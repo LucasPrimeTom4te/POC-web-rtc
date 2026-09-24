@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC P2P QR PoC</title>
+
+  <!-- Apenas para gerar/ler QR durante a prova de conceito -->
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, sans-serif;
+      background: #111827;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .app {
+      width: min(900px, 100%);
+      background: #1f2937;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.4);
+    }
+
+    h1 {
+      margin-top: 0;
+      text-align: center;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #9ca3af;
+      margin-bottom: 30px;
+    }
+
+    .mode-selection {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #374151;
+      color: white;
+    }
+
+    button:hover {
+      background: #4b5563;
+    }
+
+    button.primary {
+      background: #2563eb;
+    }
+
+    button.primary:hover {
+      background: #1d4ed8;
+    }
+
+    button.active {
+      background: #7c3aed;
+    }
+
+    .mode-selection button {
+      flex: 1;
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .status {
+      padding: 14px;
+      background: #111827;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      color: #d1d5db;
+    }
+
+    .status.connected {
+      color: #86efac;
+    }
+
+    .qr-container {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      width: fit-content;
+      margin: 20px auto;
+    }
+
+    #qrCanvas {
+      display: block;
+      width: 320px;
+      height: 320px;
+      max-width: 70vw;
+      max-height: 70vw;
+    }
+
+    #answerQrCanvas {
+      display: block;
+      width: 320px;
+      height: 320px;
+      max-width: 70vw;
+      max-height: 70vw;
+    }
+
+    .camera-container {
+      position: relative;
+      width: min(600px, 100%);
+      margin: 20px auto;
+      background: black;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+    }
+
+    canvas.camera-canvas {
+      display: none;
+    }
+
+    .camera-overlay {
+      position: absolute;
+      inset: 15%;
+      border: 3px solid #22c55e;
+      border-radius: 20px;
+      pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.25);
+    }
+
+    .instructions {
+      text-align: center;
+      color: #d1d5db;
+      line-height: 1.6;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .color-button {
+      min-width: 110px;
+    }
+
+    .red {
+      background: #dc2626;
+    }
+
+    .green {
+      background: #16a34a;
+    }
+
+    .blue {
+      background: #2563eb;
+    }
+
+    .purple {
+      background: #9333ea;
+    }
+
+    .orange {
+      background: #ea580c;
+    }
+
+    .target {
+      width: 260px;
+      height: 100px;
+      margin: 30px auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 16px;
+      font-size: 24px;
+      font-weight: bold;
+      background: #2563eb;
+      transition: background .2s;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .log {
+      margin-top: 20px;
+      background: #030712;
+      border-radius: 10px;
+      padding: 15px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 160px;
+      overflow-y: auto;
+      color: #9ca3af;
+    }
+
+    .step {
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 10px;
+      background: #111827;
+    }
+
+    .step strong {
+      color: white;
+    }
+
+    @media (max-width: 600px) {
+      .app {
+        padding: 20px;
+      }
+
+      #qrCanvas,
+      #answerQrCanvas {
+        width: 260px;
+        height: 260px;
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+
+<div class="app">
+
+  <h1>🔗 WebRTC P2P</h1>
+
+  <div class="subtitle">
+    Prova de conceito — emparelhamento por QR Code
+  </div>
+
+  <div class="mode-selection">
+    <button id="computerModeBtn" class="active">
+      💻 Computador
+    </button>
+
+```
+<button id="phoneModeBtn">
+  📱 Celular
+</button>
+```
+
+  </div>
+
+  <!-- ========================================================= -->
+
+  <!-- COMPUTADOR -->
+
+  <!-- ========================================================= -->
+
+  <section id="computerPanel" class="panel active">
+
+```
+<div id="computerStatus" class="status">
+  Clique em "Iniciar emparelhamento".
+</div>
+
+<div id="computerStart">
+
+  <div class="instructions">
+    <p>
+      O computador irá criar uma conexão WebRTC.
+    </p>
+
+    <p>
+      Depois, aponte a câmera do celular para o QR Code.
+    </p>
+  </div>
+
+  <div class="controls">
+    <button id="startPairingBtn" class="primary">
+      Iniciar emparelhamento
+    </button>
+  </div>
+
+</div>
+
+
+<div id="computerOffer" class="hidden">
+
+  <div class="step">
+    <strong>1.</strong>
+    Escaneie este QR Code usando o celular.
+  </div>
+
+  <div class="qr-container">
+    <canvas id="qrCanvas"></canvas>
+  </div>
+
+  <div class="step">
+    <strong>2.</strong>
+    Depois que o celular gerar a resposta, abra a câmera abaixo.
+  </div>
+
+  <div class="controls">
+    <button id="startComputerCameraBtn" class="primary">
+      📷 Ler resposta do celular
+    </button>
+  </div>
+
+  <div id="computerCamera" class="hidden">
+
+    <div class="camera-container">
+      <video id="computerVideo" autoplay playsinline></video>
+      <div class="camera-overlay"></div>
+    </div>
+
+    <canvas id="computerScanCanvas" class="camera-canvas"></canvas>
+
+    <p class="instructions">
+      Aponte a câmera para o QR Code exibido no celular.
+    </p>
+
+  </div>
+
+</div>
+
+
+<div id="computerConnected" class="hidden">
+
+  <div class="status connected">
+    🟢 Conectado diretamente ao celular!
+  </div>
+
+  <div
+    id="targetButton"
+    class="target"
+  >
+    BOTÃO
+  </div>
+
+  <p class="instructions">
+    A cor deste botão será controlada pelo celular.
+  </p>
+
+</div>
+```
+
+  </section>
+
+  <!-- ========================================================= -->
+
+  <!-- CELULAR -->
+
+  <!-- ========================================================= -->
+
+  <section id="phonePanel" class="panel">
+
+```
+<div id="phoneStatus" class="status">
+  Aponte a câmera para o QR Code exibido no computador.
+</div>
+
+<div id="phoneScanner">
+
+  <div class="camera-container">
+    <video id="phoneVideo" autoplay playsinline></video>
+    <div class="camera-overlay"></div>
+  </div>
+
+  <canvas id="phoneScanCanvas" class="camera-canvas"></canvas>
+
+  <div class="controls">
+    <button id="startPhoneCameraBtn" class="primary">
+      📷 Abrir câmera
+    </button>
+  </div>
+
+</div>
+
+
+<div id="phoneAnswer" class="hidden">
+
+  <div class="step">
+    <strong>QR detectado!</strong>
+    Agora mostre este QR Code para a câmera do computador.
+  </div>
+
+  <div class="qr-container">
+    <canvas id="answerQrCanvas"></canvas>
+  </div>
+
+  <p class="instructions">
+    Aguarde o computador ler o QR Code.
+  </p>
+
+</div>
+
+
+<div id="phoneConnected" class="hidden">
+
+  <div class="status connected">
+    🟢 Conectado ao computador!
+  </div>
+
+  <p class="instructions">
+    Use os botões abaixo para controlar o computador.
+  </p>
+
+  <div class="controls">
+
+    <button class="color-button red" data-color="#dc2626">
+      🔴 Vermelho
+    </button>
+
+    <button class="color-button green" data-color="#16a34a">
+      🟢 Verde
+    </button>
+
+    <button class="color-button blue" data-color="#2563eb">
+      🔵 Azul
+    </button>
+
+    <button class="color-button purple" data-color="#9333ea">
+      🟣 Roxo
+    </button>
+
+    <button class="color-button orange" data-color="#ea580c">
+      🟠 Laranja
+    </button>
+
+  </div>
+
+</div>
+```
+
+  </section>
+
+  <div id="log" class="log"></div>
+
+</div>
+
+<script>
+
+  /*
+   * ============================================================
+   * CONFIGURAÇÃO
+   * ============================================================
+   */
+
+  const RTC_CONFIG = {
+    iceServers: [
+      {
+        urls: "stun:stun.l.google.com:19302"
+      }
+    ]
+  };
+
+
+  /*
+   * ============================================================
+   * ESTADO
+   * ============================================================
+   */
+
+  let peerConnection = null;
+  let dataChannel = null;
+
+  let phoneStream = null;
+  let computerStream = null;
+
+  let scanningPhone = false;
+  let scanningComputer = false;
+
+
+  /*
+   * ============================================================
+   * ELEMENTOS
+   * ============================================================
+   */
+
+  const computerModeBtn =
+    document.getElementById("computerModeBtn");
+
+  const phoneModeBtn =
+    document.getElementById("phoneModeBtn");
+
+  const computerPanel =
+    document.getElementById("computerPanel");
+
+  const phonePanel =
+    document.getElementById("phonePanel");
+
+
+  /*
+   * ============================================================
+   * LOG
+   * ============================================================
+   */
+
+  function log(message) {
+
+    const element =
+      document.getElementById("log");
+
+    const time =
+      new Date().toLocaleTimeString();
+
+    element.innerHTML +=
+      `[${time}] ${message}<br>`;
+
+    element.scrollTop =
+      element.scrollHeight;
+
+    console.log(message);
+  }
+
+
+  /*
+   * ============================================================
+   * MODO
+   * ============================================================
+   */
+
+  computerModeBtn.onclick = () => {
+
+    computerModeBtn.classList.add("active");
+    phoneModeBtn.classList.remove("active");
+
+    computerPanel.classList.add("active");
+    phonePanel.classList.remove("active");
+
+  };
+
+
+  phoneModeBtn.onclick = () => {
+
+    phoneModeBtn.classList.add("active");
+    computerModeBtn.classList.remove("active");
+
+    phonePanel.classList.add("active");
+    computerPanel.classList.remove("active");
+
+  };
+
+
+  /*
+   * ============================================================
+   * COMPUTADOR
+   * ============================================================
+   */
+
+  document.getElementById("startPairingBtn").onclick =
+    startComputerPairing;
+
+
+  async function startComputerPairing() {
+
+    log("Criando PeerConnection...");
+
+    peerConnection =
+      new RTCPeerConnection(RTC_CONFIG);
+
+
+    /*
+     * DataChannel criado pelo computador.
+     */
+
+    dataChannel =
+      peerConnection.createDataChannel("control");
+
+
+    setupDataChannel(dataChannel);
+
+
+    /*
+     * ICE candidates.
+     *
+     * Para simplificar o PoC, esperamos gathering completo
+     * antes de colocar o SDP no QR.
+     */
+
+    peerConnection.onicecandidate =
+      event => {
+
+        if (!event.candidate) {
+
+          createOfferQR();
+
+        }
+
+      };
+
+
+    peerConnection.onconnectionstatechange =
+      () => {
+
+        log(
+          "Connection state: " +
+          peerConnection.connectionState
+        );
+
+        if (
+          peerConnection.connectionState ===
+          "connected"
+        ) {
+
+          showComputerConnected();
+
+        }
+
+      };
+
+
+    const offer =
+      await peerConnection.createOffer();
+
+    await peerConnection.setLocalDescription(
+      offer
+    );
+
+    document.getElementById(
+      "computerStatus"
+    ).textContent =
+      "Gerando QR Code...";
+
+  }
+
+
+  async function createOfferQR() {
+
+    const payload = JSON.stringify({
+
+      type: "webrtc-offer",
+
+      sdp:
+        peerConnection.localDescription.sdp
+
+    });
+
+
+    log("Offer pronto.");
+
+    document.getElementById(
+      "computerStart"
+    ).classList.add("hidden");
+
+
+    document.getElementById(
+      "computerOffer"
+    ).classList.remove("hidden");
+
+
+    document.getElementById(
+      "computerStatus"
+    ).textContent =
+      "Escaneie o QR Code com o celular.";
+
+
+    await QRCode.toCanvas(
+
+      document.getElementById("qrCanvas"),
+
+      payload,
+
+      {
+        width: 320,
+        margin: 2,
+        errorCorrectionLevel: "L"
+      }
+
+    );
+
+  }
+
+
+  /*
+   * ============================================================
+   * CÂMERA DO COMPUTADOR
+   * ============================================================
+   */
+
+  document.getElementById(
+    "startComputerCameraBtn"
+  ).onclick =
+    startComputerCamera;
+
+
+  async function startComputerCamera() {
+
+    document
+      .getElementById("computerCamera")
+      .classList.remove("hidden");
+
+
+    computerStream =
+      await navigator.mediaDevices.getUserMedia({
+
+        video: {
+          facingMode: "environment"
+        },
+
+        audio: false
+
+      });
+
+
+    const video =
+      document.getElementById("computerVideo");
+
+    video.srcObject =
+      computerStream;
+
+
+    scanningComputer = true;
+
+    scanComputerQR();
+
+  }
+
+
+  function scanComputerQR() {
+
+    if (!scanningComputer)
+      return;
+
+
+    const video =
+      document.getElementById("computerVideo");
+
+
+    const canvas =
+      document.getElementById("computerScanCanvas");
+
+
+    if (
+      video.readyState !==
+      video.HAVE_ENOUGH_DATA
+    ) {
+
+      requestAnimationFrame(
+        scanComputerQR
+      );
+
+      return;
+
+    }
+
+
+    canvas.width =
+      video.videoWidth;
+
+    canvas.height =
+      video.videoHeight;
+
+
+    const context =
+      canvas.getContext("2d");
+
+
+    context.drawImage(
+      video,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+
+    const imageData =
+      context.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+
+    const code =
+      jsQR(
+        imageData.data,
+        imageData.width,
+        imageData.height
+      );
+
+
+    if (code) {
+
+      log("QR de resposta detectado!");
+
+      scanningComputer = false;
+
+      handleAnswer(
+        code.data
+      );
+
+      return;
+
+    }
+
+
+    requestAnimationFrame(
+      scanComputerQR
+    );
+
+  }
+
+
+  async function handleAnswer(data) {
+
+    try {
+
+      const message =
+        JSON.parse(data);
+
+
+      if (
+        message.type !==
+        "webrtc-answer"
+      ) {
+
+        throw new Error(
+          "QR inválido"
+        );
+
+      }
+
+
+      await peerConnection.setRemoteDescription({
+
+        type: "answer",
+
+        sdp: message.sdp
+
+      });
+
+
+      log(
+        "Answer aplicado. Aguardando conexão..."
+      );
+
+
+      document.getElementById(
+        "computerStatus"
+      ).textContent =
+        "Conectando ao celular...";
+
+
+    } catch (error) {
+
+      console.error(error);
+
+      log(
+        "Erro ao processar resposta: " +
+        error.message
+      );
+
+    }
+
+  }
+
+
+  /*
+   * ============================================================
+   * CELULAR
+   * ============================================================
+   */
+
+  document.getElementById(
+    "startPhoneCameraBtn"
+  ).onclick =
+    startPhoneCamera;
+
+
+  async function startPhoneCamera() {
+
+    phoneStream =
+      await navigator.mediaDevices.getUserMedia({
+
+        video: {
+          facingMode: "environment"
+        },
+
+        audio: false
+
+      });
+
+
+    const video =
+      document.getElementById("phoneVideo");
+
+
+    video.srcObject =
+      phoneStream;
+
+
+    scanningPhone = true;
+
+    document.getElementById(
+      "phoneStatus"
+    ).textContent =
+      "Aponte a câmera para o QR do computador.";
+
+
+    scanPhoneQR();
+
+  }
+
+
+  function scanPhoneQR() {
+
+    if (!scanningPhone)
+      return;
+
+
+    const video =
+      document.getElementById("phoneVideo");
+
+
+    const canvas =
+      document.getElementById("phoneScanCanvas");
+
+
+    if (
+      video.readyState !==
+      video.HAVE_ENOUGH_DATA
+    ) {
+
+      requestAnimationFrame(
+        scanPhoneQR
+      );
+
+      return;
+
+    }
+
+
+    canvas.width =
+      video.videoWidth;
+
+    canvas.height =
+      video.videoHeight;
+
+
+    const context =
+      canvas.getContext("2d");
+
+
+    context.drawImage(
+      video,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+
+    const imageData =
+      context.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+
+    const code =
+      jsQR(
+        imageData.data,
+        imageData.width,
+        imageData.height
+      );
+
+
+    if (code) {
+
+      log("QR do computador detectado!");
+
+      scanningPhone = false;
+
+      handleOffer(
+        code.data
+      );
+
+      return;
+
+    }
+
+
+    requestAnimationFrame(
+      scanPhoneQR
+    );
+
+  }
+
+
+  /*
+   * ============================================================
+   * PROCESSAR OFFER NO CELULAR
+   * ============================================================
+   */
+
+  async function handleOffer(data) {
+
+    try {
+
+      const message =
+        JSON.parse(data);
+
+
+      if (
+        message.type !==
+        "webrtc-offer"
+      ) {
+
+        throw new Error(
+          "QR inválido"
+        );
+
+      }
+
+
+      log(
+        "Offer recebido."
+      );
+
+
+      peerConnection =
+        new RTCPeerConnection(
+          RTC_CONFIG
+        );
+
+
+      peerConnection.ondatachannel =
+        event => {
+
+          dataChannel =
+            event.channel;
+
+          setupDataChannel(
+            dataChannel
+          );
+
+        };
+
+
+      peerConnection.onicecandidate =
+        event => {
+
+          if (!event.candidate) {
+
+            createAnswerQR();
+
+          }
+
+        };
+
+
+      peerConnection.onconnectionstatechange =
+        () => {
+
+          log(
+            "Connection state: " +
+            peerConnection.connectionState
+          );
+
+
+          if (
+            peerConnection.connectionState ===
+            "connected"
+          ) {
+
+            showPhoneConnected();
+
+          }
+
+        };
+
+
+      await peerConnection.setRemoteDescription({
+
+        type: "offer",
+
+        sdp: message.sdp
+
+      });
+
+
+      const answer =
+        await peerConnection.createAnswer();
+
+
+      await peerConnection.setLocalDescription(
+        answer
+      );
+
+
+      document.getElementById(
+        "phoneStatus"
+      ).textContent =
+        "Gerando QR de resposta...";
+
+
+    } catch (error) {
+
+      console.error(error);
+
+      log(
+        "Erro ao processar offer: " +
+        error.message
+      );
+
+    }
+
+  }
+
+
+  /*
+   * ============================================================
+   * QR DO ANSWER
+   * ============================================================
+   */
+
+  async function createAnswerQR() {
+
+    const payload = JSON.stringify({
+
+      type: "webrtc-answer",
+
+      sdp:
+        peerConnection.localDescription.sdp
+
+    });
+
+
+    await QRCode.toCanvas(
+
+      document.getElementById(
+        "answerQrCanvas"
+      ),
+
+      payload,
+
+      {
+        width: 320,
+        margin: 2,
+        errorCorrectionLevel: "L"
+      }
+
+    );
+
+
+    document.getElementById(
+      "phoneScanner"
+    ).classList.add("hidden");
+
+
+    document.getElementById(
+      "phoneAnswer"
+    ).classList.remove("hidden");
+
+
+    document.getElementById(
+      "phoneStatus"
+    ).textContent =
+      "Mostre este QR para o computador.";
+
+
+    log(
+      "Answer QR criado."
+    );
+
+  }
+
+
+  /*
+   * ============================================================
+   * DATA CHANNEL
+   * ============================================================
+   */
+
+  function setupDataChannel(channel) {
+
+    channel.onopen = () => {
+
+      log(
+        "DataChannel conectado!"
+      );
+
+    };
+
+
+    channel.onclose = () => {
+
+      log(
+        "DataChannel fechado."
+      );
+
+    };
+
+
+    channel.onerror = error => {
+
+      console.error(
+        "DataChannel error",
+        error
+      );
+
+    };
+
+
+    channel.onmessage = event => {
+
+      try {
+
+        const message =
+          JSON.parse(event.data);
+
+
+        log(
+          "Mensagem recebida: " +
+          event.data
+        );
+
+
+        /*
+         * Controle do computador.
+         */
+
+        if (
+          message.type ===
+          "set-color"
+        ) {
+
+          const button =
+            document.getElementById(
+              "targetButton"
+            );
+
+
+          button.style.backgroundColor =
+            message.color;
+
+        }
+
+      } catch (error) {
+
+        console.error(error);
+
+      }
+
+    };
+
+  }
+
+
+  /*
+   * ============================================================
+   * CONTROLES DO CELULAR
+   * ============================================================
+   */
+
+  document
+    .querySelectorAll(".color-button")
+    .forEach(button => {
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          if (
+            !dataChannel ||
+            dataChannel.readyState !==
+            "open"
+          ) {
+
+            log(
+              "DataChannel ainda não está conectado."
+            );
+
+            return;
+
+          }
+
+
+          const color =
+            button.dataset.color;
+
+
+          const message =
+            JSON.stringify({
+
+              type: "set-color",
+
+              color
+
+            });
+
+
+          dataChannel.send(
+            message
+          );
+
+
+          log(
+            "Enviado: " +
+            message
+          );
+
+        }
+      );
+
+    });
+
+
+  /*
+   * ============================================================
+   * UI
+   * ============================================================
+   */
+
+  function showComputerConnected() {
+
+    document.getElementById(
+      "computerOffer"
+    ).classList.add("hidden");
+
+
+    document.getElementById(
+      "computerConnected"
+    ).classList.remove("hidden");
+
+
+    document.getElementById(
+      "computerStatus"
+    ).textContent =
+      "Conectado!";
+
+
+    if (computerStream) {
+
+      computerStream
+        .getTracks()
+        .forEach(track =>
+          track.stop()
+        );
+
+    }
+
+  }
+
+
+  function showPhoneConnected() {
+
+    document.getElementById(
+      "phoneAnswer"
+    ).classList.add("hidden");
+
+
+    document.getElementById(
+      "phoneConnected"
+    ).classList.remove("hidden");
+
+
+    document.getElementById(
+      "phoneStatus"
+    ).textContent =
+      "Conectado!";
+
+
+    if (phoneStream) {
+
+      phoneStream
+        .getTracks()
+        .forEach(track =>
+          track.stop()
+        );
+
+    }
+
+  }
+
+</script>
+
+</body>
+</html>
