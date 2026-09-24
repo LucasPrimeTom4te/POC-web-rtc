@@ -3,85 +3,124 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
   <title>WebRTC P2P QR PoC</title>
 
   <!-- Apenas para gerar/ler QR durante a prova de conceito -->
-
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
   <style>
+    :root {
+      --bg: #0b1020;
+      --surface: #151b2e;
+      --surface-2: #1e2640;
+      --border: #2a3352;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --error: #ef4444;
+    }
+
     * {
       box-sizing: border-box;
     }
 
+    html,
     body {
       margin: 0;
-      min-height: 100vh;
-      font-family: system-ui, sans-serif;
-      background: #111827;
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
+      min-height: 100%;
     }
 
-    .app {
-      width: min(900px, 100%);
-      background: #1f2937;
-      border-radius: 20px;
-      padding: 30px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.4);
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
     }
 
-    h1 {
-      margin-top: 0;
-      text-align: center;
-    }
-
-    .subtitle {
-      text-align: center;
-      color: #9ca3af;
-      margin-bottom: 30px;
-    }
-
-    .mode-selection {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 25px;
+    .hidden {
+      display: none !important;
     }
 
     button {
+      font: inherit;
       border: 0;
-      border-radius: 10px;
-      padding: 14px 20px;
-      font-size: 16px;
+      border-radius: 12px;
+      padding: 12px 18px;
       cursor: pointer;
-      background: #374151;
-      color: white;
+      background: var(--surface-2);
+      color: var(--text);
     }
 
     button:hover {
-      background: #4b5563;
+      filter: brightness(1.15);
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: default;
     }
 
     button.primary {
-      background: #2563eb;
+      background: var(--accent);
+      font-weight: 600;
     }
 
-    button.primary:hover {
-      background: #1d4ed8;
+    button.big {
+      padding: 18px 28px;
+      font-size: 18px;
+      width: 100%;
+      max-width: 360px;
     }
 
-    button.active {
-      background: #7c3aed;
+    /* ----------------------------------------------------------
+     * TOPO
+     * ---------------------------------------------------------- */
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
     }
 
-    .mode-selection button {
-      flex: 1;
+    header h1 {
+      font-size: 17px;
+      margin: 0;
+      white-space: nowrap;
+    }
+
+    .mode-toggle {
+      display: flex;
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 3px;
+    }
+
+    .mode-toggle button {
+      background: transparent;
+      padding: 8px 14px;
+      font-size: 14px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .mode-toggle button.active {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    main {
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
     }
 
     .panel {
@@ -92,48 +131,183 @@
       display: block;
     }
 
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+    }
+
+    .center {
+      text-align: center;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .steps {
+      text-align: left;
+      max-width: 520px;
+      margin: 18px auto;
+      padding-left: 22px;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+
+    .steps strong {
+      color: var(--text);
+    }
+
+    /* ----------------------------------------------------------
+     * STATUS
+     * ---------------------------------------------------------- */
+
     .status {
-      padding: 14px;
-      background: #111827;
-      border-radius: 10px;
-      margin-bottom: 20px;
-      color: #d1d5db;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      font-size: 15px;
     }
 
-    .status.connected {
-      color: #86efac;
+    .status::before {
+      content: "";
+      flex: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
     }
 
-    .qr-container {
+    .status.working::before {
+      background: var(--warn);
+      animation: pulse 1s infinite;
+    }
+
+    .status.ok::before {
+      background: var(--ok);
+    }
+
+    .status.error::before {
+      background: var(--error);
+    }
+
+    @keyframes pulse {
+      50% { opacity: .25; }
+    }
+
+    /* ----------------------------------------------------------
+     * COMPUTADOR — tela de emparelhamento
+     *
+     * QR grande no topo (perto da webcam) + pré-visualização da
+     * webcam ao lado, as duas coisas ativas ao mesmo tempo.
+     * ---------------------------------------------------------- */
+
+    .intro-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .url-qr {
       background: white;
-      border-radius: 16px;
-      padding: 20px;
+      border-radius: 14px;
+      padding: 10px;
+      text-align: center;
+      color: #111;
+      font-size: 12px;
+    }
+
+    .url-qr canvas {
+      display: block;
+      width: 160px !important;
+      height: 160px !important;
+    }
+
+    .pair-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .qr-box {
+      background: white;
+      border-radius: 18px;
+      padding: 12px;
+      justify-self: center;
       width: fit-content;
-      margin: 20px auto;
+      max-width: 100%;
     }
 
-    #qrCanvas,
-    #answerQrCanvas {
+    .qr-box canvas {
       display: block;
-      width: 320px !important;
+      width: min(calc(100vh - 130px), calc(100vw - 420px), 640px) !important;
       height: auto !important;
-      max-width: 70vw;
+      aspect-ratio: 1;
+      image-rendering: pixelated;
     }
 
-    .camera-container {
+    .side {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .side-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .webcam {
       position: relative;
-      width: min(600px, 100%);
-      margin: 20px auto;
       background: black;
-      border-radius: 16px;
+      border-radius: 14px;
       overflow: hidden;
+      aspect-ratio: 4 / 3;
     }
 
-    video {
-      display: block;
+    .webcam video {
       width: 100%;
-      aspect-ratio: 4 / 3;
+      height: 100%;
       object-fit: cover;
+      display: block;
+    }
+
+    .webcam .hint {
+      position: absolute;
+      inset: auto 0 0 0;
+      padding: 8px;
+      font-size: 12px;
+      text-align: center;
+      background: linear-gradient(transparent, rgba(0,0,0,.8));
+    }
+
+    .webcam .frame {
+      position: absolute;
+      inset: 12% 22%;
+      border: 2px dashed rgba(255,255,255,.6);
+      border-radius: 12px;
+      pointer-events: none;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .row button {
+      flex: 1;
+      font-size: 14px;
+      padding: 10px 12px;
     }
 
     /* Câmera frontal: espelha só a pré-visualização (a leitura usa o frame original). */
@@ -141,106 +315,202 @@
       transform: scaleX(-1);
     }
 
-    canvas.camera-canvas {
-      display: none;
-    }
-
-    .camera-overlay {
-      position: absolute;
-      inset: 15%;
-      border: 3px solid #22c55e;
-      border-radius: 20px;
-      pointer-events: none;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,.25);
-    }
-
-    .instructions {
-      text-align: center;
-      color: #d1d5db;
-      line-height: 1.6;
-    }
-
-    .controls {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-top: 20px;
-    }
-
-    .color-button {
-      min-width: 110px;
-    }
-
-    .red {
-      background: #dc2626;
-    }
-
-    .green {
-      background: #16a34a;
-    }
-
-    .blue {
-      background: #2563eb;
-    }
-
-    .purple {
-      background: #9333ea;
-    }
-
-    .orange {
-      background: #ea580c;
-    }
-
     .target {
-      width: 260px;
-      height: 100px;
+      width: min(420px, 100%);
+      height: 160px;
       margin: 30px auto;
       display: flex;
       justify-content: center;
       align-items: center;
-      border-radius: 16px;
-      font-size: 24px;
+      border-radius: 20px;
+      font-size: 28px;
       font-weight: bold;
-      background: #2563eb;
+      background: var(--accent);
       transition: background .2s;
     }
 
-    .hidden {
-      display: none !important;
+    /* ----------------------------------------------------------
+     * CELULAR — telas em tela cheia
+     * ---------------------------------------------------------- */
+
+    .fullscreen {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
     }
 
-    .log {
+    .scanner-screen {
+      background: black;
+    }
+
+    .scanner-screen video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .viewfinder {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: min(75vw, 60vh);
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%);
+      border: 3px solid var(--ok);
+      border-radius: 22px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
+      pointer-events: none;
+    }
+
+    .overlay-top,
+    .overlay-bottom {
+      position: relative;
+      z-index: 1;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .overlay-top {
+      padding-top: max(16px, env(safe-area-inset-top));
+      font-size: 17px;
+      font-weight: 600;
+      text-shadow: 0 1px 4px black;
+    }
+
+    .overlay-top small {
+      display: block;
+      font-weight: 400;
+      font-size: 14px;
+      opacity: .85;
+      margin-top: 4px;
+    }
+
+    .overlay-bottom {
+      margin-top: auto;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .overlay-bottom button {
+      background: rgba(30, 38, 64, .85);
+      backdrop-filter: blur(6px);
+    }
+
+    /* QR de resposta: fundo branco e o maior possível, para a webcam ler. */
+    .answer-screen {
+      background: white;
+      color: #111;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    }
+
+    .answer-screen canvas {
+      display: block;
+      width: min(94vw, calc(100dvh - 190px)) !important;
+      height: auto !important;
+      aspect-ratio: 1;
+      image-rendering: pixelated;
+    }
+
+    .answer-screen p {
+      margin: 0;
+      text-align: center;
+      font-size: 16px;
+      max-width: 420px;
+    }
+
+    .answer-screen .small {
+      font-size: 13px;
+      color: #555;
+    }
+
+    .answer-screen button {
+      background: #e5e7eb;
+      color: #111;
+      font-size: 14px;
+      padding: 10px 16px;
+    }
+
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
       margin-top: 20px;
-      background: #030712;
+    }
+
+    .color-grid button {
+      padding: 26px 10px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .color-grid button:last-child {
+      grid-column: span 2;
+    }
+
+    /* ----------------------------------------------------------
+     * LOG
+     * ---------------------------------------------------------- */
+
+    details.log {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    details.log summary {
+      cursor: pointer;
+    }
+
+    #log {
+      margin-top: 8px;
+      background: #050814;
       border-radius: 10px;
-      padding: 15px;
-      font-family: monospace;
+      padding: 12px;
+      font-family: ui-monospace, monospace;
       font-size: 12px;
-      max-height: 160px;
+      max-height: 180px;
       overflow-y: auto;
-      color: #9ca3af;
+      overflow-wrap: anywhere;
     }
 
-    .step {
-      padding: 15px;
-      margin: 10px 0;
-      border-radius: 10px;
-      background: #111827;
-    }
-
-    .step strong {
-      color: white;
-    }
-
-    @media (max-width: 600px) {
-      .app {
-        padding: 20px;
+    @media (max-width: 760px) {
+      main {
+        padding: 16px;
       }
 
-      #qrCanvas,
-      #answerQrCanvas {
-        width: 260px !important;
+      header {
+        padding: 10px 16px;
+      }
+
+      header h1 {
+        font-size: 15px;
+      }
+
+      .mode-toggle button {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .qr-box canvas {
+        width: min(calc(100vw - 56px), 70vh) !important;
+      }
+
+      .intro-grid,
+      .pair-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .url-qr {
+        display: none;
       }
     }
   </style>
@@ -249,218 +519,189 @@
 
 <body>
 
-<div class="app">
-
+<header>
   <h1>🔗 WebRTC P2P</h1>
 
-  <div class="subtitle">
-    Prova de conceito — emparelhamento por QR Code
+  <div class="mode-toggle">
+    <button id="computerModeBtn" class="active">💻 Computador</button>
+    <button id="phoneModeBtn">📱 Celular</button>
   </div>
+</header>
 
-  <div class="mode-selection">
-    <button id="computerModeBtn" class="active">
-      💻 Computador
-    </button>
-
-<button id="phoneModeBtn">
-  📱 Celular
-</button>
-
-  </div>
+<main>
 
   <!-- ========================================================= -->
-
-  <!-- COMPUTADOR -->
-
+  <!-- COMPUTADOR                                                 -->
   <!-- ========================================================= -->
 
   <section id="computerPanel" class="panel active">
 
-<div id="computerStatus" class="status">
-  Clique em "Iniciar emparelhamento".
-</div>
+    <!-- Início -->
+    <div id="computerStart" class="card">
 
-<div id="computerStart">
+      <div class="intro-grid">
 
-  <div class="instructions">
-    <p>
-      O computador irá criar uma conexão WebRTC.
-    </p>
+        <div>
+          <h2 style="margin-top:0">Emparelhar com o celular</h2>
 
-    <p>
-      Depois, aponte a câmera do celular para o QR Code.
-    </p>
-  </div>
+          <ol class="steps" style="margin-left:0">
+            <li>Clique em <strong>Iniciar</strong>. O QR aparece e a webcam liga.</li>
+            <li>No celular, abra esta página e toque em <strong>Conectar</strong>.</li>
+            <li>
+              Segure o celular <strong>de frente para a tela</strong>, a uns
+              20–30&nbsp;cm, com a <strong>tela do celular virada para o computador</strong>.
+            </li>
+            <li>Mantenha parado: os dois QR são lidos sozinhos.</li>
+          </ol>
 
-  <div class="controls">
-    <button id="startPairingBtn" class="primary">
-      Iniciar emparelhamento
-    </button>
-  </div>
+          <button id="startPairingBtn" class="primary big">Iniciar</button>
+        </div>
 
-</div>
+        <div id="urlQrBox" class="url-qr hidden">
+          <canvas id="urlQrCanvas"></canvas>
+          Abrir no celular
+        </div>
 
+      </div>
 
-<div id="computerOffer" class="hidden">
-
-  <div class="step">
-    <strong>1.</strong>
-    Escaneie este QR Code usando o celular.
-  </div>
-
-  <div class="qr-container">
-    <canvas id="qrCanvas"></canvas>
-  </div>
-
-  <div class="step">
-    <strong>2.</strong>
-    Depois que o celular gerar a resposta, abra a câmera abaixo.
-  </div>
-
-  <div class="controls">
-    <button id="startComputerCameraBtn" class="primary">
-      📷 Ler resposta do celular
-    </button>
-  </div>
-
-  <div id="computerCamera" class="hidden">
-
-    <div class="camera-container">
-      <video id="computerVideo" autoplay playsinline></video>
-      <div class="camera-overlay"></div>
     </div>
 
-    <canvas id="computerScanCanvas" class="camera-canvas"></canvas>
+    <!-- Emparelhando: QR + webcam juntos -->
+    <div id="computerPairing" class="pair-grid hidden">
 
-    <div class="controls">
-      <button id="switchComputerCameraBtn" class="hidden">
-        🔄 Trocar câmera
-      </button>
+      <div class="qr-box">
+        <canvas id="qrCanvas"></canvas>
+      </div>
+
+      <div class="side">
+
+        <div id="computerStatus" class="status working">Gerando QR…</div>
+
+        <p class="side-title">Webcam</p>
+
+        <div class="webcam">
+          <video id="computerVideo" autoplay playsinline muted></video>
+          <div class="frame"></div>
+          <div class="hint">Enquadre a tela do celular aqui</div>
+        </div>
+
+        <div class="row">
+          <button id="switchComputerCameraBtn" class="hidden">🔄 Trocar câmera</button>
+          <button id="restartComputerBtn">↺ Recomeçar</button>
+        </div>
+
+        <ol class="steps" style="margin:0; font-size:14px">
+          <li>No celular, toque em <strong>Conectar</strong>.</li>
+          <li>Aponte a câmera frontal para este QR.</li>
+          <li>Mantenha o celular parado até conectar.</li>
+        </ol>
+
+      </div>
+
     </div>
 
-    <p class="instructions">
-      Aponte a câmera para o QR Code exibido no celular.
-    </p>
+    <!-- Conectado -->
+    <div id="computerConnected" class="card center hidden">
 
-  </div>
+      <div class="status ok">Conectado diretamente ao celular</div>
 
-</div>
+      <div id="targetButton" class="target">BOTÃO</div>
 
+      <p class="muted">A cor deste botão é controlada pelo celular.</p>
 
-<div id="computerConnected" class="hidden">
+      <button id="disconnectComputerBtn">Desconectar</button>
 
-  <div class="status connected">
-    🟢 Conectado diretamente ao celular!
-  </div>
-
-  <div
-    id="targetButton"
-    class="target"
-  >
-    BOTÃO
-  </div>
-
-  <p class="instructions">
-    A cor deste botão será controlada pelo celular.
-  </p>
-
-</div>
+    </div>
 
   </section>
 
   <!-- ========================================================= -->
-
-  <!-- CELULAR -->
-
+  <!-- CELULAR                                                    -->
   <!-- ========================================================= -->
 
   <section id="phonePanel" class="panel">
 
-<div id="phoneStatus" class="status">
-  Aponte a câmera para o QR Code exibido no computador.
-</div>
+    <!-- Início -->
+    <div id="phoneStart" class="card center">
 
-<div id="phoneScanner">
+      <h2 style="margin-top:0">Conectar ao computador</h2>
 
-  <div class="camera-container">
-    <video id="phoneVideo" autoplay playsinline></video>
-    <div class="camera-overlay"></div>
-  </div>
+      <ol class="steps">
+        <li>No computador, clique em <strong>Iniciar</strong>.</li>
+        <li>Toque em <strong>Conectar</strong> abaixo. A câmera frontal abre.</li>
+        <li>
+          Vire a <strong>tela do celular para o computador</strong> e aponte
+          para o QR. A resposta aparece aqui e a webcam lê sozinha.
+        </li>
+      </ol>
 
-  <canvas id="phoneScanCanvas" class="camera-canvas"></canvas>
+      <button id="startPhoneBtn" class="primary big">📷 Conectar</button>
 
-  <div class="controls">
-    <button id="startPhoneCameraBtn" class="primary">
-      📷 Abrir câmera
-    </button>
+      <div id="phoneStatus" class="status" style="margin-top:18px">Aguardando.</div>
 
-    <button id="switchPhoneCameraBtn" class="hidden">
-      🔄 Trocar câmera
-    </button>
-  </div>
+    </div>
 
-</div>
+    <!-- Conectado -->
+    <div id="phoneConnected" class="card hidden">
 
+      <div class="status ok">Conectado ao computador</div>
 
-<div id="phoneAnswer" class="hidden">
+      <div class="color-grid">
+        <button class="color-button" style="background:#dc2626" data-color="#dc2626">Vermelho</button>
+        <button class="color-button" style="background:#16a34a" data-color="#16a34a">Verde</button>
+        <button class="color-button" style="background:#2563eb" data-color="#2563eb">Azul</button>
+        <button class="color-button" style="background:#9333ea" data-color="#9333ea">Roxo</button>
+        <button class="color-button" style="background:#ea580c" data-color="#ea580c">Laranja</button>
+      </div>
 
-  <div class="step">
-    <strong>QR detectado!</strong>
-    Agora mostre este QR Code para a câmera do computador.
-  </div>
+      <div class="center" style="margin-top:20px">
+        <button id="disconnectPhoneBtn">Desconectar</button>
+      </div>
 
-  <div class="qr-container">
-    <canvas id="answerQrCanvas"></canvas>
-  </div>
-
-  <p class="instructions">
-    Aguarde o computador ler o QR Code.
-  </p>
-
-</div>
-
-
-<div id="phoneConnected" class="hidden">
-
-  <div class="status connected">
-    🟢 Conectado ao computador!
-  </div>
-
-  <p class="instructions">
-    Use os botões abaixo para controlar o computador.
-  </p>
-
-  <div class="controls">
-
-    <button class="color-button red" data-color="#dc2626">
-      🔴 Vermelho
-    </button>
-
-    <button class="color-button green" data-color="#16a34a">
-      🟢 Verde
-    </button>
-
-    <button class="color-button blue" data-color="#2563eb">
-      🔵 Azul
-    </button>
-
-    <button class="color-button purple" data-color="#9333ea">
-      🟣 Roxo
-    </button>
-
-    <button class="color-button orange" data-color="#ea580c">
-      🟠 Laranja
-    </button>
-
-  </div>
-
-</div>
+    </div>
 
   </section>
 
-  <div id="log" class="log"></div>
+  <details class="log">
+    <summary>Log técnico</summary>
+    <div id="log"></div>
+  </details>
+
+</main>
+
+<!-- Celular: câmera em tela cheia -->
+<div id="phoneScanner" class="fullscreen scanner-screen hidden">
+
+  <video id="phoneVideo" autoplay playsinline muted></video>
+  <div class="viewfinder"></div>
+
+  <div class="overlay-top">
+    Aponte para o QR na tela do computador
+    <small id="phoneScanHint">Tela do celular virada para o computador</small>
+  </div>
+
+  <div class="overlay-bottom">
+    <button id="switchPhoneCameraBtn" class="hidden">🔄 Trocar câmera</button>
+    <button id="cancelPhoneScanBtn">✕ Cancelar</button>
+  </div>
 
 </div>
+
+<!-- Celular: QR de resposta em tela cheia -->
+<div id="phoneAnswer" class="fullscreen answer-screen hidden">
+
+  <p><strong>Mantenha o celular parado</strong>, virado para a webcam do computador.</p>
+
+  <canvas id="answerQrCanvas"></canvas>
+
+  <p id="phoneAnswerStatus" class="small">Aguardando o computador ler o QR…</p>
+
+  <button id="rescanPhoneBtn">↺ Ler o QR do computador de novo</button>
+
+</div>
+
+<canvas id="computerScanCanvas" class="hidden"></canvas>
+<canvas id="phoneScanCanvas" class="hidden"></canvas>
 
 <script>
 
@@ -479,12 +720,11 @@
   // Tempo máximo esperando o ICE gathering antes de gerar o QR.
   const ICE_GATHERING_TIMEOUT_MS = 4000;
 
-  // Resolução máxima usada na leitura do QR (performance no celular).
-  const SCAN_MAX_WIDTH = 800;
   const SCAN_INTERVAL_MS = 120;
 
+  // Renderiza grande e deixa o CSS reduzir (image-rendering: pixelated).
   const QR_OPTIONS = {
-    width: 320,
+    width: 1024,
     margin: 2,
     errorCorrectionLevel: "M"
   };
@@ -498,13 +738,14 @@
 
   let peerConnection = null;
   let dataChannel = null;
+  let wakeLock = null;
 
   const $ = id => document.getElementById(id);
 
 
   /*
    * ============================================================
-   * LOG
+   * LOG / STATUS
    * ============================================================
    */
 
@@ -520,6 +761,20 @@
     element.scrollTop = element.scrollHeight;
 
     console.log(message);
+  }
+
+  // kind: "" | "working" | "ok" | "error"
+  function setStatus(id, text, kind = "") {
+
+    const element = $(id);
+
+    element.textContent = text;
+    element.className = "status " + kind;
+
+  }
+
+  function show(id, visible = true) {
+    $(id).classList.toggle("hidden", !visible);
   }
 
 
@@ -547,6 +802,15 @@
   // Abre direto no modo celular em dispositivos móveis.
   if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
     selectMode("phone");
+  }
+
+  // QR com o endereço da página, para abrir no celular pela câmera nativa.
+  if (/^https?:/.test(location.protocol) && window.QRCode) {
+
+    QRCode.toCanvas($("urlQrCanvas"), location.href, { width: 320, margin: 1 })
+      .then(() => show("urlQrBox"))
+      .catch(() => {});
+
   }
 
 
@@ -715,11 +979,25 @@
 
   }
 
-  function createPeerConnection() {
+  function closeConnection() {
+
+    if (dataChannel) {
+      dataChannel.onclose = null;
+      dataChannel.close();
+      dataChannel = null;
+    }
 
     if (peerConnection) {
+      peerConnection.onconnectionstatechange = null;
       peerConnection.close();
+      peerConnection = null;
     }
+
+  }
+
+  function createPeerConnection(onFailed) {
+
+    closeConnection();
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
@@ -728,7 +1006,7 @@
       log("Connection state: " + pc.connectionState);
 
       if (pc.connectionState === "failed") {
-        log("Falha na conexão. Os dois aparelhos estão na mesma rede?");
+        onFailed("Falha na conexão. Os dois aparelhos estão na mesma rede?");
       }
 
     };
@@ -751,6 +1029,23 @@
 
   }
 
+  async function keepScreenOn() {
+
+    try {
+      wakeLock = await navigator.wakeLock?.request("screen");
+    } catch {
+      // Sem suporte / sem permissão: tudo bem.
+    }
+
+  }
+
+  function releaseScreen() {
+
+    wakeLock?.release().catch(() => {});
+    wakeLock = null;
+
+  }
+
 
   /*
    * ============================================================
@@ -760,12 +1055,13 @@
 
   class QrScanner {
 
-    constructor({ videoId, canvasId, switchButtonId, onCode }) {
+    constructor({ videoId, canvasId, switchButtonId, maxWidth, onCode }) {
 
       this.video = $(videoId);
       this.canvas = $(canvasId);
       this.switchButton = $(switchButtonId);
       this.context = this.canvas.getContext("2d", { willReadFrequently: true });
+      this.maxWidth = maxWidth;
       this.onCode = onCode;
 
       this.stream = null;
@@ -775,7 +1071,10 @@
       this.lastScan = 0;
       this.lastInvalid = null;
 
-      this.switchButton.onclick = () => this.switchCamera();
+      this.switchButton.onclick = () =>
+        this.switchCamera().catch(error =>
+          log("Erro ao trocar câmera: " + error.message)
+        );
 
     }
 
@@ -786,6 +1085,8 @@
           "Câmera indisponível. Abra a página via HTTPS (ou localhost)."
         );
       }
+
+      this.lastInvalid = null;
 
       await this.openStream({ facingMode: { ideal: this.facingMode } });
 
@@ -831,7 +1132,7 @@
       this.video.srcObject = this.stream;
       await this.video.play().catch(() => {});
 
-      log(`Câmera: ${track.label || "desconhecida"}`);
+      log(`Câmera: ${track.label || "desconhecida"} (${settings.width}x${settings.height})`);
 
     }
 
@@ -890,7 +1191,7 @@
       this.lastScan = now;
 
       const scale =
-        Math.min(1, SCAN_MAX_WIDTH / this.video.videoWidth);
+        Math.min(1, this.maxWidth / this.video.videoWidth);
 
       const width = Math.round(this.video.videoWidth * scale);
       const height = Math.round(this.video.videoHeight * scale);
@@ -962,6 +1263,9 @@
   /*
    * ============================================================
    * COMPUTADOR
+   *
+   * QR do offer e webcam ficam ativos ao mesmo tempo: o celular
+   * lê o QR e mostra a resposta sem precisar ser movido.
    * ============================================================
    */
 
@@ -969,21 +1273,39 @@
     videoId: "computerVideo",
     canvasId: "computerScanCanvas",
     switchButtonId: "switchComputerCameraBtn",
+    maxWidth: 1280, // tela do celular ocupa pouco da imagem da webcam
     onCode: handleAnswer
   });
 
   $("startPairingBtn").onclick = startComputerPairing;
+  $("restartComputerBtn").onclick = startComputerPairing;
+  $("disconnectComputerBtn").onclick = resetComputer;
+
+  function computerFailed(message) {
+    setStatus("computerStatus", message, "error");
+  }
 
   async function startComputerPairing() {
 
-    try {
+    computerScanner.stop();
 
-      $("startPairingBtn").disabled = true;
-      $("computerStatus").textContent = "Gerando QR Code...";
+    show("computerStart", false);
+    show("computerConnected", false);
+    show("computerPairing");
+
+    setStatus("computerStatus", "Gerando QR…", "working");
+
+    // Câmera em paralelo com o QR (a permissão pode demorar).
+    const cameraReady = computerScanner.start().catch(error => {
+      log("Erro na câmera: " + error.message);
+      throw error;
+    });
+
+    try {
 
       log("Criando PeerConnection...");
 
-      const pc = createPeerConnection();
+      const pc = createPeerConnection(computerFailed);
 
       // DataChannel criado pelo computador.
       dataChannel = pc.createDataChannel("control");
@@ -996,37 +1318,27 @@
 
       log("Offer pronto.");
 
-      $("computerStart").classList.add("hidden");
-      $("computerOffer").classList.remove("hidden");
-      $("computerStatus").textContent = "Escaneie o QR Code com o celular.";
-
     } catch (error) {
 
       console.error(error);
       log("Erro ao gerar offer: " + error.message);
-      $("computerStatus").textContent = "Erro: " + error.message;
-      $("startPairingBtn").disabled = false;
+      computerFailed("Erro ao gerar QR: " + error.message);
+      return;
+
+    }
+
+    try {
+
+      await cameraReady;
+      setStatus("computerStatus", "Procurando o QR do celular…", "working");
+
+    } catch (error) {
+
+      computerFailed("Webcam indisponível: " + error.message);
 
     }
 
   }
-
-  $("startComputerCameraBtn").onclick = async () => {
-
-    try {
-
-      $("computerCamera").classList.remove("hidden");
-      await computerScanner.start();
-
-    } catch (error) {
-
-      console.error(error);
-      log("Erro na câmera: " + error.message);
-      $("computerStatus").textContent = "Erro na câmera: " + error.message;
-
-    }
-
-  };
 
   async function handleAnswer(data) {
 
@@ -1040,8 +1352,7 @@
 
       log("Answer aplicado. Aguardando conexão...");
 
-      $("computerCamera").classList.add("hidden");
-      $("computerStatus").textContent = "Conectando ao celular...";
+      setStatus("computerStatus", "QR lido! Conectando…", "working");
 
       return true;
 
@@ -1055,10 +1366,33 @@
 
   }
 
+  function showComputerConnected() {
+
+    computerScanner.stop();
+
+    show("computerPairing", false);
+    show("computerConnected");
+
+  }
+
+  function resetComputer() {
+
+    computerScanner.stop();
+    closeConnection();
+
+    show("computerPairing", false);
+    show("computerConnected", false);
+    show("computerStart");
+
+  }
+
 
   /*
    * ============================================================
    * CELULAR
+   *
+   * Câmera frontal em tela cheia → lê o offer → QR de resposta em
+   * tela cheia (fundo branco) para a webcam do computador ler.
    * ============================================================
    */
 
@@ -1066,27 +1400,43 @@
     videoId: "phoneVideo",
     canvasId: "phoneScanCanvas",
     switchButtonId: "switchPhoneCameraBtn",
+    maxWidth: 800,
     onCode: handleOffer
   });
 
-  $("startPhoneCameraBtn").onclick = async () => {
+  $("startPhoneBtn").onclick = startPhoneScan;
+  $("rescanPhoneBtn").onclick = startPhoneScan;
+  $("cancelPhoneScanBtn").onclick = resetPhone;
+  $("disconnectPhoneBtn").onclick = resetPhone;
+
+  function phoneFailed(message) {
+
+    resetPhone();
+    setStatus("phoneStatus", message, "error");
+
+  }
+
+  async function startPhoneScan() {
+
+    closeConnection();
+    keepScreenOn();
+
+    show("phoneAnswer", false);
+    show("phoneScanner");
 
     try {
 
       await phoneScanner.start();
 
-      $("startPhoneCameraBtn").classList.add("hidden");
-      $("phoneStatus").textContent = "Aponte a câmera para o QR do computador.";
-
     } catch (error) {
 
       console.error(error);
       log("Erro na câmera: " + error.message);
-      $("phoneStatus").textContent = "Erro na câmera: " + error.message;
+      phoneFailed("Erro na câmera: " + error.message);
 
     }
 
-  };
+  }
 
   async function handleOffer(data) {
 
@@ -1096,6 +1446,7 @@
       offer = decodeDescription(data, "offer");
     } catch (error) {
       log("QR ignorado: " + error.message);
+      $("phoneScanHint").textContent = "Esse QR não é o do computador.";
       return false;
     }
 
@@ -1103,9 +1454,9 @@
 
       log("Offer recebido.");
 
-      $("phoneStatus").textContent = "Gerando QR de resposta...";
+      $("phoneScanHint").textContent = "QR lido! Gerando resposta…";
 
-      const pc = createPeerConnection();
+      const pc = createPeerConnection(phoneFailed);
 
       pc.ondatachannel = event => {
         dataChannel = event.channel;
@@ -1118,9 +1469,10 @@
 
       await renderQR("answerQrCanvas", encodeDescription(pc.localDescription));
 
-      $("phoneScanner").classList.add("hidden");
-      $("phoneAnswer").classList.remove("hidden");
-      $("phoneStatus").textContent = "Mostre este QR para o computador.";
+      show("phoneScanner", false);
+      show("phoneAnswer");
+
+      $("phoneAnswerStatus").textContent = "Aguardando o computador ler o QR…";
 
       log("Answer QR criado.");
 
@@ -1130,10 +1482,39 @@
 
       console.error(error);
       log("Erro ao processar offer: " + error.message);
-      $("phoneStatus").textContent = "Erro: " + error.message;
+      phoneFailed("Erro: " + error.message);
       return true;
 
     }
+
+  }
+
+  function showPhoneConnected() {
+
+    phoneScanner.stop();
+    releaseScreen();
+
+    show("phoneScanner", false);
+    show("phoneAnswer", false);
+    show("phoneStart", false);
+    show("phoneConnected");
+
+  }
+
+  function resetPhone() {
+
+    phoneScanner.stop();
+    closeConnection();
+    releaseScreen();
+
+    $("phoneScanHint").textContent = "Tela do celular virada para o computador";
+
+    show("phoneScanner", false);
+    show("phoneAnswer", false);
+    show("phoneConnected", false);
+    show("phoneStart");
+
+    setStatus("phoneStatus", "Aguardando.");
 
   }
 
@@ -1210,34 +1591,6 @@
       });
 
     });
-
-
-  /*
-   * ============================================================
-   * UI
-   * ============================================================
-   */
-
-  function showComputerConnected() {
-
-    $("computerOffer").classList.add("hidden");
-    $("computerConnected").classList.remove("hidden");
-    $("computerStatus").textContent = "Conectado!";
-
-    computerScanner.stop();
-
-  }
-
-  function showPhoneConnected() {
-
-    $("phoneScanner").classList.add("hidden");
-    $("phoneAnswer").classList.add("hidden");
-    $("phoneConnected").classList.remove("hidden");
-    $("phoneStatus").textContent = "Conectado!";
-
-    phoneScanner.stop();
-
-  }
 
 </script>
 
