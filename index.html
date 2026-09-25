@@ -3326,6 +3326,7 @@
   };
 
   const REQUEST_TIMEOUT_MS = 60000;   // tempo para o outro aceitar
+  const OFFLINE_TIMEOUT_MS = 20000;   // idem, quando não o vimos online
   const CONNECT_TIMEOUT_MS = 30000;   // aceitou, mas a conexão direta não abriu
   const ROOM_LIMIT = 2;
   const NAME_MAX = 40;
@@ -3453,7 +3454,9 @@
     }
 
     myChannel = client.channel("device:" + me.id, {
-      config: { broadcast: { self: false }, presence: { key: me.id } }
+      // enabled: sem isso o Supabase só liga a presença em canais com um
+      // ouvinte de presença, e o track() abaixo seria ignorado.
+      config: { broadcast: { self: false }, presence: { key: me.id, enabled: true } }
     });
 
     myChannel.on("broadcast", { event: "signal" }, ({ payload }) => handleSignal(payload));
@@ -3712,12 +3715,10 @@
 
       if (pending?.pairId !== pairId) return;
 
-      if (!presence) {
-        pendingFailed("Esse aparelho não está com a página aberta agora. Abra a página nele e peça de novo.");
-        return;
-      }
+      // A presença é só uma dica: sem ela, pede mesmo assim e espera menos.
+      const seenOnline = !!presence;
 
-      pending.peer.name = cleanName(presence.name) || pending.peer.name;
+      pending.peer.name = cleanName(presence?.name) || pending.peer.name;
 
       // Escuta o canal da conexão antes de pedir: a oferta vem logo depois do "aceitar".
       await openPair(pairId, "guest", pending.peer);
@@ -3728,13 +3729,17 @@
       showPending({
         icon: "⏳",
         title: `Pedido enviado para ${peerName(pending.peer)}`,
-        status: "Aguardando tocar em Aceitar lá…"
+        status: seenOnline
+          ? "Aguardando tocar em Aceitar lá…"
+          : "Aguardando… (não vi esse aparelho online: confira se a página está aberta nele)"
       });
 
       pending.timer = setTimeout(() => {
         sendToDevice(peer.id, { type: "cancel", pairId, from: publicMe() }).catch(() => {});
-        pendingFailed("Ninguém aceitou a tempo.");
-      }, REQUEST_TIMEOUT_MS);
+        pendingFailed(seenOnline
+          ? "Ninguém aceitou a tempo."
+          : "Sem resposta. Esse aparelho parece não estar com a página aberta: abra a página nele e peça de novo.");
+      }, seenOnline ? REQUEST_TIMEOUT_MS : OFFLINE_TIMEOUT_MS);
 
     } catch (error) {
 
@@ -4027,7 +4032,9 @@
 
     await leaveRoom();
 
-    const channel = client.channel("room:" + name, { config: { presence: { key: me.id } } });
+    const channel = client.channel("room:" + name, {
+      config: { presence: { key: me.id, enabled: true } }
+    });
 
     room = { name, channel, joinedAt: Date.now(), requestedTo: null };
 
