@@ -383,8 +383,13 @@
     }
 
     /* ----------------------------------------------------------
-     * INÍCIO (Supabase): este aparelho, código, sala, lembrados
+     * INÍCIO (Supabase): QR grande à esquerda; nome, sala e
+     * lembrados empilhados à direita. No celular, uma coluna.
      * ---------------------------------------------------------- */
+
+    main:has(.home) {
+      max-width: 1180px;
+    }
 
     .home {
       display: flex;
@@ -392,38 +397,77 @@
       gap: 16px;
     }
 
-    .home-grid {
+    .home-layout {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
       gap: 16px;
+      align-items: start;
     }
 
-    .home h2 {
-      font-size: 22px;
+    .qr-card {
+      position: sticky;
+      top: 16px;
+    }
+
+    .qr-card h2 {
+      font-size: clamp(22px, 2.4vw, 28px);
+    }
+
+    /* O QR é o principal: o maior que couber na tela. */
+    .qr-card .qr-box canvas {
+      width: min(460px, calc(100vh - 330px), calc(100vw - 88px)) !important;
+      min-width: 240px;
+      height: auto !important;
+      aspect-ratio: 1;
+      image-rendering: pixelated;
+    }
+
+    .home-side {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .side-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 20px;
+    }
+
+    .side-card h3 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    .side-card .step-badge {
+      align-self: flex-start;
+    }
+
+    .side-label {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .side-text {
+      margin: 0;
+      font-size: 14.5px;
+      line-height: 1.5;
+    }
+
+    .side-text strong {
+      color: var(--text);
+    }
+
+    .online-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .small {
       font-size: 13px;
-    }
-
-    .me-card {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .me-row {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .me-info {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
     }
 
     .text-input {
@@ -442,20 +486,42 @@
       display: flex;
       gap: 8px;
       width: 100%;
-      max-width: 420px;
     }
 
     .room-active {
       display: flex;
       flex-direction: column;
-      align-items: center;
       gap: 10px;
-      width: 100%;
+    }
+
+    .room-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .room-head button {
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+
+    .room-share {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .qr-box.small-qr {
+      padding: 8px;
+      min-width: 0;
+      min-height: 0;
+      flex: none;
     }
 
     .qr-box.small-qr canvas {
-      width: 200px !important;
-      height: 200px !important;
+      width: 132px !important;
+      height: 132px !important;
       min-width: 0;
     }
 
@@ -463,6 +529,10 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+    }
+
+    .remembered-list:empty {
+      display: none;
     }
 
     .remembered-item {
@@ -516,9 +586,18 @@
       color: var(--warn);
     }
 
-    @media (max-width: 760px) {
-      .home-grid {
+    @media (max-width: 899px) {
+      .home-layout {
         grid-template-columns: 1fr;
+      }
+
+      .qr-card {
+        position: static;
+      }
+
+      .qr-card .qr-box canvas {
+        width: min(300px, calc(100vw - 88px)) !important;
+        min-width: 0;
       }
     }
 
@@ -1316,35 +1395,25 @@
       <button id="homeRetryBtn" class="hidden">🔁 Pedir de novo</button>
     </div>
 
-    <div class="card me-card">
-      <div class="me-row">
-        <span id="onlineDot" class="live-dot warn"></span>
-        <div class="me-info">
-          <label for="nameInput" class="muted small">Nome deste aparelho (é o que o outro vê)</label>
-          <input id="nameInput" class="text-input" maxlength="40" autocomplete="off">
-        </div>
-      </div>
-      <div id="onlineText" class="muted small">Conectando ao servidor de troca…</div>
-    </div>
+    <div class="home-layout">
 
-    <div class="home-grid">
+      <!-- Opção 1: o principal, com o QR grande -->
+      <div class="card step qr-card">
 
-      <div class="card step">
+        <span class="step-badge">Opção 1 · a mais fácil</span>
 
-        <span class="step-badge">Opção 1</span>
-
-        <h2>Conectar a este aparelho</h2>
+        <h2>Leia este código com o outro aparelho</h2>
 
         <p class="lead">
-          No outro aparelho, aponte a <strong>câmera</strong> para este código e
+          Aponte a <strong>câmera</strong> do outro aparelho para o código e
           toque no link. Aí é só <strong>aceitar</strong> o pedido aqui.
         </p>
 
-        <div class="qr-box small-qr">
+        <div class="qr-box">
           <canvas id="deviceQr"></canvas>
         </div>
 
-        <button id="copyDeviceLinkBtn">🔗 Copiar link</button>
+        <button id="copyDeviceLinkBtn">🔗 Copiar link deste aparelho</button>
 
         <div id="deviceLinkWarning" class="status error hidden">
           Este endereço só abre neste computador. Para outro aparelho ler,
@@ -1353,49 +1422,71 @@
 
       </div>
 
-      <div class="card step">
+      <div class="home-side">
 
-        <span class="step-badge">Opção 2</span>
-
-        <h2>Entrar numa sala</h2>
-
-        <p class="lead">
-          Os dois aparelhos entram na <strong>mesma sala</strong>, com o mesmo
-          nome. Cabem 2 por sala.
-        </p>
-
-        <form id="roomForm" class="room-form" autocomplete="off">
-          <input id="roomInput" class="text-input" placeholder="Nome da sala (ex.: casa)" maxlength="40" enterkeyhint="go">
-          <button type="submit" class="primary">Entrar</button>
-        </form>
-
-        <div id="roomActive" class="room-active hidden">
-          <div>Você está na sala <strong id="roomName"></strong></div>
-          <div id="roomStatus" class="status working">Entrando na sala…</div>
-          <p class="muted small" style="margin:0">O outro pode digitar o nome ou ler este código:</p>
-          <div class="qr-box small-qr">
-            <canvas id="roomQr"></canvas>
+        <!-- Este aparelho -->
+        <div class="card side-card">
+          <label for="nameInput" class="side-label">Nome deste aparelho <span class="muted">(é o que o outro vê)</span></label>
+          <input id="nameInput" class="text-input" maxlength="40" autocomplete="off">
+          <div class="online-row">
+            <span id="onlineDot" class="live-dot warn"></span>
+            <span id="onlineText" class="muted small">Conectando ao servidor de troca…</span>
           </div>
-          <button id="leaveRoomBtn">Sair da sala</button>
         </div>
 
-        <div id="roomError" class="status error hidden"></div>
+        <!-- Opção 2: sala -->
+        <div class="card side-card">
+
+          <span class="step-badge">Opção 2</span>
+
+          <h3>Entrar numa sala</h3>
+
+          <p class="muted side-text">
+            Os dois aparelhos entram na <strong>mesma sala</strong>, com o mesmo
+            nome. Cabem 2 por sala.
+          </p>
+
+          <form id="roomForm" class="room-form" autocomplete="off">
+            <input id="roomInput" class="text-input" placeholder="Nome da sala (ex.: casa)" maxlength="40" enterkeyhint="go">
+            <button type="submit" class="primary">Entrar</button>
+          </form>
+
+          <div id="roomActive" class="room-active hidden">
+            <div class="room-head">
+              <div>Na sala <strong id="roomName"></strong></div>
+              <button id="leaveRoomBtn">Sair da sala</button>
+            </div>
+            <div id="roomStatus" class="status working">Entrando na sala…</div>
+            <div class="room-share">
+              <div class="qr-box small-qr">
+                <canvas id="roomQr"></canvas>
+              </div>
+              <p class="muted small" style="margin:0">
+                O outro pode digitar o nome da sala ou ler este código.
+              </p>
+            </div>
+          </div>
+
+          <div id="roomError" class="status error hidden"></div>
+
+        </div>
+
+        <!-- Lembrados -->
+        <div class="card side-card">
+
+          <h3>⭐ Dispositivos lembrados</h3>
+
+          <div id="rememberedList" class="remembered-list"></div>
+
+          <p id="rememberedEmpty" class="muted side-text">
+            Nenhum ainda. Ao aceitar uma conexão, marque “Lembrar este
+            dispositivo”: depois é só tocar em <strong>Conectar</strong> para
+            mandar um novo pedido (o outro sempre precisa aceitar).
+          </p>
+
+        </div>
 
       </div>
-
-    </div>
-
-    <div class="card">
-
-      <h2 style="margin:0 0 12px">⭐ Dispositivos lembrados</h2>
-
-      <div id="rememberedList" class="remembered-list"></div>
-
-      <p id="rememberedEmpty" class="muted" style="margin:0">
-        Nenhum ainda. Ao aceitar uma conexão, marque “Lembrar este dispositivo”:
-        depois é só tocar em Conectar para mandar um novo pedido (o outro
-        sempre precisa aceitar).
-      </p>
 
     </div>
 
@@ -4287,7 +4378,7 @@
 
   };
 
-  QRCode.toCanvas($("deviceQr"), deviceLink, { width: 480, margin: 1 }).catch(() => {});
+  QRCode.toCanvas($("deviceQr"), deviceLink, { width: 1024, margin: 1 }).catch(() => {});
 
   show("deviceLinkWarning", !CAN_LINK);
 
