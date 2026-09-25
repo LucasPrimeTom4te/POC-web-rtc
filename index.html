@@ -3640,7 +3640,14 @@
   }
 
   // Fechar a aba ou sair da página também avisa o outro lado.
-  window.addEventListener("pagehide", () => peers.forEach(sendBye));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveRoomMemory();
+  });
+
+  window.addEventListener("pagehide", () => {
+    saveRoomMemory();
+    peers.forEach(sendBye);
+  });
 
   function createPeerConnection(peer) {
 
@@ -3928,6 +3935,7 @@
     requestAnimationFrame(layoutWorkspace);
 
     session.statsTimer = setInterval(updateAudioLevels, 250);
+    session.roomSaveTimer = setInterval(saveRoomMemory, ROOM_SAVE_MS);
 
   }
 
@@ -4062,6 +4070,8 @@
 
     if (!session) return;
 
+    saveRoomMemory();
+    clearInterval(session.roomSaveTimer);
     clearInterval(session.statsTimer);
     clearInterval(session.reconnectTimer);
     clearTimeout(session.toastTimer);
@@ -4590,14 +4600,7 @@
 
     // Quadros (com a versão de cada um), os que foram fechados e a posição
     // das janelas: é pouco, vai inteiro no primeiro pedaço.
-    const workspace = {
-      boards: [...session.boards.values()].map(({ id, title, version, by }) => ({ id, title, version, by })),
-      closed: [...session.closedBoards],
-      erased: [...session.erased],
-      displays: [...session.displays.values()].map(displayData),
-      closedDisplays: [...session.closedDisplays],
-      layout: [...session.layout].map(([id, entry]) => ({ id, ...pickLayout(entry), rev: entry.rev, by: entry.by }))
-    };
+    const workspace = workspaceSnapshot();
 
     batches.forEach((batch, index) => sendTo(peer, {
       type: "sync-data",
@@ -4613,6 +4616,78 @@
     }
 
     if (full) log(`Histórico enviado para ${peerLabel(peer)}: ${chat.length} mensagens, ${strokes.length} traços.`);
+
+  }
+
+  function workspaceSnapshot() {
+    return {
+      boards: [...session.boards.values()].map(({ id, title, version, by }) => ({ id, title, version, by })),
+      closed: [...session.closedBoards],
+      erased: [...session.erased],
+      displays: [...session.displays.values()].map(displayData),
+      closedDisplays: [...session.closedDisplays],
+      layout: [...session.layout].map(([id, entry]) => ({ id, ...pickLayout(entry), rev: entry.rev, by: entry.by }))
+    };
+  }
+
+  /* ---- memória da sala (neste navegador) ---- */
+
+  /*
+   * Enquanto estou numa sala, guardo o que ela tem (quadros, traços, chat
+   * e janelas) no localStorage, por nome de sala: a cada ROOM_SAVE_MS e
+   * ao sair. Voltando na mesma sala sem ninguém lá, restauro. Imagens
+   * não ficam (são grandes): as janelas de imagem não voltam. Não coube
+   * (localStorage cheio): fica sem, ou com a versão anterior.
+   */
+
+  const ROOM_SAVE_MS = 5000;
+  const roomMemoryKey = name => "rtc.room." + name;
+
+  function saveRoomMemory() {
+
+    if (!session?.room || !session.roomRestoreChecked) return;
+
+    const workspace = workspaceSnapshot();
+    const hidden = new Set(workspace.displays.filter(item => item.kind === "image").map(item => "display:" + item.id));
+
+    workspace.displays = workspace.displays.filter(item => item.kind !== "image");
+    workspace.layout = workspace.layout.filter(item => !hidden.has(item.id));
+
+    const chat = [...session.chat.values()];
+    const strokes = [...session.strokes].map(([key, { author, board, tool, color, width, v, t, points, text }]) => ({ key, author, board, tool, color, width, v, t, points, text }));
+
+    const text = JSON.stringify({ saved: Date.now(), ...workspace, chat, strokes });
+
+    if (text === session.roomSaved) return;
+
+    try {
+      localStorage.setItem(roomMemoryKey(session.room), text);
+      session.roomSaved = text;
+    } catch {}
+
+  }
+
+  // Entrei e não tem mais ninguém: volta o que eu tinha desta sala.
+  function restoreRoomMemory() {
+
+    if (!session?.room || session.roomRestoreChecked) return;
+
+    session.roomRestoreChecked = true;
+
+    let data = null;
+
+    try { data = JSON.parse(storageGet(roomMemoryKey(session.room))); } catch {}
+
+    if (!data || typeof data !== "object") return;
+
+    const has = key => Array.isArray(data[key]) && data[key].length;
+
+    if (!has("chat") && !has("strokes") && !has("displays") && !(Array.isArray(data.boards) && data.boards.length > 1)) return;
+
+    mergeSnapshot({ id: me.id }, { ...data, full: false });
+
+    const when = Number.isFinite(data.saved) ? new Date(data.saved).toLocaleString() : "";
+    addNote(`📂 A sala estava vazia: voltou o que você tinha aqui${when ? " (salvo em " + when + ")" : ""}.`);
 
   }
 
@@ -11269,6 +11344,12 @@
     if (!room.announced && (members.length > 1 || Date.now() - room.joinedAt > ROOM_SETTLE_MS)) {
 
       room.announced = true;
+
+      // Sozinho: restaura a memória da sala. Com gente: o histórico vem deles.
+      if (session) {
+        if (members.length === 1) restoreRoomMemory();
+        else session.roomRestoreChecked = true;
+      }
 
       if (session) {
         addNote(owner.id === me.id
