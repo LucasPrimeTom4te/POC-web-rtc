@@ -697,6 +697,31 @@
       gap: 6px;
     }
 
+    /* Pequeno e apagado: os detalhes ficam no tooltip. */
+    .perf-stats {
+      gap: 6px;
+      padding: 0 4px;
+      font-size: 10px;
+      color: var(--muted);
+      opacity: .45;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      cursor: default;
+      transition: opacity .15s;
+    }
+
+    .perf-stats:hover {
+      opacity: 1;
+    }
+
+    .perf-stats .warn {
+      color: var(--warn);
+    }
+
+    .perf-stats .bad {
+      color: #f87171;
+    }
+
     .icon-btn {
       padding: 7px 9px;
       font-size: 14px;
@@ -4784,6 +4809,10 @@
     </div>
 
     <div class="s-actions">
+      <!-- Desempenho desta página (só no PC): FPS, memória e CPU (estimada). -->
+      <span id="perfStats" class="perf-stats desktop-only" aria-label="Desempenho desta página" title="Desempenho desta página">
+        <span id="perfFps"></span><span id="perfMem"></span><span id="perfCpu"></span>
+      </span>
       <button id="roomLinkBtn" class="icon-btn hidden" title="QR code e link da sala para chamar mais gente">🔗<span class="btn-text"> Link da sala</span></button>
       <button id="rememberBtn" class="icon-btn" title="Lembrar este dispositivo para conectar de novo depois">☆ Lembrar</button>
       <button id="chatToggleBtn" class="icon-btn desktop-only" title="Fechar o chat">💬<span class="btn-text"> Chat</span><span id="chatToggleBadge" class="badge hidden"></span></button>
@@ -16145,6 +16174,120 @@
   }
 
   setInterval(tickWaves, WAVE_EVERY_MS);
+
+  /* ---- 📊 desempenho no topo (só no PC) ----
+   *
+   * fps: quadros de tela por segundo. MB: memória do JavaScript desta aba
+   * (performance.memory, só Chrome e Edge). CPU: o navegador não dá a %
+   * de verdade; mostra quanto a página passou ocupada com tarefas longas
+   * (> 50 ms) no último segundo e, no Chrome, a pressão de CPU do
+   * computador (Compute Pressure). Atualiza uma vez por segundo.
+   */
+  const PRESSURE_LABEL = { nominal: "normal", fair: "moderada", serious: "alta", critical: "crítica" };
+
+  // loop: marca do contador atual (um religado deixa o anterior parar sozinho).
+  const perf = { running: false, loop: null, frames: 0, since: 0, lastFrame: 0, busy: 0, pressure: null };
+
+  function perfFrame(now, loop) {
+
+    if (!perf.running || loop !== perf.loop) return;
+
+    perf.frames++;
+    perf.lastFrame = now;
+
+    const elapsed = now - perf.since;
+
+    if (elapsed >= 1000) {
+      renderPerf(perf.frames * 1000 / elapsed, elapsed);
+      perf.frames = 0;
+      perf.busy = 0;
+      perf.since = now;
+    }
+
+    requestAnimationFrame(time => perfFrame(time, loop));
+
+  }
+
+  function setPerfText(id, text, level = "") {
+    const element = $(id);
+    if (element.textContent !== text) element.textContent = text;
+    if (element.className !== level) element.className = level;
+  }
+
+  function renderPerf(fps, elapsed) {
+
+    setPerfText("perfFps", Math.round(fps) + "fps", fps < 30 ? "bad" : fps < 50 ? "warn" : "");
+
+    const memory = performance.memory;
+    const used = memory && memory.usedJSHeapSize / 1048576;
+    if (memory) {
+      const share = memory.usedJSHeapSize / memory.jsHeapSizeLimit;
+      setPerfText("perfMem", Math.round(used) + "MB", share > 0.7 ? "bad" : share > 0.4 ? "warn" : "");
+    }
+
+    const busy = Math.min(100, perf.busy / elapsed * 100);
+    const pressure = perf.pressure && PRESSURE_LABEL[perf.pressure];
+    setPerfText("perfCpu", Math.round(busy) + "%",
+      busy > 50 || perf.pressure === "critical" || perf.pressure === "serious" ? "bad"
+        : busy > 20 || perf.pressure === "fair" ? "warn" : "");
+
+    // Tooltip com os números e o que cada um quer dizer.
+    const tip = [
+      "📊 Desempenho desta página (só aqui)",
+      `FPS: ${Math.round(fps)} quadros de tela por segundo (60 é o normal)`,
+      memory ? `Memória: ${Math.round(used)} MB de JavaScript nesta aba (limite ${Math.round(memory.jsHeapSizeLimit / 1048576)} MB)`
+        : "Memória: este navegador não informa (só Chrome e Edge)",
+      `CPU: página ocupada ${Math.round(busy)}% do tempo com tarefas longas`,
+      pressure ? `Pressão de CPU do computador: ${pressure}` : ""
+    ].filter(Boolean).join("\n");
+
+    // Com o mouse em cima, o title está guardado pelo tooltip: atualiza lá.
+    const box = $("perfStats");
+    if ("tipTitle" in box.dataset) box.dataset.tipTitle = tip;
+    else if (box.title !== tip) box.title = tip;
+
+  }
+
+  // Liga só com sessão e no PC. Também religa o contador se ele parou: no
+  // picture-in-picture da sala os quadros vêm da janela flutuante, e ao
+  // fechá-la o pedido que estava lá se perde.
+  function syncPerf() {
+
+    const wanted = !!session && DESKTOP_LAYOUT.matches;
+
+    if (!wanted) {
+      perf.running = false;
+      return;
+    }
+
+    const now = performance.now();
+
+    if (!perf.running || (!document.hidden && now - perf.lastFrame > 1500)) {
+      perf.running = true;
+      perf.frames = 0;
+      perf.busy = 0;
+      perf.since = perf.lastFrame = now;
+      const loop = perf.loop = {};
+      requestAnimationFrame(time => perfFrame(time, loop));
+    }
+
+  }
+
+  setInterval(syncPerf, 1000);
+
+  if (PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
+    new PerformanceObserver(list => {
+      if (perf.running) for (const entry of list.getEntries()) perf.busy += entry.duration;
+    }).observe({ type: "longtask" });
+  }
+
+  if ("PressureObserver" in window) {
+    try {
+      new PressureObserver(records => { perf.pressure = records.at(-1)?.state || null; })
+        .observe("cpu", { sampleInterval: 2000 })
+        .catch(() => {});
+    } catch {}
+  }
 
   async function togglePip(video) {
 
