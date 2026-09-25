@@ -2005,6 +2005,150 @@
       color: var(--warn);
     }
 
+    /* Ícones SVG da barra do quadro. */
+    .board-tools .ic {
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .board-tools .ic svg,
+    .board-tools .tool > svg {
+      display: block;
+      width: 18px;
+      height: 18px;
+    }
+
+    .board-tools .tool {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .tray[data-tray="more"].open .tool {
+      justify-content: flex-start;
+    }
+
+    /* PC: a barra fica em pé, numa coluna à esquerda da área de trabalho
+       (2 colunas de ícones; o nome aparece ao passar o mouse). */
+    @media (min-width: 900px) {
+
+      .board-pane {
+        flex-direction: row;
+        align-items: flex-start;
+        padding-top: 10px;
+      }
+
+      .board-pane > .stage-area {
+        align-self: stretch;
+        min-width: 0;
+      }
+
+      #boardTools {
+        position: relative;
+        flex: none;
+        margin-left: 10px;
+        z-index: 25;
+        display: grid;
+        grid-template-columns: repeat(2, 36px);
+        gap: 4px;
+        padding: 6px;
+        border-radius: 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+      }
+
+      #boardTools .tool-group {
+        display: contents;
+      }
+
+      #boardTools .tool {
+        width: 36px;
+        height: 36px;
+        min-width: 0;
+        padding: 0;
+        border-radius: 10px;
+        font-size: 16px;
+      }
+
+      #boardTools .tool:not(.active) {
+        background: transparent;
+      }
+
+      #boardTools .tool:not(.active):hover {
+        background: var(--surface-2, rgba(255, 255, 255, .08));
+      }
+
+      #boardTools .tool-sep,
+      #boardTools .spacer {
+        display: block;
+        grid-column: 1 / -1;
+        flex: none;
+        width: auto;
+        height: 1px;
+        margin: 3px 2px;
+        background: var(--border);
+      }
+
+      #boardTools .swatch,
+      #boardTools .color-pick {
+        justify-self: center;
+        align-self: center;
+        width: 26px;
+        height: 26px;
+      }
+
+      #boardTools .size-pick {
+        grid-column: 1 / -1;
+        flex-direction: column;
+        gap: 4px;
+        padding: 2px 0;
+      }
+
+      #boardTools .size-pick input {
+        width: 70px;
+      }
+
+      /* Editando / Visualizando: a linha inteira, embaixo de tudo. */
+      #boardTools #boardModeBtn {
+        grid-column: 1 / -1;
+        width: auto;
+        margin-top: 4px;
+      }
+
+      #boardTools #boardModeBtn.active {
+        background: transparent;
+        color: var(--accent);
+        box-shadow: inset 0 0 0 1.5px var(--accent);
+      }
+
+      #boardTools .btn-label,
+      #boardTools .rail-label {
+        display: none;
+      }
+
+      /* "Fulano está desenhando" sai ao lado da barra. */
+      #boardTools .remote-drawing {
+        position: absolute;
+        top: 6px;
+        left: calc(100% + 8px);
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        max-width: 50vw;
+      }
+
+      /* Tela baixa: 3 colunas, para caber em pé. */
+      @media (max-height: 720px) {
+        #boardTools {
+          grid-template-columns: repeat(3, 36px);
+        }
+      }
+
+    }
+
     /* Chat */
     .chat-list {
       flex: 1;
@@ -2989,13 +3133,13 @@
       <!-- No PC tudo numa linha. No celular: uma linha com a ferramenta,
            a cor e o ⋯; cada um abre a sua bandeja por cima do quadro. -->
       <div id="boardTools" class="board-tools">
-        <button id="toolTrayBtn" class="tool tray-btn mobile-only" data-tray="tools" title="Ferramentas" aria-expanded="false"><span id="toolTrayIcon">✏️</span><span class="caret">▾</span></button>
+        <button id="toolTrayBtn" class="tool tray-btn mobile-only" data-tray="tools" title="Ferramentas" aria-expanded="false"><span id="toolTrayIcon" class="ic"></span><span class="caret">▾</span></button>
         <button id="colorTrayBtn" class="tool tray-btn mobile-only" data-tray="colors" title="Cor e espessura" aria-expanded="false"><span id="colorTrayDot" class="color-now"></span><span class="caret">▾</span></button>
         <!-- Ferramentas (atalho entre parênteses no title). -->
         <div class="tray" data-tray="tools">
           <span id="toolButtons" class="tool-group" role="toolbar" aria-label="Ferramentas de desenho"></span>
         </div>
-        <button id="undoBtn" class="tool" title="Desfazer o meu último traço neste quadro (Ctrl+Z)">↶</button>
+        <button id="undoBtn" class="tool" title="Desfazer o meu último traço neste quadro (Ctrl+Z)"><span class="ic" data-icon="undo"></span></button>
         <span class="tool-sep desktop-flex"></span>
         <div class="tray" data-tray="colors">
           <span id="swatches" class="tool-group"></span>
@@ -3010,14 +3154,14 @@
         <span id="remoteDrawing" class="remote-drawing hidden">✏️ O outro está desenhando…</span>
         <span class="spacer"></span>
         <div class="tray" data-tray="more">
-          <button id="addBoardBtn" class="tool" title="Novo quadro (aparece para todos)">➕ Quadro</button>
-          <button id="addDisplayBtn" class="tool" title="Mostrar uma imagem para todos (dá para trocar quando quiser)">🖼️ Imagem</button>
-          <button id="addSiteBtn" class="tool" title="Abrir um site: todos veem ao vivo, só você mexe">🌐 Site</button>
-          <button id="addVideoBtn" class="tool" title="Mostrar um vídeo do YouTube para todos, com som (só você controla)">▶️ YouTube</button>
-          <button id="addCodeBtn" class="tool" title="Editor de código: todos veem e todos podem escrever">💻 Código</button>
+          <button id="addBoardBtn" class="tool" title="Novo quadro (aparece para todos)"><span class="ic" data-icon="board"></span><span class="rail-label">Quadro</span></button>
+          <button id="addDisplayBtn" class="tool" title="Mostrar uma imagem para todos (dá para trocar quando quiser)"><span class="ic" data-icon="image"></span><span class="rail-label">Imagem</span></button>
+          <button id="addSiteBtn" class="tool" title="Abrir um site: todos veem ao vivo, só você mexe"><span class="ic" data-icon="site"></span><span class="rail-label">Site</span></button>
+          <button id="addVideoBtn" class="tool" title="Mostrar um vídeo do YouTube para todos, com som (só você controla)"><span class="ic" data-icon="youtube"></span><span class="rail-label">YouTube</span></button>
+          <button id="addCodeBtn" class="tool" title="Editor de código: todos veem e todos podem escrever"><span class="ic" data-icon="code"></span><span class="rail-label">Código</span></button>
         </div>
         <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
-        <button id="boardModeBtn" class="tool active">✏️<span class="btn-label"> Editando</span></button>
+        <button id="boardModeBtn" class="tool active"><span id="boardModeIcon" class="ic"></span><span id="boardModeLabel" class="btn-label">Editando</span></button>
         <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo e código" aria-expanded="false">⋯</button>
       </div>
 
@@ -6866,16 +7010,41 @@
    * borracha dar o mesmo resultado em todos, inclusive em quem chega depois.
    */
 
+  // Ícones da barra do quadro (traço de 24×24, na cor do texto).
+  const ICONS = {
+    pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    highlighter: '<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
+    eraser: '<path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>',
+    line: '<path d="M5 19 19 5"/>',
+    arrow: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
+    rect: '<rect x="3" y="5" width="18" height="14" rx="2"/>',
+    ellipse: '<ellipse cx="12" cy="12" rx="9" ry="7"/>',
+    text: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+    textbox: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 8h8"/><path d="M8 12h5"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+    board: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+    site: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    youtube: '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3Z"/>',
+    code: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>'
+  };
+
+  const iconSvg = name =>
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
+
+  document.querySelectorAll(".ic[data-icon]").forEach(element => { element.innerHTML = iconSvg(element.dataset.icon); });
+
   const TOOLS = {
-    pen:         { icon: "✏️", label: "Caneta", key: "p" },
-    highlighter: { icon: "🖍️", label: "Marca-texto", key: "h" },
-    eraser:      { icon: "🧽", label: "Borracha", key: "e" },
-    line:        { icon: "／", label: "Linha", key: "l" },
-    arrow:       { icon: "➚", label: "Seta", key: "a" },
-    rect:        { icon: "▭", label: "Retângulo", key: "r" },
-    ellipse:     { icon: "◯", label: "Elipse", key: "o" },
-    text:        { icon: "🅣", label: "Texto", key: "t" },
-    textbox:     { icon: "🗨️", label: "Caixa de texto", key: "x" }
+    pen:         { icon: "pen", label: "Caneta", key: "p" },
+    highlighter: { icon: "highlighter", label: "Marca-texto", key: "h" },
+    eraser:      { icon: "eraser", label: "Borracha", key: "e" },
+    line:        { icon: "line", label: "Linha", key: "l" },
+    arrow:       { icon: "arrow", label: "Seta", key: "a" },
+    rect:        { icon: "rect", label: "Retângulo", key: "r" },
+    ellipse:     { icon: "ellipse", label: "Elipse", key: "o" },
+    text:        { icon: "text", label: "Texto", key: "t" },
+    textbox:     { icon: "textbox", label: "Caixa de texto", key: "x" }
   };
 
   const SHAPES = new Set(["line", "arrow", "rect", "ellipse"]);
@@ -7630,7 +7799,7 @@
       const button = document.createElement("button");
       button.className = "tool" + (session.tool === name ? " active" : "");
       button.dataset.tool = name;
-      button.textContent = tool.icon;
+      button.innerHTML = iconSvg(tool.icon);
       button.title = `${tool.label} (${tool.key.toUpperCase()})`;
       button.setAttribute("aria-pressed", session.tool === name);
       button.onclick = () => {
@@ -7641,7 +7810,7 @@
     }));
 
     $("boardPane").dataset.tool = session.tool;
-    $("toolTrayIcon").textContent = TOOLS[session.tool].icon;
+    $("toolTrayIcon").innerHTML = iconSvg(TOOLS[session.tool].icon);
     $("toolTrayBtn").title = "Ferramenta: " + TOOLS[session.tool].label;
 
   }
@@ -7762,8 +7931,8 @@
 
     const editing = session.boardMode === "edit";
 
-    $("boardModeBtn").firstChild.textContent = editing ? "✏️" : "👁️";
-    $("boardModeBtn").lastChild.textContent = editing ? " Editando" : " Visualizando";
+    $("boardModeIcon").innerHTML = iconSvg(editing ? "pen" : "eye");
+    $("boardModeLabel").textContent = editing ? "Editando" : "Visualizando";
     $("boardModeBtn").classList.toggle("active", editing);
     $("boardModeBtn").title = editing
       ? "Tocar no quadro desenha. Toque para só visualizar."
