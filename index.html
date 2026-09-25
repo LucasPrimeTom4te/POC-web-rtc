@@ -789,6 +789,20 @@
       opacity: .4;
     }
 
+    .avatar.reconnecting {
+      opacity: .7;
+      box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--warn);
+      animation: avatar-reconnect 1.2s ease-in-out infinite;
+    }
+
+    @keyframes avatar-reconnect {
+      50% { box-shadow: 0 0 0 2px var(--surface), 0 0 0 7px rgba(245, 158, 11, .25); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .avatar.reconnecting { animation: none; }
+    }
+
     .avatar .badges {
       position: absolute;
       left: 50%;
@@ -2962,6 +2976,12 @@
     }
 
     /* Balão rápido no lugar do title do navegador (mouse só). */
+    .hover-tip.warn {
+      background: #3a2a06;
+      border-color: var(--warn);
+      color: #fde68a;
+    }
+
     .hover-tip {
       position: fixed;
       top: 0;
@@ -6850,6 +6870,7 @@
     toast(text);
 
     renderConnectionState();
+    renderRemoteState();
     reconnectAttempt(peer);
 
   }
@@ -6860,10 +6881,12 @@
 
     peer.reconnect = null;
 
-    addNote("✅ Reconectado!");
-    toast("✅ Reconectado!");
+    const text = session.room ? `✅ ${peerLabel(peer)} reconectou!` : "✅ Reconectado!";
+    addNote(text);
+    toast(text);
 
     renderConnectionState();
+    renderRemoteState();
 
   }
 
@@ -6898,12 +6921,19 @@
 
     }
 
+    // O topo é da minha conexão: na sala, uma pessoa caindo aparece só na
+    // bolinha dela. Só vira "Reconectando…" numa conexão direta (é a única)
+    // ou quando todos caíram juntos (aí o problema deve ser a minha internet).
+    const peersHere = connectedPeers();
+    const falling = peersHere.filter(peer => peer.reconnect).length;
+    const mine = reconnect && (!session.room || (falling >= 2 && falling === peersHere.length));
+
     if (!reconnect) {
       clearInterval(session.reconnectTimer);
       session.reconnectTimer = null;
     }
 
-    if (reconnect) {
+    if (mine) {
 
       const elapsed = Math.floor((Date.now() - reconnect.startedAt) / 1000);
 
@@ -6911,10 +6941,17 @@
       $("sessionTitleNote").textContent =
         `(tentando há ${elapsed} s, desiste em ${RECONNECT_GIVE_UP_S - elapsed} s)`;
 
-    } else if (session.room && !connectedPeers().length) {
+    } else if (session.room && !peersHere.length) {
+
+      $("sessionTitle").textContent = "Conectado";
+      $("sessionTitleNote").textContent = "(sozinho na sala por enquanto)";
+
+    } else if (session.room) {
 
       $("sessionTitle").textContent = "Na sala";
-      $("sessionTitleNote").textContent = "(esperando alguém entrar)";
+      $("sessionTitleNote").textContent = falling
+        ? `(${falling === 1 ? "1 pessoa reconectando" : falling + " pessoas reconectando"})`
+        : "(direto, sem servidor no meio)";
 
     } else {
 
@@ -6923,7 +6960,7 @@
 
     }
 
-    $("liveDot").classList.toggle("warn", !!reconnect);
+    $("liveDot").classList.toggle("warn", !!mine);
 
     renderPeople();
 
@@ -8245,10 +8282,16 @@
 
       peer.micPill = avatar(peer.id, peerLabel(peer), {
         ...peer.remote,
-        text: (muted ? "🔕" : "") + (peer.reconnect ? " ⚠️" : "")
-      }, muted ? "muted-by-me" : "");
+        text: muted ? "🔕" : ""
+      }, (muted ? "muted-by-me " : "") + (peer.reconnect ? "reconnecting" : ""));
 
       if (muted) peer.micPill.title += "\n🔕 você mutou (só para você)";
+
+      // Caindo: anel amarelo e tooltip amarelo.
+      if (peer.reconnect) {
+        peer.micPill.title = `⚠️ ${peerLabel(peer)}: reconectando…\nA conexão com essa pessoa caiu; tentando de novo.`;
+        peer.micPill.dataset.tipTone = "warn";
+      }
       peer.micPill.title += "\nBotão direito: volume e mais";
 
       // Tocar na bolinha: volume e mudo dessa pessoa (nas configurações).
@@ -10421,6 +10464,7 @@
 
     const tip = hoverTip.el;
     tip.textContent = text;
+    tip.classList.toggle("warn", target.dataset.tipTone === "warn");
     tip.classList.remove("hidden");
 
     const rect = target.getBoundingClientRect();
