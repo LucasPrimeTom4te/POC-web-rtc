@@ -5,11 +5,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
-  <title>WebRTC P2P QR PoC</title>
+  <title>WebRTC P2P com Supabase</title>
 
-  <!-- Apenas para gerar/ler QR durante a prova de conceito -->
+  <!-- QR com o link do aparelho / da sala -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+  <!-- Supabase Realtime: só para a troca inicial (sinalização) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"></script>
 
   <style>
     :root {
@@ -298,159 +300,226 @@
     }
 
     /* ----------------------------------------------------------
-     * WEBCAM (computador)
+     * INTRODUÇÃO
      * ---------------------------------------------------------- */
 
-    .webcam {
-      position: relative;
-      background: black;
-      border-radius: 14px;
-      overflow: hidden;
-      aspect-ratio: 4 / 3;
-      width: min(100%, 560px, calc((100vh - 460px) * 4 / 3));
-      min-width: 260px;
+    .intro {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 16px;
     }
 
-    .webcam video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
+    .intro-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
     }
 
-    .webcam .frame {
-      position: absolute;
-      inset: 12% 24%;
-      border: 3px dashed rgba(255,255,255,.7);
-      border-radius: 14px;
-      pointer-events: none;
+    .intro-head > div {
+      flex: 1;
     }
 
-    /* Câmera frontal: espelha só a pré-visualização (a leitura usa o frame original). */
-    video.mirrored {
-      transform: scaleX(-1);
+    .intro h2 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      line-height: 1.3;
+    }
+
+    .intro-lead {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .intro strong {
+      color: var(--text);
+    }
+
+    .intro-need {
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .intro-features {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .intro-features div {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      font-size: 14px;
+    }
+
+    .intro-features b {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+
+    .intro-features span {
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .small {
+      font-size: 13px;
+    }
+
+    @media (max-width: 760px) {
+      .intro-features {
+        grid-template-columns: 1fr 1fr;
+      }
     }
 
     /* ----------------------------------------------------------
-     * CELULAR — telas em tela cheia
+     * INÍCIO (Supabase): este aparelho, código, sala, lembrados
      * ---------------------------------------------------------- */
 
-    .fullscreen {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
+    .home {
       display: flex;
       flex-direction: column;
+      gap: 16px;
     }
 
-    .scanner-screen {
-      background: black;
+    .home-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
     }
 
-    .scanner-screen video {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .viewfinder {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: min(75vw, 60vh);
-      aspect-ratio: 1;
-      transform: translate(-50%, -50%);
-      border: 3px solid var(--ok);
-      border-radius: 22px;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
-      pointer-events: none;
-    }
-
-    .overlay-top,
-    .overlay-bottom {
-      position: relative;
-      z-index: 1;
-      padding: 16px;
-      text-align: center;
-    }
-
-    .overlay-top {
-      padding-top: max(16px, env(safe-area-inset-top));
-      font-size: 19px;
-      font-weight: 600;
-      text-shadow: 0 1px 4px black;
-    }
-
-    .overlay-top small {
-      display: block;
-      font-weight: 400;
-      font-size: 15px;
-      opacity: .85;
-      margin-top: 4px;
-    }
-
-    .overlay-bottom {
-      margin-top: auto;
-      padding-bottom: max(16px, env(safe-area-inset-bottom));
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-    }
-
-    .overlay-bottom button {
-      background: rgba(30, 38, 64, .85);
-      backdrop-filter: blur(6px);
-    }
-
-    /* QR de resposta: fundo branco e o maior possível, para a webcam ler. */
-    .answer-screen {
-      background: white;
-      color: #111;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
-    }
-
-    .answer-screen canvas {
-      display: block;
-      width: min(94vw, calc(100dvh - 250px)) !important;
-      height: auto !important;
-      aspect-ratio: 1;
-      image-rendering: pixelated;
-    }
-
-    .answer-screen h2 {
-      margin: 0;
+    .home h2 {
       font-size: 22px;
-      line-height: 1.25;
-      text-align: center;
-      max-width: 420px;
     }
 
-    .answer-screen p {
-      margin: 0;
-      text-align: center;
-      font-size: 16px;
-      max-width: 420px;
-    }
-
-    .answer-screen .small {
+    .small {
       font-size: 13px;
-      color: #555;
     }
 
-    .answer-screen .step-badge {
-      color: #2563eb;
+    .me-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
-    .answer-screen button {
-      background: #e5e7eb;
-      color: #111;
+    .me-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .me-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .text-input {
+      width: 100%;
+      min-width: 0;
+      font: inherit;
+      font-size: 16px; /* evita o zoom automático do iPhone */
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .room-form {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .room-active {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .qr-box.small-qr canvas {
+      width: 200px !important;
+      height: 200px !important;
+      min-width: 0;
+    }
+
+    .remembered-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .remembered-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--surface-2);
+    }
+
+    .remembered-item .info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .remembered-item .name {
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .remembered-item button {
+      padding: 8px 12px;
       font-size: 14px;
-      padding: 10px 16px;
+    }
+
+    .big-icon {
+      font-size: 48px;
+      line-height: 1;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .check input {
+      width: 20px;
+      height: 20px;
+    }
+
+    #rememberBtn {
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    #rememberBtn.on {
+      color: var(--warn);
+    }
+
+    @media (max-width: 760px) {
+      .home-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     /* ----------------------------------------------------------
@@ -1191,117 +1260,141 @@
       🔳 <span class="label">Abrir QR code do site</span>
     </button>
 
-    <div class="mode-toggle">
-      <button id="computerModeBtn" class="active">💻 Computador</button>
-      <button id="phoneModeBtn">📱 Celular</button>
-    </div>
-
   </div>
 </header>
 
 <main>
 
-  <!-- ========================================================= -->
-  <!-- COMPUTADOR                                                 -->
-  <!-- ========================================================= -->
+  <!-- Introdução para quem chega sem saber do que se trata -->
+  <div id="intro" class="card intro">
 
-  <section id="computerPanel" class="panel active">
+    <div class="intro-head">
+      <div>
+        <h2>👋 Conecte dois aparelhos, direto um no outro</h2>
+        <p class="intro-lead">
+          Esta página liga <strong>dois aparelhos</strong> (um computador e um
+          celular, ou dois celulares) numa conexão direta. O que vocês trocarem
+          vai de um para o outro, <strong>sem passar por um servidor</strong>.
+        </p>
+      </div>
+      <button id="introCloseBtn" class="icon-btn" title="Esconder a introdução">✕</button>
+    </div>
 
-    <!-- Passo 1: o celular lê o QR do computador -->
-    <div id="computerStep1" class="card step">
+    <div class="intro-need">
+      <strong>Você vai precisar:</strong> os 2 aparelhos com esta página aberta e com internet. Um pede para conectar e o outro aceita.
+    </div>
 
-      <span class="step-badge">
-        <span class="dots"><i class="on"></i><i></i></span>
-        Passo 1 de 2
-      </span>
+    <div class="intro-features">
+      <div><b>💬</b><strong>Chat</strong><span>mensagens na hora</span></div>
+      <div><b>🎙️</b><strong>Voz</strong><span>fale com o outro aparelho</span></div>
+      <div><b>🎨</b><strong>Quadro</strong><span>desenhem juntos</span></div>
+      <div><b>📁</b><strong>Arquivos</strong><span>você envia, o outro aceita e baixa</span></div>
+    </div>
 
-      <h2>Aponte a câmera do celular para este código</h2>
+    <p class="muted small" style="margin:0">
+      É só seguir os passos abaixo. Quer saber como funciona por dentro? Toque em 💡.
+    </p>
 
-      <p id="step1Lead" class="lead">
-        Use a <strong>câmera normal do celular</strong> e toque no link que aparecer.
-        O celular vai mostrar outro código na tela.
+  </div>
+
+  <section id="homePanel" class="home">
+
+    <div id="configError" class="card hidden">
+      <h2 style="margin-top:0">⚙️ Falta configurar o Supabase</h2>
+      <p class="muted" style="margin:0 0 8px">
+        Não consegui carregar a configuração: <strong id="configErrorText"></strong>
       </p>
+      <p class="muted" style="margin:0">
+        Na Vercel, defina <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code>
+        em <em>Settings → Environment Variables</em> e faça um novo deploy.
+        Para rodar localmente, use <code>vercel dev</code>.
+      </p>
+    </div>
 
-      <div class="qr-box">
-        <canvas id="qrCanvas" class="hidden"></canvas>
-        <span id="qrLoading">Preparando código…</span>
+    <div id="homeNotice" class="status error hidden">
+      <span id="homeNoticeText" style="flex:1"></span>
+      <button id="homeRetryBtn" class="hidden">🔁 Pedir de novo</button>
+    </div>
+
+    <div class="card me-card">
+      <div class="me-row">
+        <span id="onlineDot" class="live-dot warn"></span>
+        <div class="me-info">
+          <label for="nameInput" class="muted small">Nome deste aparelho (é o que o outro vê)</label>
+          <input id="nameInput" class="text-input" maxlength="40" autocomplete="off">
+        </div>
+      </div>
+      <div id="onlineText" class="muted small">Conectando ao servidor de troca…</div>
+    </div>
+
+    <div class="home-grid">
+
+      <div class="card step">
+
+        <span class="step-badge">Opção 1</span>
+
+        <h2>Conectar a este aparelho</h2>
+
+        <p class="lead">
+          No outro aparelho, aponte a <strong>câmera</strong> para este código e
+          toque no link. Aí é só <strong>aceitar</strong> o pedido aqui.
+        </p>
+
+        <div class="qr-box small-qr">
+          <canvas id="deviceQr"></canvas>
+        </div>
+
+        <button id="copyDeviceLinkBtn">🔗 Copiar link</button>
+
+        <div id="deviceLinkWarning" class="status error hidden">
+          Este endereço só abre neste computador. Para outro aparelho ler,
+          acesse a página pelo endereço publicado (Vercel).
+        </div>
+
       </div>
 
-      <div class="actions">
-        <button id="toStep2Btn" class="primary big" disabled>
-          O celular mostrou um código →
-        </button>
-      </div>
+      <div class="card step">
 
-      <div id="step1Status" class="status error hidden"></div>
+        <span class="step-badge">Opção 2</span>
+
+        <h2>Entrar numa sala</h2>
+
+        <p class="lead">
+          Os dois aparelhos entram na <strong>mesma sala</strong>, com o mesmo
+          nome. Cabem 2 por sala.
+        </p>
+
+        <form id="roomForm" class="room-form" autocomplete="off">
+          <input id="roomInput" class="text-input" placeholder="Nome da sala (ex.: casa)" maxlength="40" enterkeyhint="go">
+          <button type="submit" class="primary">Entrar</button>
+        </form>
+
+        <div id="roomActive" class="room-active hidden">
+          <div>Você está na sala <strong id="roomName"></strong></div>
+          <div id="roomStatus" class="status working">Entrando na sala…</div>
+          <p class="muted small" style="margin:0">O outro pode digitar o nome ou ler este código:</p>
+          <div class="qr-box small-qr">
+            <canvas id="roomQr"></canvas>
+          </div>
+          <button id="leaveRoomBtn">Sair da sala</button>
+        </div>
+
+        <div id="roomError" class="status error hidden"></div>
+
+      </div>
 
     </div>
 
-    <!-- Passo 2: a webcam lê o QR do celular -->
-    <div id="computerStep2" class="card step hidden">
+    <div class="card">
 
-      <span class="step-badge">
-        <span class="dots"><i class="on"></i><i class="on"></i></span>
-        Passo 2 de 2
-      </span>
+      <h2 style="margin:0 0 12px">⭐ Dispositivos lembrados</h2>
 
-      <h2>Agora mostre a tela do celular para a câmera do computador</h2>
+      <div id="rememberedList" class="remembered-list"></div>
 
-      <p class="lead">
-        Vire o celular com o código <strong>de frente para a câmera</strong>
-        (fica em cima da tela) e segure parado.
-      </p>
-
-      <div class="webcam">
-        <video id="computerVideo" autoplay playsinline muted></video>
-        <div class="frame"></div>
-      </div>
-
-      <div id="computerStatus" class="status working">Ligando a câmera…</div>
-
-      <div class="actions">
-        <button id="backToStep1Btn">← Voltar</button>
-        <button id="switchComputerCameraBtn" class="hidden">🔄 Trocar câmera</button>
-        <button id="restartComputerBtn" class="hidden">↺ Começar de novo</button>
-      </div>
-
-      <ul class="tips">
-        <li>Não está lendo? Aproxime ou afaste o celular devagar.</li>
-        <li>Se o código aparecer muito claro ou com reflexo, incline um pouco o celular.</li>
-        <li>O código precisa aparecer inteiro dentro do quadro.</li>
-      </ul>
-
-    </div>
-
-  </section>
-
-  <!-- ========================================================= -->
-  <!-- CELULAR                                                    -->
-  <!-- ========================================================= -->
-
-  <section id="phonePanel" class="panel">
-
-    <!-- Início (quando a página foi aberta sem o link do QR) -->
-    <div id="phoneStart" class="card step">
-
-      <span class="step-badge">
-        <span class="dots"><i class="on"></i><i></i></span>
-        Passo 1 de 2
-      </span>
-
-      <h2>Leia o código que está na tela do computador</h2>
-
-      <p class="lead">
-        Toque no botão abaixo e aponte a câmera para o código.
-      </p>
-
-      <button id="startPhoneBtn" class="primary big">📷 Ler código</button>
-
-      <div id="phoneStatus" class="status hidden"></div>
-
-      <p class="muted" style="margin:0; font-size:14px">
-        Dica: também dá para ler com a <strong>câmera normal do celular</strong>
-        e tocar no link que aparecer.
+      <p id="rememberedEmpty" class="muted" style="margin:0">
+        Nenhum ainda. Ao aceitar uma conexão, marque “Lembrar este dispositivo”:
+        depois é só tocar em Conectar para mandar um novo pedido (o outro
+        sempre precisa aceitar).
       </p>
 
     </div>
@@ -1315,41 +1408,48 @@
 
 </main>
 
-<!-- Celular: câmera em tela cheia -->
-<div id="phoneScanner" class="fullscreen scanner-screen hidden">
+<!-- Pedido de conexão recebido: sempre precisa aceitar -->
+<div id="requestModal" class="modal hidden">
 
-  <video id="phoneVideo" autoplay playsinline muted></video>
-  <div class="viewfinder"></div>
+  <div class="card modal-card">
 
-  <div class="overlay-top">
-    Aponte para o código na tela do computador
-    <small id="phoneScanHint">Deixe o código dentro do quadro verde</small>
-  </div>
+    <div class="big-icon">🔔</div>
 
-  <div class="overlay-bottom">
-    <button id="switchPhoneCameraBtn" class="hidden">🔄 Trocar câmera</button>
-    <button id="cancelPhoneScanBtn">✕ Cancelar</button>
+    <h2 id="requestTitle">Pedido de conexão</h2>
+
+    <p id="requestDetail" class="muted" style="margin:0"></p>
+
+    <label class="check">
+      <input type="checkbox" id="rememberCheck">
+      Lembrar este dispositivo
+    </label>
+
+    <div class="actions">
+      <button id="declineBtn" class="big">Recusar</button>
+      <button id="acceptBtn" class="primary big">Aceitar</button>
+    </div>
+
   </div>
 
 </div>
 
-<!-- Celular: QR de resposta em tela cheia -->
-<div id="phoneAnswer" class="fullscreen answer-screen hidden">
+<!-- Pedido enviado / conectando -->
+<div id="pendingModal" class="modal hidden">
 
-  <span class="step-badge">
-    <span class="dots"><i class="on"></i><i class="on"></i></span>
-    Passo 2 de 2
-  </span>
+  <div class="card modal-card">
 
-  <h2>Agora vire esta tela para a câmera do computador</h2>
+    <div id="pendingIcon" class="big-icon">📨</div>
 
-  <p>No computador, clique em <strong>“O celular mostrou um código”</strong>.</p>
+    <h2 id="pendingTitle">Pedindo para conectar…</h2>
 
-  <canvas id="answerQrCanvas"></canvas>
+    <div id="pendingStatus" class="status working">Aguardando…</div>
 
-  <p id="phoneAnswerStatus" class="small">Segure parado até aparecer “Conectado”.</p>
+    <div class="actions">
+      <button id="pendingRetryBtn" class="primary hidden">🔁 Pedir de novo</button>
+      <button id="pendingCancelBtn">Cancelar</button>
+    </div>
 
-  <button id="rescanPhoneBtn">↺ Ler o código do computador de novo</button>
+  </div>
 
 </div>
 
@@ -1363,12 +1463,13 @@
       <div>
         <div class="s-title">
           <span id="sessionTitle">Conectado</span>
-          <span id="sessionTitleNote" class="s-title-note">(sem um servidor)</span>
+          <span id="sessionTitleNote" class="s-title-note">(direto, sem servidor no meio)</span>
         </div>
         <div id="peerName" class="s-sub">direto com o outro aparelho</div>
       </div>
     </div>
 
+    <button id="rememberBtn" class="icon-btn" title="Lembrar este dispositivo para conectar de novo depois">☆ Lembrar</button>
     <button id="sessionHelpBtn" class="icon-btn" title="Quero entender o que está acontecendo">💡</button>
 
   </div>
@@ -1518,15 +1619,17 @@
     </p>
 
     <p>
-      <strong>Aqui, quem faz esse papel é o QR code.</strong>
-      As informações viram um código na tela, e a câmera do outro aparelho lê.
+      <strong>Nesta versão, esse servidor é o Supabase Realtime</strong>.
+      Ele funciona como um "carteiro": entrega o pedido de conexão, a oferta e a
+      resposta. Depois que os aparelhos se conectam, a conversa não passa mais
+      por ele.
     </p>
 
     <div class="flow">
-      <div><b>💻</b>O computador cria uma <strong>oferta</strong> e mostra num QR</div>
-      <div><b>📱</b>O celular lê e cria uma <strong>resposta</strong> em outro QR</div>
-      <div><b>📷</b>A webcam do computador lê a resposta</div>
-      <div><b>🔗</b>Pronto: conexão direta, os QR não são mais usados</div>
+      <div><b>📷</b>O outro lê o <strong>código do aparelho</strong> ou entra na mesma <strong>sala</strong></div>
+      <div><b>🔔</b>Chega um <strong>pedido</strong>, e você aceita (sempre)</div>
+      <div><b>☁️</b><strong>Oferta</strong> e <strong>resposta</strong> passam pelo Supabase</div>
+      <div><b>🔗</b>Conexão direta: chat, voz, quadro e arquivos não passam pelo servidor</div>
     </div>
 
     <details>
@@ -1534,23 +1637,44 @@
 
       <ul>
         <li>
-          A oferta e a resposta são descrições <strong>SDP</strong>, que têm
-          de 1 a 3&nbsp;KB, grandes demais para um QR fácil de ler. A página
-          envia só o essencial (credenciais ICE, impressão digital DTLS e
-          candidatos de rede) em uns 300 caracteres e remonta o SDP do outro lado.
+          Cada aparelho tem um <strong>id</strong> guardado no navegador e
+          escuta o seu canal <code>device:&lt;id&gt;</code> do Supabase. O QR
+          do aparelho é só um link com esse id. Quem abre o link manda um
+          <strong>pedido</strong> por esse canal, e nada acontece sem o
+          <strong>Aceitar</strong>.
         </li>
         <li>
-          O primeiro QR é um <strong>link</strong> com a oferta depois do
-          <code>#</code>. Assim a câmera normal do celular já abre a página
-          pronta. O que vem depois do <code>#</code> não é enviado ao servidor
-          do site.
+          Na <strong>sala</strong>, cada um entra no canal
+          <code>room:&lt;nome&gt;</code> e aparece na lista de presença
+          (<em>presence</em>). Quem chegou depois pede para conectar a quem já
+          estava. Um terceiro vê que já tem 2 e sai sozinho.
         </li>
         <li>
-          O QR só carrega o mínimo para abrir o canal de dados. O
-          <strong>áudio é combinado depois, pelo próprio canal de dados</strong>:
-          quem mostrou o primeiro QR manda uma descrição SDP nova (agora com
-          áudio) e o outro responde, sem precisar de outro QR. Isso se chama
-          <strong>renegociação</strong>.
+          Aceito o pedido, oferta e resposta (descrições <strong>SDP</strong>
+          completas) vão por um canal só daquela conexão,
+          <code>pair:&lt;id&gt;</code>. Cada lado espera juntar os seus
+          endereços de rede e manda tudo numa mensagem só.
+        </li>
+        <li>
+          Se a conexão <strong>cair</strong>, quem aceitou refaz a negociação
+          de rede (<em>ICE restart</em>) pelo mesmo canal a cada poucos
+          segundos, e a conversa continua de onde parou, sem novo pedido.
+        </li>
+        <li>
+          <strong>Lembrar um dispositivo</strong> guarda o id e o nome dele só
+          neste navegador. Depois dá para mandar um pedido novo direto, mas o
+          outro <strong>sempre</strong> precisa aceitar.
+        </li>
+        <li>
+          Nesta prova de conceito os canais do Supabase são públicos: quem
+          souber um id ou o nome de uma sala consegue <em>pedir</em>, nunca
+          conectar sem aceite. Em produção, o ideal é usar canais privados com
+          login.
+        </li>
+        <li>
+          O <strong>áudio é combinado depois, pelo próprio canal de dados</strong>:
+          quem aceitou o pedido manda uma descrição SDP nova (agora com áudio) e
+          o outro responde. Isso se chama <strong>renegociação</strong>.
         </li>
         <li>
           Ligar ou desligar o microfone não renegocia nada: a trilha de áudio é
@@ -1607,8 +1731,6 @@
 
 </div>
 
-<canvas id="computerScanCanvas" class="hidden"></canvas>
-<canvas id="phoneScanCanvas" class="hidden"></canvas>
 
 <script>
 
@@ -1627,27 +1749,13 @@
   // Conexão caiu durante a sessão: por quanto tempo esperar ela voltar.
   const RECONNECT_GIVE_UP_S = 60;
 
-  const CONNECTION_LOST_MESSAGE =
-    "A conexão caiu e não voltou. Para conectar de novo, siga o passo a passo.";
+  // A cada quantos segundos refazer a negociação enquanto a conexão está caída.
+  const RECONNECT_EVERY_S = 6;
 
-  // Tempo máximo esperando o ICE gathering antes de gerar o QR.
+  const CONNECTION_LOST_MESSAGE = "A conexão caiu e não voltou.";
+
+  // Tempo máximo juntando os candidatos ICE antes de mandar o SDP.
   const ICE_GATHERING_TIMEOUT_MS = 4000;
-
-  const SCAN_INTERVAL_MS = 80;
-
-  // Sem ler nada depois disso, mostra uma dica de como posicionar.
-  const SCAN_HINT_AFTER_MS = 7000;
-
-  // Renderiza grande e deixa o CSS reduzir (image-rendering: pixelated).
-  const QR_OPTIONS = {
-    width: 1024,
-    margin: 2,
-    // "L" gera um QR menor; lendo de uma tela, não precisa de mais.
-    errorCorrectionLevel: "L"
-  };
-
-  // Prefixo do offer dentro do link: <página>#o=<offer>
-  const OFFER_HASH = "#o=";
 
 
   /*
@@ -1698,249 +1806,10 @@
   }
 
 
-  /*
-   * ============================================================
-   * MODO
-   * ============================================================
-   */
-
-  function selectMode(mode) {
-
-    const isPhone = mode === "phone";
-
-    $("phoneModeBtn").classList.toggle("active", isPhone);
-    $("computerModeBtn").classList.toggle("active", !isPhone);
-
-    $("phonePanel").classList.toggle("active", isPhone);
-    $("computerPanel").classList.toggle("active", !isPhone);
-
-  }
-
-  // Trocar de modo recomeça aquele lado (os dois usam a mesma conexão).
-  $("computerModeBtn").onclick = () => {
-    resetPhone();
-    selectMode("computer");
-    startComputerPairing();
-  };
-
-  $("phoneModeBtn").onclick = () => {
-    computerScanner.stop();
-    closeConnection();
-    selectMode("phone");
-    resetPhone();
-  };
-
-
-  /*
-   * ============================================================
-   * LINK COM O OFFER
-   *
-   * O QR do computador é um link para esta página com o offer no
-   * hash. Assim a câmera nativa do celular já abre a página pronta
-   * para responder, sem precisar abrir nada antes. Só funciona se o
-   * celular conseguir acessar o endereço (não vale localhost/file).
-   * ============================================================
-   */
-
+  // O QR só funciona se o outro aparelho alcançar este endereço.
   const CAN_LINK =
     /^https?:$/.test(location.protocol) &&
     !/^(localhost|127\.|\[::1\]$)/.test(location.hostname);
-
-  // "|" não é válido em URL; "~" nunca aparece no offer compacto.
-  function offerToLink(offer) {
-    return location.origin + location.pathname + location.search +
-      OFFER_HASH + offer.replaceAll("|", "~");
-  }
-
-  // Aceita tanto o link quanto o offer puro (lido pelo scanner da página).
-  function offerFromText(text) {
-
-    const index = text.indexOf(OFFER_HASH);
-
-    if (index === -1) return text;
-
-    return decodeURIComponent(text.slice(index + OFFER_HASH.length))
-      .replaceAll("~", "|");
-
-  }
-
-  /*
-   * ============================================================
-   * SDP COMPACTO
-   *
-   * O SDP completo tem 1–3 KB, o que gera um QR denso demais para
-   * ser lido pela câmera. Enviamos só o essencial (ICE, DTLS e
-   * candidatos) e reconstruímos um SDP de DataChannel do outro lado.
-   *
-   * Formato: W2|tipo|mid|ufrag|pwd|fingerprint(base64)|setup|candidatos
-   * candidato: tipo,endereço,porta  (separados por ";")
-   *
-   * Para o QR ficar o menos denso possível (mais fácil de ler):
-   * - hostname mDNS "<uuid>.local" vira "@<uuid em base64>"
-   * - prioridade não vai: é recalculada pelo tipo e pela ordem
-   * - no máximo MAX_CANDIDATES candidatos, sem repetidos
-   * ============================================================
-   */
-
-  const MAX_CANDIDATES = 4;
-
-  // Prioridades padrão (RFC 8445) para host / srflx / prflx / relay.
-  const TYPE_PREFERENCE = { host: 126, srflx: 100, prflx: 110, relay: 0 };
-
-  const MDNS_REGEX =
-    /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})\.local$/i;
-
-  const CANDIDATE_TYPES = {
-    h: "host",
-    s: "srflx",
-    p: "prflx",
-    r: "relay"
-  };
-
-  // Hex (com ou sem ":") → base64 sem "=" no final.
-  function hexToBase64(hex) {
-    const bytes = hex.replace(/:/g, "").match(/../g).map(h => parseInt(h, 16));
-    return btoa(String.fromCharCode(...bytes)).replace(/=+$/, "");
-  }
-
-  function base64ToHex(base64, separator = ":") {
-    return Array.from(atob(base64), c =>
-      c.charCodeAt(0).toString(16).padStart(2, "0").toUpperCase()
-    ).join(separator);
-  }
-
-  function packAddress(address) {
-
-    const match = address.match(MDNS_REGEX);
-
-    return match
-      ? "@" + hexToBase64(match.slice(1).join(""))
-      : address;
-
-  }
-
-  function unpackAddress(address) {
-
-    if (!address.startsWith("@")) return address;
-
-    const hex = base64ToHex(address.slice(1), "").toLowerCase();
-
-    return [
-      hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
-      hex.slice(16, 20), hex.slice(20)
-    ].join("-") + ".local";
-
-  }
-
-  function encodeDescription(description) {
-
-    const sdp = description.sdp;
-
-    const get = regex => {
-      const match = sdp.match(regex);
-      if (!match) throw new Error("SDP sem " + regex);
-      return match[1].trim();
-    };
-
-    const candidates = [...sdp.matchAll(/^a=candidate:(.+)$/gm)]
-      .map(match => match[1].trim().split(/\s+/))
-      // Apenas componente 1 / UDP (DataChannel usa só isso).
-      .filter(parts => parts[1] === "1" && parts[2].toLowerCase() === "udp")
-      // Maior prioridade primeiro.
-      .sort((a, b) => Number(b[3]) - Number(a[3]))
-      .map(parts => [
-        parts[7][0],              // tipo (h/s/p/r)
-        packAddress(parts[4]),    // ip ou hostname mDNS
-        parts[5]                  // porta
-      ].join(","))
-      .filter((candidate, index, all) => all.indexOf(candidate) === index)
-      .slice(0, MAX_CANDIDATES);
-
-    if (!candidates.length) {
-      throw new Error("Nenhum candidato ICE encontrado.");
-    }
-
-    return [
-      "W2",
-      description.type === "offer" ? "o" : "a",
-      get(/^a=mid:(.+)$/m),
-      get(/^a=ice-ufrag:(.+)$/m),
-      get(/^a=ice-pwd:(.+)$/m),
-      hexToBase64(get(/^a=fingerprint:sha-256 (.+)$/m)),
-      get(/^a=setup:(.+)$/m),
-      candidates.join(";")
-    ].join("|");
-
-  }
-
-  function decodeDescription(text, expectedType) {
-
-    const parts = text.split("|");
-
-    if (parts.length !== 8 || parts[0] !== "W2") {
-      throw new Error("QR não pertence a este app.");
-    }
-
-    const [, type, mid, ufrag, pwd, fingerprint, setup, candidates] = parts;
-    const fullType = type === "o" ? "offer" : "answer";
-
-    if (fullType !== expectedType) {
-      throw new Error(
-        `Esperado QR de ${expectedType}, lido QR de ${fullType}.`
-      );
-    }
-
-    const sessionId =
-      Math.floor(Math.random() * 1e15);
-
-    const lines = [
-      "v=0",
-      `o=- ${sessionId} 2 IN IP4 127.0.0.1`,
-      "s=-",
-      "t=0 0",
-      `a=group:BUNDLE ${mid}`,
-      "a=msid-semantic: WMS",
-      "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
-      "c=IN IP4 0.0.0.0",
-      `a=ice-ufrag:${ufrag}`,
-      `a=ice-pwd:${pwd}`,
-      "a=ice-options:trickle",
-      `a=fingerprint:sha-256 ${base64ToHex(fingerprint)}`,
-      `a=setup:${setup}`,
-      `a=mid:${mid}`,
-      "a=sctp-port:5000",
-      "a=max-message-size:262144"
-    ];
-
-    candidates.split(";").forEach((candidate, index) => {
-
-      const [typeCode, address, port] = candidate.split(",");
-      const candidateType = CANDIDATE_TYPES[typeCode] || "host";
-
-      const priority =
-        TYPE_PREFERENCE[candidateType] * 2 ** 24 +
-        (65535 - index) * 2 ** 8 +
-        255;
-
-      let line =
-        `a=candidate:${index + 1} 1 udp ${priority} ${unpackAddress(address)} ${port} typ ${candidateType}`;
-
-      if (candidateType !== "host") {
-        line += " raddr 0.0.0.0 rport 0";
-      }
-
-      lines.push(line);
-
-    });
-
-    lines.push("a=end-of-candidates");
-
-    return {
-      type: fullType,
-      sdp: lines.join("\r\n") + "\r\n"
-    };
-
-  }
 
 
   /*
@@ -2024,15 +1893,15 @@
 
       log("Connection state: " + state);
 
-      if (state === "failed") {
+      if (session && (state === "disconnected" || state === "failed")) {
 
-        if (session) onFailed(CONNECTION_LOST_MESSAGE, true);
-        else onFailed("Falha na conexão. Os dois aparelhos estão na mesma rede?");
-
-      } else if (state === "disconnected") {
-
-        // Oscilação: o próprio WebRTC continua tentando. Só desiste depois.
+        // Caiu durante a sessão: tenta reconectar (ICE restart pelo
+        // Supabase, veja reconnectAttempt). Só desiste depois.
         connectionInterrupted(() => onFailed(CONNECTION_LOST_MESSAGE, true));
+
+      } else if (state === "failed") {
+
+        onFailed("Falha na conexão. Os dois aparelhos estão com internet?");
 
       } else if (state === "connected") {
 
@@ -2052,14 +1921,6 @@
 
   }
 
-  async function renderQR(canvasId, text) {
-
-    log(`Gerando QR (${text.length} caracteres)...`);
-
-    await QRCode.toCanvas($(canvasId), text, QR_OPTIONS);
-
-  }
-
   async function keepScreenOn() {
 
     try {
@@ -2074,629 +1935,6 @@
 
     wakeLock?.release().catch(() => {});
     wakeLock = null;
-
-  }
-
-
-  /*
-   * ============================================================
-   * SCANNER DE QR (câmera)
-   *
-   * Usa o leitor nativo do navegador (BarcodeDetector) quando
-   * existe, que é bem mais robusto. Senão, usa o jsQR alternando:
-   * - o centro da imagem em resolução cheia (onde fica a mira), e
-   * - a imagem inteira reduzida (QR fora do centro).
-   * Reduzir a imagem inteira sempre deixava o QR com poucos pixels
-   * por quadradinho e ele não era lido.
-   * ============================================================
-   */
-
-  // Lado máximo da imagem entregue ao jsQR (mais que isso fica lento).
-  const JSQR_MAX_SIDE = 1000;
-
-  let nativeDetectorPromise = null;
-
-  function getNativeDetector() {
-
-    nativeDetectorPromise ??= (async () => {
-
-      try {
-
-        if (!("BarcodeDetector" in window)) return null;
-
-        const formats = await BarcodeDetector.getSupportedFormats();
-
-        if (!formats.includes("qr_code")) return null;
-
-        return new BarcodeDetector({ formats: ["qr_code"] });
-
-      } catch {
-        return null;
-      }
-
-    })();
-
-    return nativeDetectorPromise;
-
-  }
-
-  class QrScanner {
-
-    constructor({ videoId, canvasId, switchButtonId, facingMode, onCode, onSlow }) {
-
-      this.video = $(videoId);
-      this.canvas = $(canvasId);
-      this.switchButton = $(switchButtonId);
-      this.context = this.canvas.getContext("2d", { willReadFrequently: true });
-      this.onCode = onCode;
-      this.onSlow = onSlow;
-
-      this.stream = null;
-      this.session = 0; // muda a cada start/stop: encerra loops antigos
-      this.facingMode = facingMode;
-      this.deviceId = null;
-      this.lastInvalid = null;
-      this.frame = 0;
-
-      this.switchButton.onclick = () =>
-        this.switchCamera().catch(error =>
-          log("Erro ao trocar câmera: " + error.message)
-        );
-
-    }
-
-    async start() {
-
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error(
-          "Câmera indisponível. Abra a página via HTTPS (ou localhost)."
-        );
-      }
-
-      this.stop();
-
-      const session = this.session;
-
-      this.lastInvalid = null;
-      this.detector = await getNativeDetector();
-
-      log(this.detector
-        ? "Leitor de QR: nativo do navegador."
-        : "Leitor de QR: jsQR.");
-
-      const stream =
-        await this.openStream({ facingMode: { ideal: this.facingMode } });
-
-      // Cancelado enquanto a câmera abria: desliga o que acabou de abrir.
-      if (session !== this.session) {
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-
-      const devices =
-        (await navigator.mediaDevices.enumerateDevices())
-          .filter(device => device.kind === "videoinput");
-
-      this.switchButton.classList.toggle("hidden", devices.length < 2);
-
-      this.loop(session);
-
-    }
-
-    async openStream(videoConstraints) {
-
-      this.stopTracks();
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          ...videoConstraints,
-          // Quanto mais pixels, mais longe o QR ainda é lido.
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
-        audio: false
-      });
-
-      const track = stream.getVideoTracks()[0];
-
-      // Foco contínuo, quando a câmera permite (ajuda muito no celular).
-      await track.applyConstraints({
-        advanced: [{ focusMode: "continuous" }]
-      }).catch(() => {});
-
-      const settings = track.getSettings();
-
-      this.stream = stream;
-      this.deviceId = settings.deviceId || null;
-
-      if (settings.facingMode) {
-        this.facingMode = settings.facingMode;
-      }
-
-      // Espelha a pré-visualização quando não é a câmera traseira.
-      this.video.classList.toggle(
-        "mirrored",
-        settings.facingMode !== "environment"
-      );
-
-      this.video.srcObject = stream;
-      await this.video.play().catch(() => {});
-
-      log(`Câmera: ${track.label || "desconhecida"} (${settings.width}x${settings.height})`);
-
-      return stream;
-
-    }
-
-    async switchCamera() {
-
-      const next =
-        this.facingMode === "user" ? "environment" : "user";
-
-      const previousDevice = this.deviceId;
-
-      try {
-
-        await this.openStream({ facingMode: { exact: next } });
-
-        if (this.deviceId && this.deviceId === previousDevice) {
-          throw new Error("mesma câmera");
-        }
-
-        this.facingMode = next;
-        return;
-
-      } catch {
-        // Sem facingMode (ex.: notebook): alterna pela lista de câmeras.
-      }
-
-      const devices =
-        (await navigator.mediaDevices.enumerateDevices())
-          .filter(device => device.kind === "videoinput");
-
-      const index =
-        devices.findIndex(device => device.deviceId === previousDevice);
-
-      const nextDevice =
-        devices[(index + 1) % devices.length];
-
-      await this.openStream({ deviceId: { exact: nextDevice.deviceId } });
-
-    }
-
-    async loop(session) {
-
-      const startedAt = performance.now();
-      let hinted = false;
-
-      while (session === this.session) {
-
-        await new Promise(resolve => setTimeout(resolve, SCAN_INTERVAL_MS));
-
-        if (session !== this.session) return;
-
-        if (!hinted && performance.now() - startedAt > SCAN_HINT_AFTER_MS) {
-          hinted = true;
-          this.onSlow?.();
-        }
-
-        if (
-          this.video.readyState < this.video.HAVE_CURRENT_DATA ||
-          !this.video.videoWidth
-        ) {
-          continue;
-        }
-
-        let data = null;
-
-        try {
-          data = await this.detect();
-        } catch (error) {
-          log("Erro na leitura: " + error.message);
-        }
-
-        if (session !== this.session) return;
-
-        if (!data || data === this.lastInvalid) continue;
-
-        const accepted = await this.onCode(data);
-
-        if (accepted) {
-          this.stop();
-          return;
-        }
-
-        // QR que não é deste app: ignora esse conteúdo e continua lendo.
-        this.lastInvalid = data;
-
-      }
-
-    }
-
-    async detect() {
-
-      if (this.detector) {
-        const codes = await this.detector.detect(this.video);
-        return codes[0]?.rawValue || null;
-      }
-
-      const videoWidth = this.video.videoWidth;
-      const videoHeight = this.video.videoHeight;
-
-      let sx = 0, sy = 0, sw = videoWidth, sh = videoHeight;
-
-      // Quadros alternados: centro em resolução cheia / imagem inteira.
-      if (this.frame++ % 2 === 0) {
-
-        const side = Math.round(Math.min(videoWidth, videoHeight) * 0.8);
-
-        sx = Math.round((videoWidth - side) / 2);
-        sy = Math.round((videoHeight - side) / 2);
-        sw = sh = side;
-
-      }
-
-      const scale = Math.min(1, JSQR_MAX_SIDE / Math.max(sw, sh));
-      const width = Math.round(sw * scale);
-      const height = Math.round(sh * scale);
-
-      this.canvas.width = width;
-      this.canvas.height = height;
-
-      this.context.drawImage(this.video, sx, sy, sw, sh, 0, 0, width, height);
-
-      const imageData = this.context.getImageData(0, 0, width, height);
-
-      // Os QR daqui são sempre escuros no claro: não precisa inverter.
-      const code = jsQR(imageData.data, width, height, {
-        inversionAttempts: "dontInvert"
-      });
-
-      return code?.data || null;
-
-    }
-
-    stopTracks() {
-
-      if (this.stream) {
-        this.stream.getTracks().forEach(track => track.stop());
-        this.stream = null;
-      }
-
-    }
-
-    stop() {
-
-      this.session++;
-      this.stopTracks();
-      this.video.srcObject = null;
-      this.switchButton.classList.add("hidden");
-
-    }
-
-  }
-
-
-  /*
-   * ============================================================
-   * COMPUTADOR
-   *
-   * Passo 1: mostra o QR do offer (o celular lê).
-   * Passo 2: liga a webcam e lê o QR de resposta do celular.
-   * Uma coisa de cada vez, avançando por botão.
-   * ============================================================
-   */
-
-  const computerScanner = new QrScanner({
-    videoId: "computerVideo",
-    canvasId: "computerScanCanvas",
-    switchButtonId: "switchComputerCameraBtn",
-    facingMode: "user",
-    onCode: handleAnswer,
-    onSlow: () => setStatus(
-      "computerStatus",
-      "Ainda não achei o código. Aproxime ou afaste o celular devagar.",
-      "working"
-    )
-  });
-
-  $("toStep2Btn").onclick = showComputerStep2;
-  $("backToStep1Btn").onclick = showComputerStep1;
-  $("restartComputerBtn").onclick = startComputerPairing;
-
-  if (!CAN_LINK) {
-    $("step1Lead").innerHTML =
-      "Abra <strong>esta mesma página no celular</strong>, toque em " +
-      "<strong>Ler código</strong> e aponte para este código.";
-  }
-
-  // O celular saiu: volta ao passo 1 com um código novo e avisa.
-  function computerDisconnected(
-    message = "O celular foi desconectado. Para conectar de novo, siga o passo a passo."
-  ) {
-
-    startComputerPairing();
-
-    setStatus("step1Status", message, "error");
-    show("step1Status");
-
-  }
-
-  // lost: a conexão caiu durante a sessão e não voltou.
-  function computerFailed(message, lost = false) {
-
-    if (session?.role === "host") {
-      computerDisconnected(lost ? message : undefined);
-      return;
-    }
-
-    setStatus("computerStatus", message, "error");
-    show("restartComputerBtn");
-
-  }
-
-  function showComputerStep(step) {
-
-    show("computerStep1", step === 1);
-    show("computerStep2", step === 2);
-
-  }
-
-  // Gera um offer novo e volta ao passo 1.
-  async function startComputerPairing() {
-
-    computerScanner.stop();
-    showComputerStep(1);
-
-    show("qrCanvas", false);
-    show("qrLoading");
-    show("step1Status", false);
-    $("toStep2Btn").disabled = true;
-
-    try {
-
-      log("Criando PeerConnection...");
-
-      const pc = createPeerConnection(computerFailed);
-
-      // DataChannel criado pelo computador.
-      dataChannel = pc.createDataChannel("control");
-      setupDataChannel(dataChannel, showComputerConnected, computerDisconnected);
-
-      await pc.setLocalDescription(await pc.createOffer());
-      await waitForIceGathering(pc);
-
-      const offer = encodeDescription(pc.localDescription);
-
-      await renderQR("qrCanvas", CAN_LINK ? offerToLink(offer) : offer);
-
-      show("qrLoading", false);
-      show("qrCanvas");
-      $("toStep2Btn").disabled = false;
-
-      log("Offer pronto.");
-
-    } catch (error) {
-
-      console.error(error);
-      log("Erro ao gerar offer: " + error.message);
-      setStatus("step1Status", "Erro ao gerar o código: " + error.message, "error");
-      show("step1Status");
-
-    }
-
-  }
-
-  function showComputerStep1() {
-
-    computerScanner.stop();
-    showComputerStep(1);
-
-  }
-
-  async function showComputerStep2() {
-
-    showComputerStep(2);
-    show("restartComputerBtn", false);
-    setStatus("computerStatus", "Ligando a câmera…", "working");
-
-    try {
-
-      await computerScanner.start();
-      setStatus("computerStatus", "Procurando o código do celular…", "working");
-
-    } catch (error) {
-
-      log("Erro na câmera: " + error.message);
-      computerFailed("Não foi possível ligar a câmera: " + error.message);
-
-    }
-
-  }
-
-  async function handleAnswer(data) {
-
-    try {
-
-      const answer = decodeDescription(data, "answer");
-
-      log("QR de resposta detectado!");
-
-      await peerConnection.setRemoteDescription(answer);
-
-      log("Answer aplicado. Aguardando conexão...");
-
-      setStatus("computerStatus", "Código lido! Conectando…", "working");
-
-      return true;
-
-    } catch (error) {
-
-      console.error(error);
-      log("QR ignorado: " + error.message);
-      return false;
-
-    }
-
-  }
-
-  function showComputerConnected() {
-
-    computerScanner.stop();
-    showComputerStep(0);
-    startSession("host");
-
-  }
-
-
-  /*
-   * ============================================================
-   * CELULAR
-   *
-   * Aberto pelo link do QR: gera a resposta direto.
-   * Aberto sem link: câmera traseira em tela cheia → lê o offer.
-   * Depois, QR de resposta em tela cheia para a webcam ler.
-   * ============================================================
-   */
-
-  const phoneScanner = new QrScanner({
-    videoId: "phoneVideo",
-    canvasId: "phoneScanCanvas",
-    switchButtonId: "switchPhoneCameraBtn",
-    facingMode: "environment",
-    onCode: handleOffer,
-    onSlow: () => {
-      $("phoneScanHint").textContent =
-        "Chegue mais perto, até o código encher o quadro verde.";
-    }
-  });
-
-  $("startPhoneBtn").onclick = startPhoneScan;
-  $("rescanPhoneBtn").onclick = startPhoneScan;
-  $("cancelPhoneScanBtn").onclick = resetPhone;
-
-  // O computador saiu: volta ao início e avisa.
-  function phoneDisconnected() {
-    phoneFailed(
-      "O computador foi desconectado. Para conectar de novo, toque em Ler código."
-    );
-  }
-
-  // lost: a conexão caiu durante a sessão e não voltou.
-  function phoneFailed(message, lost = false) {
-
-    if (session?.role === "guest" && !lost) {
-      message =
-        "O computador foi desconectado. Para conectar de novo, toque em Ler código.";
-    }
-
-    resetPhone();
-    setStatus("phoneStatus", message, "error");
-    show("phoneStatus");
-
-  }
-
-  async function startPhoneScan() {
-
-    closeConnection();
-
-    $("phoneScanHint").textContent = "Deixe o código dentro do quadro verde";
-
-    show("phoneAnswer", false);
-    show("phoneScanner");
-
-    try {
-
-      await phoneScanner.start();
-
-    } catch (error) {
-
-      console.error(error);
-      log("Erro na câmera: " + error.message);
-      phoneFailed("Não foi possível abrir a câmera: " + error.message);
-
-    }
-
-  }
-
-  async function handleOffer(data) {
-
-    let offer;
-
-    try {
-      offer = decodeDescription(offerFromText(data), "offer");
-    } catch (error) {
-      log("QR ignorado: " + error.message);
-      $("phoneScanHint").textContent = /^https?:/.test(data)
-        ? "Esse é o código do site. Leia o código grande do Passo 1."
-        : "Esse código não é o do computador.";
-      return false;
-    }
-
-    $("phoneScanHint").textContent = "Código lido! Preparando…";
-
-    await answerOffer(offer);
-
-    return true;
-
-  }
-
-  async function answerOffer(offer) {
-
-    try {
-
-      log("Offer recebido.");
-
-      keepScreenOn();
-
-      const pc = createPeerConnection(phoneFailed);
-
-      pc.ondatachannel = event => {
-        dataChannel = event.channel;
-        setupDataChannel(dataChannel, showPhoneConnected, phoneDisconnected);
-      };
-
-      await pc.setRemoteDescription(offer);
-      await pc.setLocalDescription(await pc.createAnswer());
-      await waitForIceGathering(pc);
-
-      await renderQR("answerQrCanvas", encodeDescription(pc.localDescription));
-
-      show("phoneScanner", false);
-      show("phoneAnswer");
-
-      log("Answer QR criado.");
-
-    } catch (error) {
-
-      console.error(error);
-      log("Erro ao processar offer: " + error.message);
-      phoneFailed("Erro: " + error.message);
-
-    }
-
-  }
-
-  function showPhoneConnected() {
-
-    phoneScanner.stop();
-
-    show("phoneScanner", false);
-    show("phoneAnswer", false);
-    startSession("guest");
-
-  }
-
-  function resetPhone() {
-
-    phoneScanner.stop();
-    closeConnection();
-    releaseScreen();
-
-    show("phoneScanner", false);
-    show("phoneAnswer", false);
-    show("phoneStatus", false);
-    show("phoneStart");
 
   }
 
@@ -2834,7 +2072,7 @@
       audioReady: false,
       micTrack: null,
       speakerOn: true,
-      remote: { known: false, mic: false, speaker: true, device: null },
+      remote: { known: false, mic: false, speaker: true, device: null, name: "" },
       tab: "chat",
       unread: { chat: 0, board: 0 },
       color: role === "host" ? BOARD_COLORS[1] : BOARD_COLORS[2],
@@ -2888,7 +2126,7 @@
       }
     };
 
-    send({ type: "hello", device: IS_MOBILE ? "phone" : "computer" });
+    send({ type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name });
     sendState();
 
     if (role === "host") {
@@ -2924,10 +2162,14 @@
 
   }
 
-  $("leaveBtn").onclick = () => {
-    if (session?.role === "host") startComputerPairing();
-    else resetPhone();
-  };
+  $("leaveBtn").onclick = () => goHome();
+
+  // Nome do outro lado: o que ele escolheu, senão o tipo do aparelho.
+  function peerLabel() {
+    return cleanName(session?.remote.name) ||
+      DEVICE_NAMES[session?.remote.device] ||
+      "O outro lado";
+  }
 
   $("sessionHelpBtn").onclick = () => show("helpModal");
 
@@ -2958,6 +2200,7 @@
     toast("⚠️ A conexão caiu. Tentando reconectar…");
 
     renderConnectionState();
+    reconnectAttempt();
 
   }
 
@@ -2992,6 +2235,8 @@
         return;
       }
 
+      if (elapsed > 0 && elapsed % RECONNECT_EVERY_S === 0) reconnectAttempt();
+
       $("sessionTitle").textContent = "Reconectando…";
       $("sessionTitleNote").textContent =
         `(tentando há ${elapsed} s, desiste em ${RECONNECT_GIVE_UP_S - elapsed} s)`;
@@ -2999,7 +2244,7 @@
     } else {
 
       $("sessionTitle").textContent = "Conectado";
-      $("sessionTitleNote").textContent = "(sem um servidor)";
+      $("sessionTitleNote").textContent = "(direto, sem servidor no meio)";
 
     }
 
@@ -3018,10 +2263,10 @@
 
       case "hello":
         session.remote.device = message.device;
-        $("peerName").textContent =
-          "direto com " + (DEVICE_NAMES[message.device] || "o outro aparelho");
-        $("remoteLabel").textContent =
-          (DEVICE_NAMES[message.device] || "O outro lado") + ":";
+        session.remote.name = cleanName(message.name);
+        peerNameChanged(message.name);
+        $("peerName").textContent = "direto com " + peerLabel();
+        $("remoteLabel").textContent = peerLabel() + ":";
         break;
 
       case "state":
@@ -3344,7 +2589,7 @@
   function handleRemoteState({ mic, speaker }) {
 
     const remote = session.remote;
-    const who = DEVICE_NAMES[remote.device] || "O outro lado";
+    const who = peerLabel();
 
     // Avisa só mudanças (não o estado inicial).
     if (remote.known) {
@@ -3620,7 +2865,7 @@
 
   function handleRemoteDraw(message) {
 
-    const who = DEVICE_NAMES[session.remote.device] || "O outro lado";
+    const who = peerLabel();
 
     if (message.type === "clear") {
       session.strokes.clear();
@@ -3778,7 +3023,7 @@
 
   function handleFileMessage(message) {
 
-    const who = DEVICE_NAMES[session.remote.device] || "O outro lado";
+    const who = peerLabel();
     const { id } = message;
 
     switch (message.type) {
@@ -4042,48 +3287,1037 @@
 
   /*
    * ============================================================
-   * INÍCIO
+   * INTRODUÇÃO: some depois que a pessoa fecha (fica lembrado)
    * ============================================================
    */
 
-  // Aberto pelo QR do computador: responde direto.
-  function handleOfferLink() {
+  try {
+    if (localStorage.getItem("rtc.introHidden")) show("intro", false);
+  } catch {}
 
-    const link = location.href;
+  $("introCloseBtn").onclick = () => {
+    show("intro", false);
+    try { localStorage.setItem("rtc.introHidden", "1"); } catch {}
+  };
 
-    // Tira o offer da barra de endereço (recarregar não reusa um offer velho).
-    history.replaceState(null, "", location.pathname + location.search);
 
-    selectMode("phone");
+  /*
+   * ============================================================
+   * SINALIZAÇÃO (Supabase Realtime)
+   *
+   * O Supabase só entrega mensagens curtas entre os aparelhos
+   * (broadcast) e diz quem está online (presence). Canais:
+   *
+   *   device:<id>  cada aparelho escuta o seu: recebe pedidos de
+   *                conexão e respostas (aceitar/recusar/ocupado)
+   *   room:<nome>  sala: quem está nela (presence), no máximo 2
+   *   pair:<id>    uma conexão aceita: oferta/resposta SDP e, se a
+   *                conexão cair, a renegociação (ICE restart)
+   *
+   * Depois de conectar, chat, áudio, quadro e arquivos vão direto
+   * de um aparelho para o outro, sem passar pelo Supabase.
+   * ============================================================
+   */
+
+  const STORAGE_KEYS = {
+    id: "rtc.deviceId",
+    name: "rtc.deviceName",
+    remembered: "rtc.remembered"
+  };
+
+  const REQUEST_TIMEOUT_MS = 60000;   // tempo para o outro aceitar
+  const CONNECT_TIMEOUT_MS = 30000;   // aceitou, mas a conexão direta não abriu
+  const ROOM_LIMIT = 2;
+  const NAME_MAX = 40;
+
+  let client = null;
+  let myChannel = null;
+  let room = null;        // { name, channel, joinedAt, requestedTo }
+  let pending = null;     // pedido em andamento: { pairId, peer, role, via, timer, failed }
+  let incoming = null;    // pedido recebido esperando Aceitar/Recusar
+  let pair = null;        // { id, channel, role, peer } da conexão aceita
+  let currentPeer = null; // { id, name } de quem está na sessão
+
+  const deviceChannels = new Map();
+
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  function uuid() {
+
+    if (crypto.randomUUID) return crypto.randomUUID();
+
+    // Fora de HTTPS o randomUUID não existe; getRandomValues existe.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = bytes[6] & 0x0f | 0x40;
+    bytes[8] = bytes[8] & 0x3f | 0x80;
+
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+
+  }
+
+  function storageGet(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+  }
+
+  function storageSet(key, value) {
+    try { localStorage.setItem(key, value); } catch {}
+  }
+
+  const cleanName = value =>
+    String(value || "").replace(/\s+/g, " ").trim().slice(0, NAME_MAX);
+
+  const isDeviceId = value =>
+    typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+  // Identidade deste aparelho (fica no navegador).
+  const me = {
+    id: isDeviceId(storageGet(STORAGE_KEYS.id)) ? storageGet(STORAGE_KEYS.id) : uuid(),
+    name: cleanName(storageGet(STORAGE_KEYS.name)) || (IS_MOBILE ? "📱 Celular" : "💻 Computador")
+  };
+
+  storageSet(STORAGE_KEYS.id, me.id);
+
+  const publicMe = () => ({ id: me.id, name: me.name });
+
+  const peerName = peer => cleanName(peer?.name) || "O outro aparelho";
+
+  function pageLink(params) {
+    return location.origin + location.pathname + "?" + new URLSearchParams(params);
+  }
+
+
+  /* ---------------- Supabase ---------------- */
+
+  async function loadConfig() {
+
+    const response = await fetch("api/config", { cache: "no-store" });
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok || !body.url || !body.anonKey) {
+      throw new Error(body.error || `não encontrei /api/config (HTTP ${response.status})`);
+    }
+
+    return body;
+
+  }
+
+  // Resolve na primeira inscrição; onStatus recebe as mudanças seguintes.
+  function subscribe(channel, onStatus) {
+
+    return new Promise((resolve, reject) => {
+
+      let settled = false;
+
+      channel.subscribe((status, error) => {
+
+        onStatus?.(status);
+
+        if (settled) return;
+
+        if (status === "SUBSCRIBED") {
+          settled = true;
+          resolve(channel);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          settled = true;
+          reject(new Error(error?.message || status));
+        }
+
+      });
+
+    });
+
+  }
+
+  async function initSignaling() {
 
     try {
-      answerOffer(decodeDescription(offerFromText(link), "offer"));
+
+      if (!window.supabase?.createClient) {
+        throw new Error("a biblioteca do Supabase não carregou (sem internet?)");
+      }
+
+      const { url, anonKey } = await loadConfig();
+
+      client = supabase.createClient(url, anonKey);
+
     } catch (error) {
-      log("Link inválido: " + error.message);
-      phoneFailed("Link inválido. Toque em Ler código e leia de novo.");
+
+      log("Configuração: " + error.message);
+      $("configErrorText").textContent = error.message;
+      show("configError");
+      setOnline("error", "Sem servidor de troca: veja o aviso acima.");
+      return false;
+
+    }
+
+    myChannel = client.channel("device:" + me.id, {
+      config: { broadcast: { self: false }, presence: { key: me.id } }
+    });
+
+    myChannel.on("broadcast", { event: "signal" }, ({ payload }) => handleSignal(payload));
+
+    try {
+
+      await subscribe(myChannel, status => {
+        if (status === "SUBSCRIBED") setOnline("ok", "Online: pronto para receber pedidos de conexão.");
+        else if (status !== "CLOSED") setOnline("warn", "Reconectando ao servidor de troca…");
+      });
+
+      await myChannel.track(publicMe());
+
+      log("Supabase Realtime conectado. Canal device:" + me.id);
+
+      return true;
+
+    } catch (error) {
+
+      log("Erro no Supabase: " + error.message);
+      setOnline("error", "Não foi possível conectar ao servidor de troca: " + error.message);
+      return false;
+
     }
 
   }
 
-  // Página já aberta e o QR lido de novo: só o "#" muda, sem recarregar.
-  window.addEventListener("hashchange", () => {
-    if (location.hash.startsWith(OFFER_HASH)) handleOfferLink();
-  });
+  function setOnline(kind, text) {
 
-  if (location.hash.startsWith(OFFER_HASH)) {
-
-    handleOfferLink();
-
-  } else if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
-
-    // Abre direto no modo celular em dispositivos móveis.
-    selectMode("phone");
-
-  } else {
-
-    startComputerPairing();
+    $("onlineDot").className = "live-dot" + (kind === "ok" ? "" : " warn");
+    $("onlineText").textContent = text;
 
   }
+
+  // Canal de outro aparelho: para mandar mensagens e ver se está online.
+  function deviceChannel(id) {
+
+    if (!deviceChannels.has(id)) {
+
+      const channel = client.channel("device:" + id, { config: { broadcast: { self: false } } });
+
+      let markSynced;
+      const synced = new Promise(resolve => { markSynced = resolve; });
+
+      channel.on("presence", { event: "sync" }, () => markSynced());
+
+      const ready = subscribe(channel);
+
+      ready.catch(() => {
+        deviceChannels.delete(id);
+        client.removeChannel(channel);
+      });
+
+      deviceChannels.set(id, { channel, ready, synced });
+
+    }
+
+    return deviceChannels.get(id);
+
+  }
+
+  async function sendToDevice(id, payload) {
+
+    const channel = await deviceChannel(id).ready;
+
+    await channel.send({ type: "broadcast", event: "signal", payload });
+
+  }
+
+  // Presença do aparelho no canal dele (null = offline).
+  async function devicePresence(id) {
+
+    const entry = deviceChannel(id);
+    const channel = await entry.ready;
+
+    await Promise.race([entry.synced, wait(3000)]);
+
+    return channel.presenceState()[id]?.[0] || null;
+
+  }
+
+
+  /* ---------------- pedidos de conexão ---------------- */
+
+  function handleSignal(payload) {
+
+    if (!payload || typeof payload.type !== "string") return;
+
+    const from = { id: payload.from?.id, name: cleanName(payload.from?.name) };
+
+    if (!isDeviceId(from.id)) return;
+
+    const matches = pending?.pairId === payload.pairId && pending.peer.id === from.id;
+
+    switch (payload.type) {
+
+      case "request":
+        handleIncomingRequest({ pairId: payload.pairId, via: payload.via, from });
+        break;
+
+      case "cancel":
+        if (incoming?.pairId === payload.pairId) {
+          closeIncoming();
+          homeNotice(`${peerName(from)} cancelou o pedido de conexão.`);
+        } else if (matches && !pending.failed) {
+          pendingFailed(`${peerName(from)} cancelou.`);
+        }
+        break;
+
+      case "accept":
+        if (!matches || pending.role !== "guest") return;
+        pending.peer.name = from.name || pending.peer.name;
+        clearTimeout(pending.timer);
+        pending.timer = setTimeout(connectTimedOut, CONNECT_TIMEOUT_MS);
+        showPending({
+          icon: "🤝",
+          title: `${peerName(pending.peer)} aceitou!`,
+          status: "Abrindo a conexão direta…"
+        });
+        break;
+
+      case "decline":
+        if (matches) pendingFailed(`${peerName(from)} recusou a conexão.`);
+        break;
+
+      case "busy":
+        if (matches) pendingFailed(`${peerName(from)} está em outra conexão agora.`);
+        break;
+
+    }
+
+  }
+
+  function handleIncomingRequest(request) {
+
+    if (typeof request.pairId !== "string" || request.pairId.length > 64) return;
+
+    // Só um pedido/conexão por vez.
+    if (session || pending || incoming) {
+      sendToDevice(request.from.id, { type: "busy", pairId: request.pairId, from: publicMe() })
+        .catch(() => {});
+      return;
+    }
+
+    const remembered = isRemembered(request.from.id);
+
+    incoming = {
+      ...request,
+      timer: setTimeout(() => declineIncoming(), REQUEST_TIMEOUT_MS)
+    };
+
+    $("requestTitle").textContent = `${peerName(request.from)} quer se conectar`;
+
+    const via = String(request.via || "");
+
+    $("requestDetail").textContent = [
+      via.startsWith("room:") ? `Pela sala “${via.slice(5)}”.` :
+        via === "remembered" ? "Pediu de novo pela lista de lembrados." :
+        "Leu o código deste aparelho.",
+      remembered ? "⭐ Você já lembrou deste dispositivo." : ""
+    ].join(" ").trim();
+
+    $("rememberCheck").checked = remembered;
+
+    show("requestModal");
+
+    log("Pedido de conexão de " + request.from.name);
+
+  }
+
+  function closeIncoming() {
+
+    if (!incoming) return;
+
+    clearTimeout(incoming.timer);
+    incoming = null;
+    show("requestModal", false);
+
+  }
+
+  function declineIncoming() {
+
+    if (!incoming) return;
+
+    const request = incoming;
+
+    closeIncoming();
+
+    sendToDevice(request.from.id, { type: "decline", pairId: request.pairId, from: publicMe() })
+      .catch(() => {});
+
+  }
+
+  async function acceptIncoming() {
+
+    if (!incoming) return;
+
+    const request = incoming;
+    const peer = request.from;
+
+    closeIncoming();
+
+    if ($("rememberCheck").checked) remember(peer);
+    else forget(peer.id);
+
+    pending = { pairId: request.pairId, peer, role: "host", via: request.via, timer: null, failed: false };
+    pending.timer = setTimeout(connectTimedOut, CONNECT_TIMEOUT_MS);
+
+    showPending({ icon: "🤝", title: `Conectando com ${peerName(peer)}…`, status: "Abrindo a conexão direta…" });
+
+    try {
+
+      await openPair(request.pairId, "host", peer);
+      await sendToDevice(peer.id, { type: "accept", pairId: request.pairId, from: publicMe() });
+      await startHostNegotiation();
+
+    } catch (error) {
+
+      console.error(error);
+      pendingFailed("Não foi possível conectar: " + error.message);
+
+    }
+
+  }
+
+  // Pede para conectar a outro aparelho (pelo código, sala ou lembrados).
+  async function requestConnection(peer, via) {
+
+    if (!client || !myChannel) {
+      homeNotice("Ainda sem conexão com o servidor de troca. Espere ficar online.");
+      return;
+    }
+
+    if (session || pending) return;
+
+    if (peer.id === me.id) {
+      homeNotice("Esse é o código deste mesmo aparelho: leia com o outro.");
+      return;
+    }
+
+    show("homeNotice", false);
+
+    const pairId = uuid();
+
+    pending = { pairId, peer: { id: peer.id, name: cleanName(peer.name) }, role: "guest", via, timer: null, failed: false };
+
+    showPending({
+      icon: "📨",
+      title: `Pedindo para conectar a ${peerName(pending.peer)}`,
+      status: "Vendo se está online…"
+    });
+
+    try {
+
+      const presence = await devicePresence(peer.id);
+
+      if (pending?.pairId !== pairId) return;
+
+      if (!presence) {
+        pendingFailed("Esse aparelho não está com a página aberta agora. Abra a página nele e peça de novo.");
+        return;
+      }
+
+      pending.peer.name = cleanName(presence.name) || pending.peer.name;
+
+      // Escuta o canal da conexão antes de pedir: a oferta vem logo depois do "aceitar".
+      await openPair(pairId, "guest", pending.peer);
+      await sendToDevice(peer.id, { type: "request", pairId, via, from: publicMe() });
+
+      if (pending?.pairId !== pairId) return;
+
+      showPending({
+        icon: "⏳",
+        title: `Pedido enviado para ${peerName(pending.peer)}`,
+        status: "Aguardando tocar em Aceitar lá…"
+      });
+
+      pending.timer = setTimeout(() => {
+        sendToDevice(peer.id, { type: "cancel", pairId, from: publicMe() }).catch(() => {});
+        pendingFailed("Ninguém aceitou a tempo.");
+      }, REQUEST_TIMEOUT_MS);
+
+    } catch (error) {
+
+      console.error(error);
+      if (pending?.pairId === pairId) pendingFailed("Não foi possível enviar o pedido: " + error.message);
+
+    }
+
+  }
+
+  function connectTimedOut() {
+    pendingFailed("A conexão direta não abriu. Os dois aparelhos estão com internet?");
+  }
+
+  function showPending({ icon, title, status, kind = "working" }) {
+
+    $("pendingIcon").textContent = icon;
+    $("pendingTitle").textContent = title;
+    setStatus("pendingStatus", status, kind);
+    $("pendingCancelBtn").textContent = "Cancelar";
+    show("pendingRetryBtn", false);
+    show("pendingModal");
+
+  }
+
+  // Mantém o aviso aberto com o motivo e a opção de pedir de novo.
+  function pendingFailed(message) {
+
+    if (!pending) return;
+
+    const { peer, via, role } = pending;
+
+    cleanupConnection();
+
+    pending = { peer, via, role, failed: true, pairId: null, timer: null };
+
+    $("pendingIcon").textContent = "😕";
+    setStatus("pendingStatus", message, "error");
+    $("pendingCancelBtn").textContent = "Fechar";
+    show("pendingRetryBtn", role === "guest");
+    show("pendingModal");
+
+  }
+
+  $("pendingCancelBtn").onclick = () => {
+
+    if (pending && !pending.failed) {
+      sendToDevice(pending.peer.id, { type: "cancel", pairId: pending.pairId, from: publicMe() })
+        .catch(() => {});
+    }
+
+    cleanupConnection();
+    pending = null;
+    show("pendingModal", false);
+
+  };
+
+  $("pendingRetryBtn").onclick = () => {
+
+    const { peer, via } = pending;
+
+    pending = null;
+    requestConnection(peer, via);
+
+  };
+
+  $("acceptBtn").onclick = acceptIncoming;
+  $("declineBtn").onclick = declineIncoming;
+
+
+  /* ---------------- conexão (canal pair:<id>) ---------------- */
+
+  async function openPair(pairId, role, peer) {
+
+    closePair();
+
+    const channel = client.channel("pair:" + pairId, { config: { broadcast: { self: false } } });
+
+    channel.on("broadcast", { event: "sdp" }, ({ payload }) =>
+      handlePairSdp(payload).catch(error => log("Erro na negociação: " + error.message))
+    );
+
+    pair = { id: pairId, channel, role, peer };
+
+    await subscribe(channel);
+
+  }
+
+  function closePair() {
+
+    if (!pair) return;
+
+    client.removeChannel(pair.channel);
+    pair = null;
+
+  }
+
+  function sendSdp(description) {
+    return pair?.channel.send({ type: "broadcast", event: "sdp", payload: { description } });
+  }
+
+  // Quem aceitou cria o canal de dados e a oferta.
+  async function startHostNegotiation() {
+
+    const pc = createPeerConnection(connectionFailed);
+
+    dataChannel = pc.createDataChannel("control");
+    setupDataChannel(dataChannel, onConnected, onPeerLeft);
+
+    await sendOffer(pc);
+
+  }
+
+  // Sem "trickle": espera juntar os candidatos e manda tudo numa mensagem.
+  async function sendOffer(pc, iceRestart = false) {
+
+    await pc.setLocalDescription(await pc.createOffer({ iceRestart }));
+
+    if (iceRestart) await wait(300); // dá tempo de recomeçar a coleta
+
+    await waitForIceGathering(pc);
+
+    if (peerConnection !== pc) return;
+
+    await sendSdp(pc.localDescription.toJSON());
+
+    log(iceRestart ? "Oferta de reconexão enviada pelo Supabase." : "Oferta enviada pelo Supabase.");
+
+  }
+
+  async function handlePairSdp({ description } = {}) {
+
+    if (!pair || !["offer", "answer"].includes(description?.type)) return;
+
+    if (description.type === "offer" && pair.role === "guest") {
+
+      let pc = peerConnection;
+
+      // Primeira oferta: conexão nova. Depois disso: reconexão (ICE restart).
+      if (!pc || !session) {
+
+        pc = createPeerConnection(connectionFailed);
+
+        pc.ondatachannel = event => {
+          dataChannel = event.channel;
+          setupDataChannel(dataChannel, onConnected, onPeerLeft);
+        };
+
+      }
+
+      await pc.setRemoteDescription(description);
+      await pc.setLocalDescription(await pc.createAnswer());
+      await waitForIceGathering(pc);
+
+      if (peerConnection !== pc) return;
+
+      await sendSdp(pc.localDescription.toJSON());
+
+      log("Resposta enviada pelo Supabase.");
+
+    } else if (
+      description.type === "answer" &&
+      pair.role === "host" &&
+      peerConnection?.signalingState === "have-local-offer"
+    ) {
+
+      await peerConnection.setRemoteDescription(description);
+      log("Resposta recebida pelo Supabase.");
+
+    }
+
+  }
+
+  // Chamado pela sessão quando a conexão cai e a cada nova tentativa.
+  function reconnectAttempt() {
+
+    if (!pair || pair.role !== "host" || !peerConnection) return;
+
+    log("Tentando reconectar (ICE restart pelo Supabase)…");
+
+    sendOffer(peerConnection, true).catch(error =>
+      log("Erro ao tentar reconectar: " + error.message)
+    );
+
+  }
+
+  function onConnected() {
+
+    const role = pair.role;
+
+    currentPeer = { ...pair.peer };
+
+    clearTimeout(pending?.timer);
+    pending = null;
+    show("pendingModal", false);
+
+    // A sala já cumpriu o papel: libera para outros.
+    leaveRoom();
+
+    startSession(role);
+    renderRememberButton();
+
+  }
+
+  // O outro saiu (ou a conexão não voltou): volta para o início.
+  function onPeerLeft() {
+    goHome(`${peerName(currentPeer)} foi desconectado.`, currentPeer);
+  }
+
+  function connectionFailed(message, lost = false) {
+
+    if (session) {
+      goHome(lost ? "A conexão caiu e não voltou." : message, currentPeer);
+      return;
+    }
+
+    pendingFailed("Não foi possível abrir a conexão direta. " + message);
+
+  }
+
+  function cleanupConnection() {
+
+    clearTimeout(pending?.timer);
+    closeConnection();
+    closePair();
+
+  }
+
+  function goHome(notice, retryPeer = null) {
+
+    cleanupConnection();
+    pending = null;
+    show("pendingModal", false);
+
+    if (notice) homeNotice(notice, retryPeer);
+
+  }
+
+  let homeRetryPeer = null;
+
+  function homeNotice(text, retryPeer = null) {
+
+    homeRetryPeer = retryPeer;
+
+    $("homeNoticeText").textContent = text;
+    show("homeRetryBtn", !!retryPeer);
+    show("homeNotice");
+
+  }
+
+  $("homeRetryBtn").onclick = () => {
+    if (homeRetryPeer) requestConnection(homeRetryPeer, "remembered");
+  };
+
+
+  /* ---------------- salas ---------------- */
+
+  function normalizeRoom(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40);
+  }
+
+  $("roomForm").onsubmit = event => {
+    event.preventDefault();
+    joinRoom($("roomInput").value);
+  };
+
+  $("leaveRoomBtn").onclick = () => leaveRoom();
+
+  async function joinRoom(value) {
+
+    const name = normalizeRoom(value);
+
+    show("roomError", false);
+
+    if (!name) {
+      roomError("Digite um nome para a sala (letras e números).");
+      return;
+    }
+
+    if (!client || !myChannel) {
+      roomError("Ainda sem conexão com o servidor de troca.");
+      return;
+    }
+
+    await leaveRoom();
+
+    const channel = client.channel("room:" + name, { config: { presence: { key: me.id } } });
+
+    room = { name, channel, joinedAt: Date.now(), requestedTo: null };
+
+    channel.on("presence", { event: "sync" }, () => {
+      if (room?.channel === channel) onRoomSync();
+    });
+
+    renderRoom();
+    setStatus("roomStatus", "Entrando na sala…", "working");
+
+    try {
+
+      await subscribe(channel);
+      await channel.track({ ...publicMe(), joinedAt: room.joinedAt });
+
+      log("Entrou na sala " + name);
+
+    } catch (error) {
+
+      if (room?.channel !== channel) return;
+      await leaveRoom();
+      roomError("Não foi possível entrar na sala: " + error.message);
+
+    }
+
+  }
+
+  // Quem entrou primeiro recebe o pedido; o segundo pede; o terceiro sai.
+  function onRoomSync() {
+
+    const members = Object.values(room.channel.presenceState())
+      .map(list => list[0])
+      .filter(member => isDeviceId(member?.id))
+      .sort((a, b) => a.joinedAt - b.joinedAt || (a.id < b.id ? -1 : 1));
+
+    const index = members.findIndex(member => member.id === me.id);
+
+    if (index === -1) return; // ainda não apareceu
+
+    if (index >= ROOM_LIMIT) {
+      const name = room.name;
+      leaveRoom();
+      roomError(`A sala “${name}” está cheia (cabem ${ROOM_LIMIT} aparelhos). Escolha outro nome.`);
+      return;
+    }
+
+    const other = members.slice(0, ROOM_LIMIT).find(member => member.id !== me.id);
+
+    if (!other) {
+      room.requestedTo = null;
+      setStatus("roomStatus", "Aguardando outra pessoa entrar na sala…", "working");
+      return;
+    }
+
+    const otherName = peerName(other);
+
+    if (index === 1) {
+
+      setStatus("roomStatus", `${otherName} está na sala. Pedindo para conectar…`, "working");
+
+      if (room.requestedTo !== other.id && !pending && !session) {
+        room.requestedTo = other.id;
+        requestConnection({ id: other.id, name: other.name }, "room:" + room.name);
+      }
+
+    } else {
+
+      setStatus("roomStatus", `${otherName} entrou na sala. Aceite o pedido quando aparecer.`, "working");
+
+    }
+
+  }
+
+  async function leaveRoom() {
+
+    if (!room) return;
+
+    const { channel } = room;
+
+    room = null;
+    renderRoom();
+
+    try { await channel.untrack(); } catch {}
+
+    client.removeChannel(channel);
+
+  }
+
+  function renderRoom() {
+
+    show("roomForm", !room);
+    show("roomActive", !!room);
+
+    if (!room) return;
+
+    $("roomName").textContent = room.name;
+
+    QRCode.toCanvas($("roomQr"), pageLink({ room: room.name }), { width: 480, margin: 1 })
+      .catch(() => {});
+
+  }
+
+  function roomError(text) {
+    setStatus("roomError", text, "error");
+    show("roomError");
+  }
+
+
+  /* ---------------- dispositivos lembrados ---------------- */
+
+  // Fica só neste navegador (localStorage): id + nome de cada um.
+  function loadRemembered() {
+
+    try {
+      const list = JSON.parse(storageGet(STORAGE_KEYS.remembered));
+      return Array.isArray(list) ? list.filter(item => isDeviceId(item?.id)) : [];
+    } catch {
+      return [];
+    }
+
+  }
+
+  function saveRemembered(list) {
+
+    storageSet(STORAGE_KEYS.remembered, JSON.stringify(list));
+
+    renderRemembered();
+    renderRememberButton();
+
+  }
+
+  function isRemembered(id) {
+    return loadRemembered().some(item => item.id === id);
+  }
+
+  function remember(peer) {
+
+    const list = loadRemembered().filter(item => item.id !== peer.id);
+
+    list.unshift({ id: peer.id, name: cleanName(peer.name), savedAt: Date.now() });
+
+    saveRemembered(list);
+
+  }
+
+  function forget(id) {
+    if (isRemembered(id)) saveRemembered(loadRemembered().filter(item => item.id !== id));
+  }
+
+  function renderRemembered() {
+
+    const list = loadRemembered();
+    const container = $("rememberedList");
+
+    container.replaceChildren();
+    show("rememberedEmpty", !list.length);
+
+    for (const item of list) {
+
+      const row = document.createElement("div");
+      row.className = "remembered-item";
+
+      const info = document.createElement("div");
+      info.className = "info";
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = peerName(item);
+
+      const date = document.createElement("div");
+      date.className = "muted small";
+      date.textContent = "Lembrado em " + new Date(item.savedAt).toLocaleDateString();
+
+      info.append(name, date);
+
+      const connect = document.createElement("button");
+      connect.className = "primary";
+      connect.textContent = "Conectar";
+      connect.onclick = () => requestConnection(item, "remembered");
+
+      const remove = document.createElement("button");
+      remove.textContent = "Esquecer";
+      remove.onclick = () => forget(item.id);
+
+      row.append(info, connect, remove);
+      container.appendChild(row);
+
+    }
+
+  }
+
+  $("rememberBtn").onclick = () => {
+
+    if (!currentPeer) return;
+
+    if (isRemembered(currentPeer.id)) forget(currentPeer.id);
+    else remember(currentPeer);
+
+  };
+
+  function renderRememberButton() {
+
+    const remembered = !!currentPeer && isRemembered(currentPeer.id);
+
+    $("rememberBtn").textContent = remembered ? "★ Lembrado" : "☆ Lembrar";
+    $("rememberBtn").classList.toggle("on", remembered);
+
+  }
+
+  // O outro mandou o nome na sessão: mantém a lista atualizada.
+  function peerNameChanged(name) {
+
+    if (!currentPeer || !cleanName(name)) return;
+
+    currentPeer.name = cleanName(name);
+
+    if (isRemembered(currentPeer.id)) remember(currentPeer);
+
+  }
+
+
+  /* ---------------- este aparelho ---------------- */
+
+  const deviceLink = pageLink({ device: me.id });
+
+  $("nameInput").value = me.name;
+
+  $("nameInput").onchange = () => {
+
+    me.name = cleanName($("nameInput").value) || me.name;
+    $("nameInput").value = me.name;
+
+    storageSet(STORAGE_KEYS.name, me.name);
+
+    myChannel?.track(publicMe()).catch(() => {});
+    room?.channel.track({ ...publicMe(), joinedAt: room.joinedAt }).catch(() => {});
+
+  };
+
+  $("copyDeviceLinkBtn").onclick = async () => {
+
+    try {
+      await navigator.clipboard.writeText(deviceLink);
+      $("copyDeviceLinkBtn").textContent = "✓ Link copiado";
+    } catch {
+      prompt("Copie o link deste aparelho:", deviceLink);
+    }
+
+    setTimeout(() => { $("copyDeviceLinkBtn").textContent = "🔗 Copiar link"; }, 2000);
+
+  };
+
+  QRCode.toCanvas($("deviceQr"), deviceLink, { width: 480, margin: 1 }).catch(() => {});
+
+  show("deviceLinkWarning", !CAN_LINK);
+
+  renderRemembered();
+  renderRoom();
+
+
+  /*
+   * ============================================================
+   * INÍCIO
+   *
+   * ?device=<id>  link do QR de um aparelho: pede para conectar
+   * ?room=<nome>  link do QR de uma sala: entra na sala
+   * ============================================================
+   */
+
+  (async () => {
+
+    const params = new URLSearchParams(location.search);
+    const targetDevice = params.get("device");
+    const targetRoom = params.get("room");
+
+    // Tira os parâmetros do endereço (recarregar não repete o pedido).
+    if (targetDevice || targetRoom) {
+      history.replaceState(null, "", location.pathname);
+    }
+
+    if (!await initSignaling()) return;
+
+    if (isDeviceId(targetDevice)) {
+      requestConnection({ id: targetDevice, name: "" }, "device");
+    } else if (targetRoom) {
+      $("roomInput").value = targetRoom;
+      joinRoom(targetRoom);
+    }
+
+  })();
 
 </script>
 
