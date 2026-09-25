@@ -454,6 +454,89 @@
     }
 
     /* ----------------------------------------------------------
+     * INTRODUÇÃO
+     * ---------------------------------------------------------- */
+
+    .intro {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .intro-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .intro-head > div {
+      flex: 1;
+    }
+
+    .intro h2 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      line-height: 1.3;
+    }
+
+    .intro-lead {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .intro strong {
+      color: var(--text);
+    }
+
+    .intro-need {
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .intro-features {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .intro-features div {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      font-size: 14px;
+    }
+
+    .intro-features b {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+
+    .intro-features span {
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .small {
+      font-size: 13px;
+    }
+
+    @media (max-width: 760px) {
+      .intro-features {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    /* ----------------------------------------------------------
      * SESSÃO (depois de conectar) — igual nos dois aparelhos
      *
      * Celular: abas Chat | Quadro.  PC (≥ 900px): lado a lado.
@@ -1200,6 +1283,38 @@
 </header>
 
 <main>
+
+  <!-- Introdução para quem chega sem saber do que se trata -->
+  <div id="intro" class="card intro">
+
+    <div class="intro-head">
+      <div>
+        <h2>👋 Conecte dois aparelhos, direto um no outro</h2>
+        <p class="intro-lead">
+          Esta página liga <strong>dois aparelhos</strong> (um computador e um
+          celular, ou dois celulares) numa conexão direta. O que vocês trocarem
+          vai de um para o outro, <strong>sem passar por um servidor</strong>.
+        </p>
+      </div>
+      <button id="introCloseBtn" class="icon-btn" title="Esconder a introdução">✕</button>
+    </div>
+
+    <div class="intro-need">
+      <strong>Você vai precisar:</strong> os 2 aparelhos com esta página aberta, a <strong>câmera do celular</strong> e a <strong>webcam do computador</strong> (um lê o código do outro). Leva menos de um minuto.
+    </div>
+
+    <div class="intro-features">
+      <div><b>💬</b><strong>Chat</strong><span>mensagens na hora</span></div>
+      <div><b>🎙️</b><strong>Voz</strong><span>fale com o outro aparelho</span></div>
+      <div><b>🎨</b><strong>Quadro</strong><span>desenhem juntos</span></div>
+      <div><b>📁</b><strong>Arquivos</strong><span>você envia, o outro aceita e baixa</span></div>
+    </div>
+
+    <p class="muted small" style="margin:0">
+      É só seguir os passos abaixo. Quer saber como funciona por dentro? Toque em 💡.
+    </p>
+
+  </div>
 
   <!-- ========================================================= -->
   <!-- COMPUTADOR                                                 -->
@@ -4038,6 +4153,22 @@
     };
 
   }
+
+
+  /*
+   * ============================================================
+   * INTRODUÇÃO: some depois que a pessoa fecha (fica lembrado)
+   * ============================================================
+   */
+
+  try {
+    if (localStorage.getItem("rtc.introHidden")) show("intro", false);
+  } catch {}
+
+  $("introCloseBtn").onclick = () => {
+    show("intro", false);
+    try { localStorage.setItem("rtc.introHidden", "1"); } catch {}
+  };
 
 
   /*
