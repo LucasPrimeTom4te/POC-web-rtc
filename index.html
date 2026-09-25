@@ -1703,8 +1703,8 @@
           <p class="muted side-text">
             Todos entram na <strong>mesma sala</strong>, com o mesmo nome.
             Cabem até 6 pessoas; o quadro e o chat ficam guardados enquanto
-            houver alguém lá. Quem abriu a sala escolhe se ela é pública
-            (entra sem pedir) ou privada.
+            houver alguém lá. A sala começa pública (entra sem pedir); quem
+            abriu pode deixá-la privada.
           </p>
 
           <form id="roomForm" class="room-form" autocomplete="off">
@@ -5223,6 +5223,9 @@
   // Na sala todos conectam com todos: cada um manda áudio/tela para
   // cada outro. Mais que isso pesa no upload, principalmente no celular.
   const ROOM_LIMIT = 6;
+
+  // Tempo para a lista de presença da sala chegar inteira.
+  const ROOM_SETTLE_MS = 1500;
   const NAME_MAX = 40;
 
   let client = null;
@@ -6135,7 +6138,11 @@
 
     // attempted: "<id>:<joinedAt>" de quem já pedi (pedir de novo só se ele reentrar).
     // public: modo da sala (quem está há mais tempo decide; veja onRoomSync).
-    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), public: false, ownerId: null };
+    // Começa pública: quem entrar conecta sem pedir, até o dono mudar.
+    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), public: true, ownerId: null, announced: false };
+
+    // Sozinho na sala: depois de um tempo, avisa como ela está.
+    setTimeout(() => { if (room?.channel === channel) onRoomSync(); }, ROOM_SETTLE_MS + 100);
 
     setAddress(roomPath(name));
 
@@ -6203,14 +6210,30 @@
       room.public = owner.public === true;
     }
 
-    if (session && previousOwner && previousOwner !== owner.id && owner.id === me.id) {
+    if (session && room.announced && previousOwner && previousOwner !== owner.id && owner.id === me.id) {
       addNote(`👑 Você agora é quem está na sala há mais tempo: pode escolher se ela é pública ou privada.`);
     }
 
-    if (session && wasPublic !== room.public) {
+    // A lista de presença pode chegar aos poucos: até ver outra pessoa
+    // (ou passar um tempo sozinho), não dá para saber quem é o dono.
+    if (!room.announced && (members.length > 1 || Date.now() - room.joinedAt > ROOM_SETTLE_MS)) {
+
+      room.announced = true;
+
+      if (session) {
+        addNote(owner.id === me.id
+          ? "🔓 A sala começou pública: quem entrar conecta sem pedir. Para exigir permissão, toque em 🔓 Pública, lá em cima."
+          : room.public
+            ? "🔓 A sala é pública: quem entrar conecta sem precisar de permissão."
+            : "🔒 A sala é privada: quem entrar precisa ser aceito.");
+      }
+
+    } else if (session && room.announced && wasPublic !== room.public) {
+
       addNote(room.public
         ? "🔓 A sala é pública: quem entrar conecta sem precisar de permissão."
         : "🔒 A sala é privada: quem entrar precisa ser aceito.");
+
     }
 
     renderRoomMode();
