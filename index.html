@@ -3294,6 +3294,61 @@
       overflow-wrap: anywhere;
     }
 
+    /* 🐞 Erros */
+
+    .errors-list {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .errors-list li {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--person, #ef4444);
+      border-radius: 8px;
+    }
+
+    .error-head {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .error-head strong {
+      color: var(--person, var(--text));
+      font-size: 13px;
+    }
+
+    .error-msg {
+      margin-top: 4px;
+      cursor: pointer;
+      color: #fca5a5;
+      overflow-wrap: anywhere;
+    }
+
+    .errors-list pre,
+    .errors-log {
+      margin: 6px 0 0;
+      font: 11.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+    }
+
+    .errors-log {
+      flex: 1;
+      min-height: 0;
+      margin: 0;
+    }
+
     /* 📝 Transcrição */
 
     .transcript-list {
@@ -5064,6 +5119,11 @@
 
 <script>
 
+  // Log técnico em memória (vai junto quando dá erro; aba 📜 Log do card de erros).
+  const LOG_KEEP = 300;
+  const logLines = [];
+  const logListeners = new Set();
+
   /*
    * ============================================================
    * CONFIGURAÇÃO
@@ -5137,8 +5197,261 @@
     element.appendChild(line);
     element.scrollTop = element.scrollHeight;
 
+    logLines.push(line.textContent);
+    if (logLines.length > LOG_KEEP) logLines.splice(0, logLines.length - LOG_KEEP);
+    logListeners.forEach(listener => { try { listener(); } catch {} });
+
     console.log(message);
   }
+
+
+  /* 🐞 Erros
+   * Qualquer erro de JavaScript nesta página (window "error" e promessa
+   * rejeitada sem tratamento) vira uma entrada no card de erros, para
+   * todos: quem teve, a mensagem, onde, o navegador, o stack e as últimas
+   * linhas do log técnico de quem teve. Sem card aberto, quem teve o erro
+   * abre um. A aba "Log" mostra o log técnico daqui, ao vivo.
+   *   "e:<id>": { name, msg, where, stack, ua, log, at } · só quem teve escreve
+   *   (o dono do card também tira: 🧹 Limpar).
+   * Script de outro site só diz "Script error." (o navegador esconde o resto).
+   */
+
+  const ERROR_KEEP = 100;
+  const ERROR_LOG_LINES = 25;
+  const ERROR_SAME_MS = 5000;   // o mesmo erro repetido: um aviso a cada 5 s
+  const ERROR_MAX_PER_MIN = 20;
+
+  const errorReports = {
+    pending: [],       // antes da sessão (ou do histórico da sala chegar)
+    last: new Map(),   // mensagem -> quando avisei
+    minute: [],        // quando avisei, no último minuto
+    reporting: false
+  };
+
+  // Navegador e sistema, curto (o userAgent inteiro vai no detalhe).
+  function browserSummary() {
+    const ua = navigator.userAgent;
+    const browser = /Edg\/(\d+)/.exec(ua) ? "Edge " + RegExp.$1
+      : /Chrome\/(\d+)/.exec(ua) ? "Chrome " + RegExp.$1
+      : /Firefox\/(\d+)/.exec(ua) ? "Firefox " + RegExp.$1
+      : /Version\/(\d+).*Safari/.exec(ua) ? "Safari " + RegExp.$1
+      : "Navegador";
+    const os = /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android"
+      : /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "";
+    return [browser, os].filter(Boolean).join(" · ");
+  }
+
+  function reportError(msg, where, stack) {
+
+    // Erro dentro daqui: não entra em laço.
+    if (errorReports.reporting) return;
+
+    const now = Date.now();
+    const key = msg + "|" + where;
+
+    if (now - (errorReports.last.get(key) || 0) < ERROR_SAME_MS) return;
+    errorReports.minute = errorReports.minute.filter(time => now - time < 60000);
+    if (errorReports.minute.length >= ERROR_MAX_PER_MIN) return;
+
+    errorReports.last.set(key, now);
+    errorReports.minute.push(now);
+
+    errorReports.pending.push({
+      msg: String(msg || "Erro sem mensagem").slice(0, 400),
+      where: String(where || "").slice(0, 300),
+      stack: String(stack || "").slice(0, 1400),
+      ua: navigator.userAgent.slice(0, 300),
+      browser: browserSummary(),
+      log: logLines.slice(-ERROR_LOG_LINES).join("\n").slice(-1600),
+      at: now
+    });
+    errorReports.pending = errorReports.pending.slice(-20);
+
+    flushErrors();
+
+  }
+
+  window.addEventListener("error", event => {
+    // Imagem ou vídeo que não carregou também chega aqui (sem .error): não é JS.
+    if (event.target && event.target !== window) return;
+    const where = event.filename ? `${event.filename.split("/").pop() || event.filename}:${event.lineno}:${event.colno}` : "";
+    reportError(event.message || event.error?.message, where, event.error?.stack);
+  }, true);
+
+  window.addEventListener("unhandledrejection", event => {
+    const reason = event.reason;
+    const msg = reason instanceof Error ? `${reason.name}: ${reason.message}` : "Promessa rejeitada: " + String(reason);
+    reportError(msg, "promessa sem tratamento", reason?.stack);
+  });
+
+  // Manda o que estava esperando, quando dá (na sala, depois do histórico:
+  // senão abriria um card de erros novo em vez de usar o que já existe).
+  function flushErrors() {
+
+    if (!session || !errorReports.pending.length) return;
+    if (session.room && !session.roomRestoreChecked) return;
+
+    errorReports.reporting = true;
+
+    try {
+
+      const card = [...session.displays.values()].find(entry => entry.kind === "errors") || openWidget("errors");
+
+      if (!card) return;
+
+      const changes = {};
+      for (const report of errorReports.pending.splice(0)) {
+        changes["e:" + me.id.slice(0, 8) + "-" + randomId()] = { ...report, name: me.name };
+      }
+      setWidget(card, changes);
+
+    } finally {
+      errorReports.reporting = false;
+    }
+
+  }
+
+  setInterval(flushErrors, 2000);
+
+  function cleanErrorKey(key, v, by, entry) {
+
+    if (!key.startsWith("e:")) return undefined;
+
+    const current = entry.state[key]?.v;
+    const author = current?.by || (key.slice(2, 10) === by.slice(0, 8) ? by : null);
+
+    if (v === null) return author === by || entry.owner === by ? null : undefined;
+    if (author !== by || current || !Number.isFinite(v?.at)) return undefined;
+
+    const text = (value, max) => typeof value === "string" ? value.slice(0, max) : "";
+    const msg = text(v.msg, 400);
+
+    if (!msg) return undefined;
+
+    return {
+      by,
+      name: cleanName(v.name) || "Alguém",
+      msg,
+      where: text(v.where, 300),
+      stack: text(v.stack, 1400),
+      ua: text(v.ua, 300),
+      browser: text(v.browser, 60),
+      log: text(v.log, 1600),
+      at: v.at
+    };
+
+  }
+
+  const errorList = entry => Object.entries(entry.state)
+    .filter(([key, item]) => key.startsWith("e:") && item.v)
+    .map(([key, item]) => ({ key, ...item.v }))
+    .sort((a, b) => b.at - a.at || (a.key < b.key ? 1 : -1));
+
+  function pruneErrors(entry) {
+    for (const old of errorList(entry).slice(ERROR_KEEP)) delete entry.state[old.key];
+  }
+
+  function createErrorsWidget(entry, view) {
+
+    view.tab = "errors";
+
+    const tabs = el("div", "widget-tabs");
+    view.tabs = {
+      errors: widgetButton("🐞 Erros", () => { view.tab = "errors"; renderDisplay(entry.id); }),
+      log: widgetButton("📜 Log (seu)", () => { view.tab = "log"; renderDisplay(entry.id); })
+    };
+    tabs.append(...Object.values(view.tabs));
+
+    view.list = el("ul", "errors-list widget-scroll");
+    view.log = el("pre", "errors-log widget-scroll");
+
+    view.foot = el("div", "widget-actions");
+    view.count = el("span", "widget-hint");
+    view.clearBtn = widgetButton("🧹 Limpar", () => {
+      setWidget(entry, Object.fromEntries(errorList(entry).map(item => [item.key, null])));
+    });
+    view.copyBtn = widgetButton("📋 Copiar", () => {
+      const text = view.tab === "log" ? logLines.join("\n") : errorList(entry).map(errorText).join("\n\n");
+      navigator.clipboard?.writeText(text).then(() => toast("📋 Copiado."), () => toast("📋 Não foi possível copiar."));
+    });
+    view.foot.append(view.count, view.copyBtn, view.clearBtn);
+
+    view.box.append(tabs, view.list, view.log, view.foot);
+
+    view.onLog = () => { if (view.tab === "log") renderDisplay(entry.id); };
+    logListeners.add(view.onLog);
+    view.widgetCleanup = () => logListeners.delete(view.onLog);
+
+  }
+
+  const errorText = item => [
+    `[${new Date(item.at).toLocaleString()}] ${item.name} · ${item.browser}`,
+    item.msg,
+    item.where && "em " + item.where,
+    item.stack,
+    item.ua,
+    item.log && "--- log ---\n" + item.log
+  ].filter(Boolean).join("\n");
+
+  function renderErrorsWidget(entry, view) {
+
+    const errors = errorList(entry);
+    const onLog = view.tab === "log";
+
+    for (const [name, button] of Object.entries(view.tabs)) button.classList.toggle("active", name === view.tab);
+
+    view.list.hidden = onLog;
+    view.log.hidden = !onLog;
+    view.clearBtn.hidden = onLog || !errors.some(item => item.by === me.id || isMine(entry));
+    view.count.textContent = onLog ? `${logLines.length} linhas, só deste aparelho`
+      : errors.length ? `${errors.length} erro${errors.length === 1 ? "" : "s"}` : "";
+
+    if (onLog) {
+      const atBottom = view.log.scrollHeight - view.log.scrollTop - view.log.clientHeight < 40;
+      view.log.textContent = logLines.join("\n") || "Nada no log ainda.";
+      if (atBottom) view.log.scrollTop = view.log.scrollHeight;
+      return;
+    }
+
+    // Lendo um detalhe aberto: não fecha.
+    const open = new Set([...view.list.querySelectorAll("details[open]")].map(item => item.dataset.key));
+
+    if (!errors.length) {
+      view.list.replaceChildren(el("li", "widget-empty", "Nenhum erro. Se der erro de JavaScript em alguém, aparece aqui (com o log de quem teve)."));
+      return;
+    }
+
+    view.list.replaceChildren(...errors.map(item => {
+
+      const li = el("li");
+      li.style.setProperty("--person", personColor(item.by));
+
+      const head = el("div", "error-head");
+      head.append(
+        el("strong", "", item.by === me.id ? "Você" : item.name),
+        el("span", "", `${new Date(item.at).toLocaleTimeString()} · ${item.browser}`)
+      );
+
+      const details = el("details");
+      details.dataset.key = item.key;
+      details.open = open.has(item.key);
+      const summary = el("summary", "error-msg", item.msg);
+      const body = el("pre", "", [
+        item.where && "em " + item.where,
+        item.stack,
+        item.ua,
+        item.log && "--- log de " + (item.by === me.id ? "você" : item.name) + " ---\n" + item.log
+      ].filter(Boolean).join("\n\n"));
+      details.append(summary, body);
+
+      li.append(head, details);
+      return li;
+
+    }));
+
+  }
+
+
 
   // kind: "" | "working" | "ok" | "error"
   function setStatus(id, text, kind = "") {
@@ -10143,7 +10456,7 @@
 
   // kind: "image" | "site" | "youtube" (veja "janelas de site e de vídeo") | "code"
   // | "poll" | "timer" | "dice" | "tasks" | "radio" | "sounds" | "palette" | "chat" (veja "ferramentas da sala").
-  const DISPLAY_KINDS = ["image", "site", "youtube", "code", "poll", "timer", "dice", "tasks", "radio", "sounds", "transcript", "transcripts", "palette", "chat"];
+  const DISPLAY_KINDS = ["image", "site", "youtube", "code", "poll", "timer", "dice", "tasks", "radio", "sounds", "transcript", "transcripts", "errors", "palette", "chat"];
 
   function ensureDisplay(id, owner, kind = "image") {
 
@@ -10658,7 +10971,7 @@
    * { kind: "youtube", video, play }.
    */
 
-  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻", poll: "📊", timer: "⏱️", dice: "🎲", tasks: "✅", radio: "📻", sounds: "🔊", transcript: "📝", transcripts: "📝", palette: "🖌️", chat: "💬" };
+  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻", poll: "📊", timer: "⏱️", dice: "🎲", tasks: "✅", radio: "📻", sounds: "🔊", transcript: "📝", transcripts: "📝", errors: "🐞", palette: "🖌️", chat: "💬" };
 
   const CAN_SITE = CAN_SHARE_SCREEN && ("RestrictionTarget" in window || "CropTarget" in window);
   const YT_ID = /^[\w-]{11}$/;
@@ -12078,6 +12391,7 @@
     radio: { icon: "📻", name: "Rádio", note: "o rádio", w: 520, ar: [1, 1], create: createRadioWidget, render: renderRadioWidget, clean: cleanRadioKey },
     transcript: { icon: "📝", name: "Transcrição", note: "o card de transcrição", w: 420, ar: [4, 5], create: createTranscriptWidget, render: renderTranscriptWidget, clean: cleanTranscriptKey, prune: pruneTranscript, label: "só a pessoa escreve aqui" },
     transcripts: { icon: "📝", name: "Transcrições", note: "o card de transcrições", w: 520, ar: [4, 5], create: createTranscriptWidget, render: renderTranscriptWidget, clean: () => undefined, label: "de todos, na ordem" },
+    errors: { icon: "🐞", name: "Erros", note: "o card de erros", w: 520, ar: [4, 5], create: createErrorsWidget, render: renderErrorsWidget, clean: cleanErrorKey, prune: pruneErrors, label: "de todos, com o log" },
     sounds: { icon: "🔊", name: "Sons", note: "um card de sons", w: 420, ar: [4, 5], create: createSoundsWidget, render: renderSoundsWidget, clean: cleanSoundKey, label: "tocar toca para todos" },
     chat: { icon: "💬", name: "Chat", note: "uma janela de chat", w: 380, ar: [3, 4], create: createChatWidget, render: renderChatWidget, clean: () => undefined, label: "todos conversam" },
     palette: { icon: "🖌️", name: "Ferramentas", note: "uma barra de ferramentas", w: 250, ar: [9, 10], create: createPaletteWidget, render: renderPaletteWidget, clean: () => undefined, label: "cada um muda só a sua" }
