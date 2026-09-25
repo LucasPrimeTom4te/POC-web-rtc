@@ -5011,6 +5011,7 @@
 
       <section class="set-section">
         <h4>🎙️ Microfone</h4>
+        <label class="check"><input type="checkbox" id="pushToTalkCheck"> Apertar para falar: o microfone só manda som enquanto eu seguro <kbd>V</kbd> (ou o botão do microfone)</label>
         <label class="check"><input type="checkbox" id="mutedAlertCheck"> Avisar quando eu falar com o microfone desligado</label>
         <p class="muted small">Só ouve aqui, para avisar: nada é enviado enquanto o microfone está desligado. Funciona depois de você permitir o microfone uma vez.</p>
       </section>
@@ -6431,6 +6432,7 @@
     clearTimeout(session.remoteDrawingTimer);
 
     session.micTrack?.stop();
+    releasePushToTalk();
     stopMutedWatch();
     stopSoundsOf();
     stopRecognition();
@@ -7547,10 +7549,143 @@
   function restoreMic() {
     if (!session || session.micRestored || !audioReady() || $("micBtn").disabled) return;
     session.micRestored = true;
-    if (storageGet(MIC_KEY) === "1" && !session.micTrack) toggleMic();
+    if (storageGet(MIC_KEY) === "1" && !session.micTrack && !pushToTalk.enabled) toggleMic();
   }
 
-  $("micBtn").onclick = () => toggleMic();
+  $("micBtn").onclick = () => {
+    // Apertar para falar: o botão é de segurar (pointerdown / pointerup).
+    if (!pushToTalk.enabled) toggleMic();
+  };
+
+  /* ---- apertar para falar ----
+   *
+   * Configuração (desligada por padrão, guardada no aparelho). Ligada, o
+   * microfone só vai para os outros enquanto seguro V (fora de campos de
+   * texto) ou o botão do microfone; para eles, no resto do tempo, está
+   * desligado como sempre. Entre uma fala e outra a faixa fica aberta, mas
+   * desativada (não manda nada): abrir de novo cortaria o começo da frase.
+   */
+  const PUSH_TO_TALK_KEY = "rtc.pushToTalk";
+  const PUSH_TO_TALK_CODE = "KeyV";
+
+  const pushToTalk = { enabled: storageGet(PUSH_TO_TALK_KEY) === "1", track: null, holding: false, opening: false };
+
+  async function startTalking() {
+
+    if (!session || !audioReady() || pushToTalk.holding) return;
+
+    pushToTalk.holding = true;
+
+    if (pushToTalk.track?.readyState !== "live") {
+
+      if (pushToTalk.opening) return;
+
+      pushToTalk.opening = true;
+
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("o microfone precisa que a página esteja em HTTPS");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+        pushToTalk.track = stream.getAudioTracks()[0];
+      } catch (error) {
+        pushToTalk.holding = false;
+        log("Erro no microfone: " + error.message);
+        toast(error.name === "NotAllowedError" ? "🎙️ Permissão do microfone negada." : "🎙️ Não foi possível ligar o microfone: " + error.message);
+        return;
+      } finally {
+        pushToTalk.opening = false;
+      }
+
+      if (!session || !pushToTalk.enabled) {
+        releasePushToTalk();
+        return;
+      }
+
+      // Soltou enquanto o navegador abria o microfone.
+      if (!pushToTalk.holding) {
+        pushToTalk.track.enabled = false;
+        return;
+      }
+
+    }
+
+    stopMutedWatch();
+    pushToTalk.track.enabled = true;
+    session.micTrack = pushToTalk.track;
+    renderLocalControls();
+    sendState();
+    await replaceTrackEverywhere("audio", pushToTalk.track).catch(() => {});
+
+  }
+
+  async function stopTalking() {
+
+    if (!pushToTalk.holding) return;
+
+    pushToTalk.holding = false;
+
+    if (!session || !pushToTalk.track || session.micTrack !== pushToTalk.track) return;
+
+    pushToTalk.track.enabled = false;
+    session.micTrack = null;
+    renderLocalControls();
+    sendState();
+    await replaceTrackEverywhere("audio", null).catch(() => {});
+
+  }
+
+  // Fecha a faixa aberta (saiu da sessão ou desligou a opção).
+  function releasePushToTalk() {
+    pushToTalk.holding = false;
+    if (session && pushToTalk.track && session.micTrack === pushToTalk.track) {
+      session.micTrack = null;
+      replaceTrackEverywhere("audio", null).catch(() => {});
+      renderLocalControls();
+      sendState();
+    }
+    pushToTalk.track?.stop();
+    pushToTalk.track = null;
+  }
+
+  function setPushToTalk(on) {
+    pushToTalk.enabled = on;
+    storageSet(PUSH_TO_TALK_KEY, on ? "1" : "0");
+    $("pushToTalkCheck").checked = on;
+    if (on && session?.micTrack) toggleMic(); // estava ligado direto: desliga
+    if (!on) releasePushToTalk();
+    renderLocalControls();
+  }
+
+  $("pushToTalkCheck").checked = pushToTalk.enabled;
+  $("pushToTalkCheck").onchange = () => setPushToTalk($("pushToTalkCheck").checked);
+
+  // Segurar o botão do microfone (mouse ou dedo).
+  $("micBtn").addEventListener("pointerdown", event => {
+    if (!pushToTalk.enabled || $("micBtn").disabled) return;
+    $("micBtn").setPointerCapture?.(event.pointerId);
+    startTalking();
+  });
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    $("micBtn").addEventListener(type, () => { if (pushToTalk.enabled) stopTalking(); });
+  }
+
+  // Segurar V (fora de campos de texto, sem Ctrl/Alt/⌘).
+  const typingNow = target => target.closest?.("input, textarea, select, [contenteditable]");
+
+  document.addEventListener("keydown", event => {
+    if (!pushToTalk.enabled || event.code !== PUSH_TO_TALK_CODE || event.ctrlKey || event.metaKey || event.altKey || typingNow(event.target)) return;
+    event.preventDefault();
+    if (!event.repeat) startTalking();
+  });
+
+  document.addEventListener("keyup", event => {
+    if (event.code === PUSH_TO_TALK_CODE) stopTalking();
+  });
+
+  // Trocou de janela ou de aba segurando: para de falar.
+  window.addEventListener("blur", () => stopTalking());
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stopTalking(); });
 
   async function toggleMic() {
 
@@ -7678,6 +7813,7 @@
     $("micBtn").classList.remove("speaking");
     $("micLabel").textContent = !ready
       ? "Preparando áudio…"
+      : pushToTalk.enabled ? (micOn ? "Falando…" : "Segure V (ou este botão) para falar")
       : micOn ? "Microfone: ligado" : "Microfone: desligado";
 
     $("speakerBtn").classList.toggle("on", session.speakerOn);
@@ -8135,7 +8271,7 @@
   // Liga ou desliga o "ouvido" conforme o estado (roda de tempos em tempos).
   async function syncMutedWatch() {
 
-    const wanted = !!session && !session.micTrack && audioReady() && mutedWatch.enabled &&
+    const wanted = !!session && !session.micTrack && !pushToTalk.enabled && audioReady() && mutedWatch.enabled &&
       !!navigator.mediaDevices?.getUserMedia;
 
     if (!wanted) {
