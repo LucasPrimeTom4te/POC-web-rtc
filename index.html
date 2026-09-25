@@ -3894,6 +3894,55 @@
       text-transform: capitalize;
     }
 
+    .sound-results {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      flex-shrink: 0;
+    }
+
+    .sound-results li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .sound-results .sound-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sound-results .sound-info strong {
+      font-size: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sound-results .sound-info span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .sound-results button {
+      flex-shrink: 0;
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+
+    .sound-results button.playing {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     .games-status:empty {
       display: none;
     }
@@ -4652,6 +4701,40 @@
 <div id="reactLayer" class="react-layer" aria-hidden="true"></div>
 
 <!-- Biblioteca de jogos (catálogos HTML5 públicos) -->
+<div id="soundModal" class="modal hidden">
+
+  <div class="card modal-card games">
+
+    <div class="games-head">
+      <h2>🔊 Biblioteca de sons</h2>
+      <button id="closeSoundLibBtn" class="tool" title="Fechar (Esc)">✕</button>
+    </div>
+
+    <div class="games-filters">
+      <select id="soundSource" aria-label="Catálogo">
+        <option value="google">Google (1.500 sons)</option>
+        <option value="freesound">Freesound</option>
+      </select>
+      <input id="soundSearch" type="search" placeholder="Procurar som" autocomplete="off" spellcheck="false" aria-label="Procurar som">
+    </div>
+
+    <div id="soundCategories" class="games-cats"></div>
+
+    <ul id="soundResults" class="sound-results"></ul>
+
+    <div id="soundLibStatus" class="muted games-status"></div>
+
+    <button id="soundMoreBtn" class="hidden">Carregar mais</button>
+
+    <p class="muted games-note">
+      ▶ escuta só aqui; ➕ põe no card, e aí tocar toca para todos.
+      Sons do Google Sound Library e do Freesound (só os CC0, livres de crédito).
+    </p>
+
+  </div>
+
+</div>
+
 <div id="gameModal" class="modal hidden">
 
   <div class="card modal-card games">
@@ -5260,7 +5343,7 @@
    * ============================================================
    */
 
-  const MODALS = ["siteQrModal", "helpModal", "roomShareModal", "gameModal"];
+  const MODALS = ["siteQrModal", "helpModal", "roomShareModal", "gameModal", "soundModal"];
 
   MODALS.forEach(id => {
     $(id).onclick = event => {
@@ -12787,8 +12870,11 @@
     const fileBtn = widgetButton("📁 Arquivo", () => file.click());
     fileBtn.title = `Enviar um arquivo de áudio (até ${SOUND_FILE_MAX / 1024 / 1024} MB)`;
 
+    const libBtn = widgetButton("🔎 Biblioteca", () => openSoundLibrary(entry));
+    libBtn.title = "Procurar sons prontos (Google e Freesound) e adicionar aqui";
+
     const source = el("div", "sound-source");
-    source.append(url, fileBtn, file);
+    source.append(url, fileBtn, libBtn, file);
 
     const add = el("button", "tool primary", "➕ Adicionar");
 
@@ -12912,6 +12998,257 @@
     }));
 
   }
+
+  /* ---- biblioteca de sons ---- */
+
+  /*
+   * 🔎 Biblioteca no card: procura sons prontos e põe no card que abriu.
+   * Google Sound Library: a lista está em sounds-google.json (link direto
+   * de cada .ogg, carregada na primeira vez). Freesound: busca pelo
+   * /api/sounds (a chave fica na Vercel); sem chave, fica indisponível.
+   */
+
+  const SOUND_CATEGORIES = {
+    alarms: "Alarmes", ambiences: "Ambientes", animals: "Animais", cartoon: "Desenho animado",
+    crowds: "Multidão", doors: "Portas", emergency: "Emergência", foley: "Foley", horror: "Terror",
+    household: "Casa", "human-sounds": "Humanos", "human-voices": "Vozes", impacts: "Impactos",
+    office: "Escritório", "science-fiction": "Ficção científica", sports: "Esportes", tools: "Ferramentas",
+    transportation: "Transporte", water: "Água", weapons: "Armas", weather: "Clima"
+  };
+
+  const SOUND_SOURCE_KEY = "rtc.soundSource";
+  const SOUND_SEARCH_MS = 400;
+
+  const soundLib = {
+    entry: null,       // o card que abriu
+    google: null,      // [{ name, url, category }], carregado uma vez
+    freesound: null,   // null = não sei; false = indisponível
+    list: [], page: 0, more: false, loading: false, category: "", query: "",
+    preview: null, previewUrl: null,
+    added: new Set(),  // urls já postas neste card nesta abertura
+    searchTimer: null, token: 0
+  };
+
+  function openSoundLibrary(entry) {
+
+    soundLib.entry = entry;
+    soundLib.added = new Set(soundList(entry).map(sound => sound.url).filter(Boolean));
+
+    const saved = storageGet(SOUND_SOURCE_KEY);
+    if (saved === "google" || saved === "freesound") $("soundSource").value = saved;
+
+    show("soundModal");
+    loadSoundSource();
+
+    if (!matchMedia("(pointer: coarse)").matches) $("soundSearch").focus();
+
+  }
+
+  async function loadSoundSource() {
+
+    const token = ++soundLib.token;
+    const source = $("soundSource").value;
+
+    Object.assign(soundLib, { list: [], page: 0, more: false, category: source === "google" ? soundLib.category : "" });
+
+    if (source === "google") {
+
+      if (!soundLib.google) {
+        soundLib.loading = true;
+        renderSoundLibrary();
+        try {
+          const response = await fetch("sounds-google.json");
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          const data = await response.json();
+          soundLib.google = Object.entries(data.categories).flatMap(([category, items]) =>
+            items.map(([name, path]) => ({ name, url: data.base + path, category })));
+        } catch (error) {
+          log("Erro ao carregar a biblioteca do Google: " + error.message);
+        }
+        if (token !== soundLib.token) return;
+        soundLib.loading = false;
+      }
+
+      renderSoundLibrary();
+      return;
+
+    }
+
+    await searchFreesound(token, 1);
+
+  }
+
+  async function searchFreesound(token, page) {
+
+    soundLib.loading = true;
+    renderSoundLibrary();
+
+    try {
+
+      const response = await fetch(`api/sounds?q=${encodeURIComponent(soundLib.query)}&page=${page}`);
+
+      if (token !== soundLib.token) return;
+
+      if (response.status === 503) {
+        soundLib.freesound = false;
+      } else {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        const data = await response.json();
+        soundLib.freesound = true;
+        soundLib.page = page;
+        soundLib.more = !!data.more;
+        for (const item of data.items || []) {
+          const url = cleanSiteUrl(item.url);
+          if (url && item.name) soundLib.list.push({ name: item.name, url, author: item.author, duration: item.duration });
+        }
+      }
+
+    } catch (error) {
+      log("Erro ao buscar no Freesound: " + error.message);
+      if (token === soundLib.token) toast("🔊 Não foi possível buscar no Freesound agora.");
+    }
+
+    if (token !== soundLib.token) return;
+
+    soundLib.loading = false;
+    renderSoundLibrary();
+
+  }
+
+  function renderSoundLibrary() {
+
+    const source = $("soundSource").value;
+    const google = source === "google";
+    const query = soundLib.query.toLowerCase();
+
+    const cats = $("soundCategories");
+    show("soundCategories", google);
+
+    if (google) {
+      cats.replaceChildren(...["", ...Object.keys(SOUND_CATEGORIES)].map(category => {
+        const button = document.createElement("button");
+        button.textContent = category ? SOUND_CATEGORIES[category] : "Todos";
+        button.classList.toggle("active", category === soundLib.category);
+        button.onclick = () => {
+          soundLib.category = category;
+          renderSoundLibrary();
+        };
+        return button;
+      }));
+    }
+
+    const shown = google
+      ? (soundLib.google || []).filter(sound =>
+          (!soundLib.category || sound.category === soundLib.category) &&
+          (!query || sound.name.toLowerCase().includes(query))).slice(0, 200)
+      : soundLib.list;
+
+    $("soundResults").replaceChildren(...shown.map(sound => {
+
+      const item = document.createElement("li");
+
+      const preview = document.createElement("button");
+      const playing = soundLib.previewUrl === sound.url;
+      preview.textContent = playing ? "⏹" : "▶";
+      preview.title = playing ? "Parar" : "Escutar (só aqui)";
+      preview.classList.toggle("playing", playing);
+      preview.onclick = () => previewSound(sound.url);
+
+      const info = document.createElement("div");
+      info.className = "sound-info";
+      const name = document.createElement("strong");
+      name.textContent = sound.name;
+      name.title = sound.name;
+      const detail = document.createElement("span");
+      detail.textContent = google ? SOUND_CATEGORIES[sound.category] || sound.category
+        : [sound.author && "por " + sound.author, Number.isFinite(sound.duration) && sound.duration.toFixed(1) + " s"].filter(Boolean).join(" · ");
+      info.append(name, detail);
+
+      const added = soundLib.added.has(sound.url);
+      const add = document.createElement("button");
+      add.textContent = added ? "✓ No card" : "➕ Adicionar";
+      add.disabled = added;
+      add.className = added ? "" : "primary";
+      add.onclick = () => addLibrarySound(sound);
+
+      item.append(preview, info, add);
+      return item;
+
+    }));
+
+    $("soundLibStatus").textContent = soundLib.loading ? "⏳ Carregando sons…"
+      : !google && soundLib.freesound === false ? "O Freesound não está configurado neste site (falta a chave FREESOUND_KEY na Vercel). Use o catálogo do Google."
+      : !shown.length ? (google ? "Nenhum som com esse nome nesta categoria." : soundLib.query ? "Nenhum som encontrado." : "")
+      : google && shown.length === 200 ? "Mostrando os 200 primeiros: procure pelo nome (em inglês: clap, laugh, bell…)."
+      : "";
+
+    show("soundMoreBtn", !google && soundLib.more && !soundLib.loading);
+
+  }
+
+  function previewSound(url) {
+
+    const playing = soundLib.previewUrl === url;
+
+    soundLib.preview?.pause();
+    soundLib.preview = null;
+    soundLib.previewUrl = null;
+
+    if (!playing) {
+      const audio = new Audio(url);
+      soundLib.preview = audio;
+      soundLib.previewUrl = url;
+      audio.onended = audio.onerror = () => {
+        if (soundLib.preview !== audio) return;
+        soundLib.preview = null;
+        soundLib.previewUrl = null;
+        renderSoundLibrary();
+      };
+      audio.play().catch(() => audio.onerror());
+    }
+
+    renderSoundLibrary();
+
+  }
+
+  function addLibrarySound(sound) {
+
+    const entry = soundLib.entry;
+
+    if (!session?.displays.has(entry?.id)) {
+      show("soundModal", false);
+      return toast("🔊 O card de sons foi fechado.");
+    }
+
+    setWidget(entry, { ["s:" + me.id.slice(0, 8) + "-" + randomId()]: { name: cleanText(sound.name, SOUND_NAME_MAX) || "Som", url: sound.url, at: Date.now() } });
+    soundLib.added.add(sound.url);
+    renderSoundLibrary();
+
+  }
+
+  function closeSoundLibrary() {
+    soundLib.preview?.pause();
+    soundLib.preview = soundLib.previewUrl = null;
+    show("soundModal", false);
+  }
+
+  $("soundSource").onchange = () => {
+    storageSet(SOUND_SOURCE_KEY, $("soundSource").value);
+    loadSoundSource();
+  };
+
+  $("soundSearch").oninput = () => {
+    soundLib.query = $("soundSearch").value.trim();
+    if ($("soundSource").value === "google") return renderSoundLibrary();
+    clearTimeout(soundLib.searchTimer);
+    soundLib.searchTimer = setTimeout(() => {
+      soundLib.list = [];
+      searchFreesound(++soundLib.token, 1);
+    }, SOUND_SEARCH_MS);
+  };
+  $("soundSearch").addEventListener("keydown", event => { if (event.key !== "Escape") event.stopPropagation(); });
+  $("soundMoreBtn").onclick = () => searchFreesound(soundLib.token, soundLib.page + 1);
+  $("closeSoundLibBtn").onclick = closeSoundLibrary;
 
   function playSoundForAll(entry, key) {
     if (!playSound(entry, key)) return;
