@@ -866,7 +866,7 @@
       color: var(--muted);
     }
 
-    .screen-settings label {
+    .screen-settings .quality-group {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -1703,7 +1703,8 @@
           <p class="muted side-text">
             Todos entram na <strong>mesma sala</strong>, com o mesmo nome.
             Cabem até 6 pessoas; o quadro e o chat ficam guardados enquanto
-            houver alguém lá.
+            houver alguém lá. Quem abriu a sala escolhe se ela é pública
+            (entra sem pedir) ou privada.
           </p>
 
           <form id="roomForm" class="room-form" autocomplete="off">
@@ -1831,6 +1832,7 @@
       </div>
     </div>
 
+    <button id="roomModeBtn" class="icon-btn hidden">🔒 Privada</button>
     <button id="roomLinkBtn" class="icon-btn hidden" title="Copiar o link da sala para chamar mais gente">🔗 Link da sala</button>
     <button id="rememberBtn" class="icon-btn" title="Lembrar este dispositivo para conectar de novo depois">☆ Lembrar</button>
     <button id="sessionHelpBtn" class="icon-btn" title="Quero entender o que está acontecendo">💡</button>
@@ -1883,14 +1885,16 @@
 
         <!-- Qualidade: mais leve = menos internet e menos processador. -->
         <div class="screen-settings">
-          <label id="sendQualityField">
+          <div id="sendQualityField" class="quality-group">
             Minha tela (o que eu envio)
-            <select id="sendQuality"></select>
-          </label>
-          <label>
+            <select id="sendHeight" aria-label="Resolução da minha tela"></select>
+            <select id="sendFps" aria-label="Quadros por segundo da minha tela"></select>
+          </div>
+          <div class="quality-group">
             Telas que eu recebo
-            <select id="receiveQuality"></select>
-          </label>
+            <select id="receiveHeight" aria-label="Resolução máxima das telas que recebo"></select>
+            <select id="receiveFps" aria-label="Quadros por segundo máximos das telas que recebo"></select>
+          </div>
         </div>
         <div id="screensEmpty" class="screens-empty">
           Ninguém está compartilhando a tela agora.
@@ -2060,7 +2064,8 @@
           Na <strong>sala</strong>, cada um entra no canal
           <code>room:&lt;nome&gt;</code> e aparece na lista de presença
           (<em>presence</em>). Quem chegou depois pede para conectar a cada um
-          que já estava (todos com todos). Quem chega pede o quadro e o chat a
+          que já estava (todos com todos). Quem está há mais tempo diz, na
+          presença, se a sala é pública: aí cada um aceita sozinho. Quem chega pede o quadro e o chat a
           quem já estava, direto pelo DataChannel: nada disso fica no servidor.
         </li>
         <li>
@@ -2310,7 +2315,7 @@
       audio: null,            // <audio> com o microfone dele
       shareAudio: null,       // <audio> com o áudio que ele compartilha
       videoStream: null,      // tela dele, quando compartilha
-      remote: { known: false, mic: false, speaker: true, screen: false, audioShare: false, wantQuality: "high", device: null, name: "" },
+      remote: { known: false, mic: false, speaker: true, screen: false, audioShare: false, want: { height: 0, fps: 0 }, device: null, name: "" },
       reconnect: null         // { startedAt, giveUp } enquanto a conexão está caída
     };
 
@@ -2696,8 +2701,8 @@
     sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name });
     sendState(peer);
 
-    if (screenQuality.receive !== "high") {
-      sendTo(peer, { type: "screen-quality", level: screenQuality.receive });
+    if (screenQuality.receive.height || screenQuality.receive.fps) {
+      sendTo(peer, { type: "screen-quality", ...screenQuality.receive });
     }
 
     // Sala: troca o que cada um fez; quem chegou (quem pediu) pede o resto.
@@ -2827,6 +2832,7 @@
     }
 
     show("roomLinkBtn", !!session.room);
+    renderRoomMode();
 
     // "Lembrar" é de um aparelho só: some quando tem mais gente.
     show("rememberBtn", list.length === 1);
@@ -2998,10 +3004,12 @@
 
       case "screen-quality":
         // Ele quer receber as telas mais leves.
-        if (SCREEN_QUALITIES[message.level]) {
-          peer.remote.wantQuality = message.level;
-          applyScreenQuality(peer);
-        }
+        // (0 = sem limite)
+        peer.remote.want = {
+          height: [0, ...SCREEN_HEIGHTS].includes(message.height) ? message.height : 0,
+          fps: [0, ...SCREEN_FPS].includes(message.fps) ? message.fps : 0
+        };
+        applyScreenQuality(peer);
         break;
 
       case "sync-request":
@@ -3986,10 +3994,10 @@
 
     try {
 
-      const quality = SCREEN_QUALITIES[screenQuality.send];
+      const { height, fps } = screenQuality.send;
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: quality.fps, max: quality.fps }, height: { max: quality.height } },
+        video: { frameRate: { ideal: fps, max: fps }, height: { max: height } },
         audio: false
       });
 
@@ -4052,36 +4060,38 @@
 
   /* ---------------- qualidade das telas ---------------- */
 
-  // Mais leve = menos internet (cada pessoa na sala recebe a sua cópia
-  // da minha tela) e menos processador para codificar e decodificar.
-  const SCREEN_QUALITIES = {
-    high:   { label: "Alta · 1080p, 30 fps",   height: 1080, fps: 30, bitrate: 4000000 },
-    medium: { label: "Média · 720p, 15 fps",   height: 720,  fps: 15, bitrate: 1500000 },
-    low:    { label: "Leve · 480p, 8 fps",     height: 480,  fps: 8,  bitrate: 500000 },
-    saver:  { label: "Economia · 360p, 4 fps", height: 360,  fps: 4,  bitrate: 200000 }
+  // Resolução e quadros por segundo, cada um no seu seletor: texto
+  // nítido pede resolução; vídeo fluido pede quadros. Menos = menos
+  // internet (cada pessoa na sala recebe a sua cópia da minha tela) e
+  // menos processador para codificar e decodificar.
+  const SCREEN_HEIGHTS = [1080, 720, 480, 360];
+  const SCREEN_FPS = [60, 30, 15, 8, 4];
+
+  const HEIGHT_LABELS = { 1080: "1080p (Full HD)", 720: "720p (HD)", 480: "480p", 360: "360p" };
+
+  const savedNumber = (key, allowed, fallback) => {
+    const value = Number(storageGet(key));
+    return allowed.includes(value) ? value : fallback;
   };
 
-  const QUALITY_ORDER = ["high", "medium", "low", "saver"];
-
-  const savedQuality = (key, fallback) => {
-    const value = storageGet(key);
-    return SCREEN_QUALITIES[value] ? value : fallback;
-  };
-
-  // send: o que eu envio. receive: o que peço para me mandarem ("high" = o que vier).
+  // send: o que eu envio. receive: o máximo que peço para me mandarem (0 = sem limite).
   const screenQuality = {
-    send: savedQuality("rtc.sendQuality", "medium"),
-    receive: savedQuality("rtc.receiveQuality", "high")
+    send: {
+      height: savedNumber("rtc.sendHeight", SCREEN_HEIGHTS, 720),
+      fps: savedNumber("rtc.sendFps", SCREEN_FPS, 15)
+    },
+    receive: {
+      height: savedNumber("rtc.receiveHeight", [0, ...SCREEN_HEIGHTS], 0),
+      fps: savedNumber("rtc.receiveFps", [0, ...SCREEN_FPS], 0)
+    }
   };
 
-  function fillQualitySelect(select, value, receiving) {
+  function fillSelect(select, values, label, value) {
 
-    select.replaceChildren(...QUALITY_ORDER.map(key => {
+    select.replaceChildren(...values.map(item => {
       const option = document.createElement("option");
-      option.value = key;
-      option.textContent = receiving && key === "high"
-        ? "Como o outro enviar"
-        : SCREEN_QUALITIES[key].label;
+      option.value = item;
+      option.textContent = label(item);
       return option;
     }));
 
@@ -4089,35 +4099,50 @@
 
   }
 
-  fillQualitySelect($("sendQuality"), screenQuality.send, false);
-  fillQualitySelect($("receiveQuality"), screenQuality.receive, true);
+  const heightLabel = height => height ? HEIGHT_LABELS[height] : "Resolução: como enviarem";
+  const fpsLabel = fps => fps ? `${fps} fps` + (fps === 60 ? " (pesado)" : "") : "Quadros: como enviarem";
 
-  $("sendQuality").onchange = () => {
+  fillSelect($("sendHeight"), SCREEN_HEIGHTS, heightLabel, screenQuality.send.height);
+  fillSelect($("sendFps"), SCREEN_FPS, fpsLabel, screenQuality.send.fps);
+  fillSelect($("receiveHeight"), [0, ...SCREEN_HEIGHTS], heightLabel, screenQuality.receive.height);
+  fillSelect($("receiveFps"), [0, ...SCREEN_FPS], fpsLabel, screenQuality.receive.fps);
 
-    screenQuality.send = $("sendQuality").value;
-    storageSet("rtc.sendQuality", screenQuality.send);
+  $("sendHeight").onchange = $("sendFps").onchange = () => {
+
+    screenQuality.send = { height: Number($("sendHeight").value), fps: Number($("sendFps").value) };
+    storageSet("rtc.sendHeight", screenQuality.send.height);
+    storageSet("rtc.sendFps", screenQuality.send.fps);
 
     const track = session?.screenTrack;
 
     if (track) {
-      const quality = SCREEN_QUALITIES[screenQuality.send];
-      track.applyConstraints({ frameRate: { max: quality.fps }, height: { max: quality.height } })
+      const { height, fps } = screenQuality.send;
+      track.applyConstraints({ frameRate: { max: fps }, height: { max: height } })
         .catch(() => {}) // alguns navegadores não mudam a captura: o limite no envio basta
         .then(() => connectedPeers().forEach(applyScreenQuality));
     }
 
   };
 
-  $("receiveQuality").onchange = () => {
+  $("receiveHeight").onchange = $("receiveFps").onchange = () => {
 
-    screenQuality.receive = $("receiveQuality").value;
-    storageSet("rtc.receiveQuality", screenQuality.receive);
+    screenQuality.receive = { height: Number($("receiveHeight").value), fps: Number($("receiveFps").value) };
+    storageSet("rtc.receiveHeight", screenQuality.receive.height);
+    storageSet("rtc.receiveFps", screenQuality.receive.fps);
 
-    if (session) send({ type: "screen-quality", level: screenQuality.receive });
+    if (session) send({ type: "screen-quality", ...screenQuality.receive });
 
   };
 
-  // Para cada pessoa: a mais leve entre o que eu escolhi enviar e o que ela pediu.
+  // Taxa de bits para a resolução e os quadros (tela tem pouco movimento:
+  // o codificador costuma usar menos que isso).
+  function screenBitrate(height, fps) {
+    const width = height * 16 / 9;
+    return Math.round(Math.min(8000000, Math.max(150000, width * height * fps * 0.08)));
+  }
+
+  // Para cada pessoa: o menor entre o que eu envio e o que ela pediu,
+  // resolução e quadros separados.
   async function applyScreenQuality(peer) {
 
     const sender = peer.videoTransceiver?.sender;
@@ -4125,13 +4150,10 @@
 
     if (!sender || !track) return;
 
-    const level = QUALITY_ORDER[Math.max(
-      QUALITY_ORDER.indexOf(screenQuality.send),
-      QUALITY_ORDER.indexOf(peer.remote.wantQuality)
-    )];
-
-    const quality = SCREEN_QUALITIES[level];
-    const height = track.getSettings().height || quality.height;
+    const limit = (mine, wanted) => wanted ? Math.min(mine, wanted) : mine;
+    const height = limit(screenQuality.send.height, peer.remote.want.height);
+    const fps = limit(screenQuality.send.fps, peer.remote.want.fps);
+    const captured = track.getSettings().height || height;
 
     try {
 
@@ -4140,13 +4162,13 @@
 
       if (!encoding) return;
 
-      encoding.maxBitrate = quality.bitrate;
-      encoding.maxFramerate = quality.fps;
-      encoding.scaleResolutionDownBy = Math.max(1, height / quality.height);
+      encoding.maxBitrate = screenBitrate(height, fps);
+      encoding.maxFramerate = fps;
+      encoding.scaleResolutionDownBy = Math.max(1, captured / height);
 
       await sender.setParameters(parameters);
 
-      log(`Tela para ${peerLabel(peer)}: ${quality.label}`);
+      log(`Tela para ${peerLabel(peer)}: ${height}p, ${fps} fps`);
 
     } catch (error) {
       log("Não foi possível ajustar a qualidade: " + error.message);
@@ -5527,9 +5549,16 @@
 
     request.room = true;
 
+    // Sala pública (quem abriu escolheu): entra sem pedir.
+    if (room?.public) {
+      log("Sala pública: aceitando " + request.from.name);
+      acceptRoomRequest(request, true, "public");
+      return;
+    }
+
     if (isAutoAccept(request.from.id)) {
       log("Aceitando automaticamente (sala): " + request.from.name);
-      acceptRoomRequest(request, true);
+      acceptRoomRequest(request, true, "remembered");
       return;
     }
 
@@ -5965,9 +5994,11 @@
     addPeerToSession(peer);
 
     if (peer.room) {
-      addNote(roomRequest?.auto
-        ? `👋 ${peerLabel(peer)} entrou (aceito automaticamente, “Sempre aceitar”).`
-        : `👋 ${peerLabel(peer)} conectou.`);
+      addNote(
+        roomRequest?.reason === "public" ? `👋 ${peerLabel(peer)} entrou (sala pública).` :
+        roomRequest?.reason === "remembered" ? `👋 ${peerLabel(peer)} entrou (aceito automaticamente, “Sempre aceitar”).` :
+        `👋 ${peerLabel(peer)} conectou.`
+      );
     }
 
     if (auto) {
@@ -6103,7 +6134,8 @@
     });
 
     // attempted: "<id>:<joinedAt>" de quem já pedi (pedir de novo só se ele reentrar).
-    room = { name, channel, joinedAt: Date.now(), attempted: new Set() };
+    // public: modo da sala (quem está há mais tempo decide; veja onRoomSync).
+    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), public: false, ownerId: null };
 
     setAddress(roomPath(name));
 
@@ -6121,7 +6153,7 @@
     try {
 
       await subscribe(channel);
-      await channel.track({ ...publicMe(), joinedAt: room.joinedAt });
+      await trackRoom();
 
       log("Entrou na sala " + name);
 
@@ -6156,6 +6188,33 @@
       return;
     }
 
+    // Quem está há mais tempo é o dono: o modo (pública/privada) vem dele.
+    // Se o dono sai, o próximo herda o modo que a sala já tinha.
+    const owner = members[0];
+    const wasPublic = room.public;
+    const previousOwner = room.ownerId;
+
+    room.ownerId = owner.id;
+    room.ownerName = cleanName(owner.name);
+
+    if (owner.id === me.id) {
+      if ((owner.public === true) !== room.public) trackRoom().catch(() => {});
+    } else {
+      room.public = owner.public === true;
+    }
+
+    if (session && previousOwner && previousOwner !== owner.id && owner.id === me.id) {
+      addNote(`👑 Você agora é quem está na sala há mais tempo: pode escolher se ela é pública ou privada.`);
+    }
+
+    if (session && wasPublic !== room.public) {
+      addNote(room.public
+        ? "🔓 A sala é pública: quem entrar conecta sem precisar de permissão."
+        : "🔒 A sala é privada: quem entrar precisa ser aceito.");
+    }
+
+    renderRoomMode();
+
     for (const member of members.slice(0, index)) {
 
       if (member.id === me.id) continue;
@@ -6171,6 +6230,49 @@
       requestRoomPeer({ id: member.id, name: cleanName(member.name) });
 
     }
+
+  }
+
+  // Minha presença na sala (o dono também diz se ela é pública).
+  function trackRoom() {
+    if (!room) return Promise.resolve();
+    return room.channel.track({ ...publicMe(), joinedAt: room.joinedAt, public: room.public });
+  }
+
+  $("roomModeBtn").onclick = () => {
+
+    if (!room || room.ownerId !== me.id) return;
+
+    room.public = !room.public;
+    trackRoom().catch(() => {});
+
+    addNote(room.public
+      ? "🔓 Você deixou a sala pública: quem entrar conecta sem precisar de permissão."
+      : "🔒 Você deixou a sala privada: quem entrar precisa ser aceito.");
+
+    renderRoomMode();
+
+  };
+
+  function renderRoomMode() {
+
+    const button = $("roomModeBtn");
+
+    show("roomModeBtn", !!room && !!session?.room);
+
+    if (!room) return;
+
+    const isOwner = room.ownerId === me.id;
+    const ownerName = room.ownerName || "quem abriu a sala";
+
+    button.textContent = room.public ? "🔓 Pública" : "🔒 Privada";
+    button.classList.toggle("on", room.public);
+    button.disabled = !isOwner;
+    button.title = isOwner
+      ? (room.public
+        ? "Pública: quem entrar conecta sem pedir. Toque para deixar privada."
+        : "Privada: quem entrar precisa ser aceito. Toque para deixar pública.")
+      : `Só quem está na sala há mais tempo (${ownerName}) muda isso.`;
 
   }
 
@@ -6210,10 +6312,11 @@
   }
 
   // Aceitei alguém que chegou na sala.
-  async function acceptRoomRequest(request, auto) {
+  // reason: "public" (sala pública) | "remembered" ("Sempre aceitar") | omitido (tocou em Aceitar)
+  async function acceptRoomRequest(request, auto, reason = null) {
 
     const { pairId, from } = request;
-    const entry = { pairId, peer: from, role: "host", timer: null, auto };
+    const entry = { pairId, peer: from, role: "host", timer: null, auto, reason };
 
     roomRequests.set(pairId, entry);
     renderRemoteState();
@@ -6536,7 +6639,7 @@
     storageSet(STORAGE_KEYS.name, me.name);
 
     myChannel?.track(publicMe()).catch(() => {});
-    room?.channel.track({ ...publicMe(), joinedAt: room.joinedAt }).catch(() => {});
+    trackRoom().catch(() => {});
 
   };
 
