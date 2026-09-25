@@ -1219,10 +1219,21 @@
       background: transparent;
     }
 
-    /* No PC o zoom fica na barra de baixo (placeZoomBar). */
+    /* No PC o zoom fica na barra de baixo, na direita (placeZoomBar).
+       Um espaço igual na esquerda mantém os botões no meio. */
+    .s-controls::before {
+      content: "";
+      flex: 1 1 0;
+    }
+
+    .zoom-slot {
+      flex: 1 1 0;
+      display: flex;
+      justify-content: flex-end;
+    }
+
     .s-controls .zoom-bar {
       position: static;
-      margin-left: 12px;
       box-shadow: none;
       background: var(--surface-2);
     }
@@ -4763,6 +4774,8 @@
     <button id="leaveBtn" class="ctl danger">
       <span class="ic" data-icon="leave"></span><span class="ctl-label">Desconectar</span>
     </button>
+    <!-- No PC o zoom vem para cá (placeZoomBar): na direita, longe dos botões. -->
+    <div id="zoomSlot" class="zoom-slot"></div>
   </div>
 
   <!-- Configurações: tudo num lugar só. -->
@@ -15063,7 +15076,7 @@
   // sala, por cima da área (lá a barra de baixo não está).
   function placeZoomBar() {
     const bar = $("zoomBar");
-    if (DESKTOP_LAYOUT.matches && !roomPip) document.querySelector(".s-controls").append(bar);
+    if (DESKTOP_LAYOUT.matches && !roomPip) $("zoomSlot").append(bar);
     else $("stageArea").append(bar);
   }
 
