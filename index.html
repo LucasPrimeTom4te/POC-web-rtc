@@ -4631,6 +4631,14 @@
           quem já estava, direto pelo DataChannel: nada disso fica no servidor.
         </li>
         <li>
+          Para ninguém ficar de fora, a cada poucos segundos cada um conta
+          aos seus conectados com quem está conectado. Quem fica sabendo de
+          alguém com quem não tem conexão (ou vê na presença alguém assim)
+          pede para conectar, sempre quem chegou depois. Quem não usa um
+          servidor <strong>TURN</strong> pode não conectar em redes restritas
+          (4G, rede de empresa).
+        </li>
+        <li>
           Aceito o pedido, oferta e resposta (descrições <strong>SDP</strong>
           completas) vão por um canal só daquela conexão,
           <code>pair:&lt;id&gt;</code>. Cada lado espera juntar os seus
@@ -5337,7 +5345,7 @@
       }
     };
 
-    sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name });
+    sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name, joinedAt: peer.room ? room?.joinedAt : undefined });
     sendState(peer);
 
     if (screenQuality.receive.height || screenQuality.receive.fps) {
@@ -5677,8 +5685,14 @@
       case "hello":
         peer.remote.device = message.device;
         peer.remote.name = cleanName(message.name);
+        if (Number.isFinite(message.joinedAt)) peer.remote.joinedAt = message.joinedAt;
         peerNameChanged(peer, message.name);
         renderPeers();
+        if (peer.room) sendMesh(); // todos ficam sabendo da conexão nova
+        break;
+
+      case "mesh":
+        receiveMesh(peer, message);
         break;
 
       case "state":
@@ -14762,6 +14776,7 @@
     }
 
     room?.retries.delete(peer.id);
+    room?.warned.delete(peer.id);
     logRoute(peer);
 
     const auto = pending?.pairId === peer.pairId && !!pending.auto;
@@ -14939,7 +14954,11 @@
     // attempted: "<id>:<joinedAt>" de quem já pedi (pedir de novo só se ele reentrar).
     // public: modo da sala (quem está há mais tempo decide; veja onRoomSync).
     // Começa pública: quem entrar conecta sem pedir, até o dono mudar.
-    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), retries: new Map(), public: true, ownerId: null, announced: false };
+    // known: quem os outros contaram que está na sala (veja sendMesh).
+    // declined: quem recusou (não peço de novo sozinho).
+    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), retries: new Map(), known: new Map(), declined: new Set(), warned: new Set(), public: true, ownerId: null, announced: false };
+
+    room.meshTimer = setInterval(meshTick, MESH_EVERY_MS);
 
     // Sozinho na sala: depois de um tempo, avisa como ela está.
     setTimeout(() => { if (room?.channel === channel) onRoomSync(); }, ROOM_SETTLE_MS + 100);
@@ -15061,12 +15080,105 @@
 
       room.attempted.add(key);
 
-      if (peers.get(member.id)?.connected) continue;
+      if (!needsConnection(member.id)) continue;
 
       requestRoomPeer({ id: member.id, name: cleanName(member.name) });
 
     }
 
+  }
+
+  /*
+   * Rede da sala em cadeia: cada um conta aos seus conectados com quem
+   * está conectado (de tempos em tempos e ao conectar alguém). Quem fica
+   * sabendo de alguém com quem não tem conexão tenta conectar. E, de
+   * tempos em tempos, todos conferem a presença e as listas recebidas e
+   * pedem de novo a quem ficou de fora. Quem pede é sempre quem chegou
+   * depois (mesma regra da presença), para os dois não pedirem juntos.
+   */
+  const MESH_EVERY_MS = 12000;   // conferir / avisar a cada
+  const MESH_FRESH_MS = 40000;   // quanto vale um "fulano está aqui" de outra pessoa
+
+  // a chegou antes de b na sala (a mesma ordem em todos os aparelhos).
+  const arrivedBefore = (a, b) => a.joinedAt < b.joinedAt || (a.joinedAt === b.joinedAt && a.id < b.id);
+
+  // Não conectado, sem pedido andando e sem ter recusado.
+  function needsConnection(id) {
+    if (!room || id === me.id || peers.get(id)?.connected || room.declined.has(id)) return false;
+    return ![...roomRequests.values()].some(entry => entry.peer.id === id);
+  }
+
+  function sendMesh(target = null) {
+
+    if (!room || !session?.room) return;
+
+    const list = connectedPeers()
+      .filter(peer => peer.room && Number.isFinite(peer.remote.joinedAt))
+      .map(peer => ({ id: peer.id, name: peer.name, joinedAt: peer.remote.joinedAt }));
+
+    const message = { type: "mesh", room: room.name, peers: list };
+
+    for (const peer of target ? [target] : connectedPeers()) {
+      if (peer.room) sendTo(peer, message);
+    }
+
+  }
+
+  function receiveMesh(from, { room: name, peers: list } = {}) {
+
+    if (!room || name !== room.name || !Array.isArray(list)) return;
+
+    const now = Date.now();
+
+    for (const member of list.slice(0, ROOM_LIMIT * 2)) {
+      if (!isDeviceId(member?.id) || member.id === me.id || !Number.isFinite(member.joinedAt)) continue;
+      room.known.set(member.id, { id: member.id, name: cleanName(member.name), joinedAt: member.joinedAt, seenAt: now });
+    }
+
+    ensureMesh();
+
+  }
+
+  // Pede a quem está na sala (pela presença ou pelo que os outros contam)
+  // e não está conectado comigo.
+  function ensureMesh() {
+
+    if (!room || !session?.room) return;
+
+    const now = Date.now();
+    const mine = { id: me.id, joinedAt: room.joinedAt };
+    const members = new Map();
+
+    for (const [id, member] of room.known) {
+      if (now - member.seenAt > MESH_FRESH_MS) room.known.delete(id);
+      else members.set(id, member);
+    }
+
+    for (const list of Object.values(room.channel.presenceState())) {
+      const member = list[0];
+      if (isDeviceId(member?.id) && member.id !== me.id && Number.isFinite(member.joinedAt)) members.set(member.id, member);
+    }
+
+    const everyone = [...members.values(), mine].sort((a, b) => arrivedBefore(a, b) ? -1 : 1);
+
+    // Sala cheia: fora dos primeiros não conecta (onRoomSync tira da sala).
+    if (everyone.indexOf(mine) >= ROOM_LIMIT) return;
+
+    for (const member of everyone.slice(0, ROOM_LIMIT)) {
+
+      if (member === mine || !arrivedBefore(member, mine) || !needsConnection(member.id)) continue;
+
+      room.attempted.add(member.id + ":" + member.joinedAt);
+      log("Sala: " + peerName(member) + " está na sala mas não conectado comigo; pedindo.");
+      requestRoomPeer({ id: member.id, name: cleanName(member.name) });
+
+    }
+
+  }
+
+  function meshTick() {
+    sendMesh();
+    ensureMesh();
   }
 
   // Minha presença na sala (o dono também diz se ela é pública).
@@ -15205,6 +15317,7 @@
         break;
 
       case "decline":
+        room?.declined.add(entry.peer.id);
         roomRequestFailed(entry, `${name} recusou a conexão.`, { retry: false });
         break;
 
@@ -15257,7 +15370,11 @@
       const hint = retry && !hasTurn
         ? " A rede de um de vocês pode estar bloqueando a conexão direta (falta um servidor TURN)."
         : "";
-      if (!again) addNote("⚠️ " + text + hint);
+      // Um aviso por pessoa (a conferência periódica segue tentando calada).
+      if (!again && !room?.warned.has(entry.peer.id)) {
+        room?.warned.add(entry.peer.id);
+        addNote("⚠️ " + text + hint);
+      }
       renderRemoteState();
     }
 
@@ -15297,6 +15414,7 @@
 
     const { channel, name } = room;
 
+    clearInterval(room.meshTimer);
     room = null;
     renderRoom();
 
