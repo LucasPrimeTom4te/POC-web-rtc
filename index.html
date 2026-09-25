@@ -1041,7 +1041,8 @@
 
     /* Tela cheia de uma janela (a de verdade e a do iPhone, que ocupa a página). */
     .win:fullscreen,
-    .win.win-full {
+    .win.win-full,
+    .win.in-pip {
       --iz: 1;
       position: fixed !important;
       inset: 0 !important;
@@ -1053,7 +1054,8 @@
     }
 
     .win:fullscreen .win-body,
-    .win.win-full .win-body {
+    .win.win-full .win-body,
+    .win.in-pip .win-body {
       flex: 1;
       min-height: 0;
       aspect-ratio: auto;
@@ -1064,19 +1066,22 @@
     }
 
     .board-win:fullscreen canvas,
-    .board-win.win-full canvas {
+    .board-win.win-full canvas,
+    .board-win.in-pip canvas {
       width: min(100%, 100cqh);
       height: auto;
       aspect-ratio: 1;
     }
 
     .win:fullscreen .win-body,
-    .win.win-full .win-body {
+    .win.win-full .win-body,
+    .win.in-pip .win-body {
       container-type: size;
     }
 
     .win:fullscreen .resize-handle,
-    .win.win-full .resize-handle {
+    .win.win-full .resize-handle,
+    .win.in-pip .resize-handle {
       display: none !important;
     }
 
@@ -3454,6 +3459,113 @@
     }
 
     /* ----------------------------------------------------------
+     * PICTURE-IN-PICTURE E MENU DO BOTÃO DIREITO
+     * ---------------------------------------------------------- */
+
+    .pip-body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .win.in-pip .win-head .desktop-only {
+      display: none !important;
+    }
+
+    .workspace > .pip-holder {
+      position: absolute;
+      box-sizing: border-box;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      border: 2px dashed var(--person, var(--accent));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--surface) 70%, transparent);
+      color: var(--muted);
+      text-align: center;
+      font-size: calc(14px * var(--iz, 1));
+      cursor: pointer;
+    }
+
+    .ctx-menu {
+      position: fixed;
+      z-index: 45;
+      min-width: 220px;
+      max-width: min(340px, calc(100vw - 16px));
+      max-height: calc(100vh - 16px);
+      overflow-y: auto;
+      padding: 5px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+    }
+
+    .ctx-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 7px 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      text-align: left;
+    }
+
+    .ctx-item:hover:not(:disabled),
+    .ctx-item:focus-visible {
+      background: var(--bg);
+      outline: none;
+    }
+
+    .ctx-item:disabled {
+      opacity: .4;
+    }
+
+    .ctx-item.active {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .ctx-item.danger {
+      color: #fca5a5;
+    }
+
+    .ctx-icon {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 18px;
+      font-size: 14px;
+    }
+
+    .ctx-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .ctx-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ctx-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .ctx-sep {
+      height: 1px;
+      margin: 4px 6px;
+      background: var(--border);
+    }
+
+    /* ----------------------------------------------------------
      * REAÇÕES FLUTUANTES
      * ---------------------------------------------------------- */
 
@@ -4365,6 +4477,9 @@
   </div>
 
 </div>
+
+<!-- Menu do botão direito (fundo, quadro e barra das janelas) -->
+<div id="ctxMenu" class="ctx-menu hidden" role="menu"></div>
 
 <!-- Reações: o seletor (em cima do botão) e a camada onde elas sobem -->
 <div id="reactPicker" class="react-picker hidden" role="menu" aria-label="Reações"></div>
@@ -5912,7 +6027,7 @@
 
     // Quadros fechados lá: fecham aqui (e não voltam).
     for (const id of list(message.closed)) {
-      if (typeof id !== "string" || !BOARD_ID.test(id) || id === MAIN_BOARD) continue;
+      if (typeof id !== "string" || !BOARD_ID.test(id)) continue;
       if (session.boards.has(id)) closeBoard(id, peer, true);
       else session.closedBoards.add(id);
     }
@@ -6997,7 +7112,7 @@
   const ZOOM_MAX = 4;
   const BOARD_MAX_PX = 3072;  // resolução máxima do quadro (zoom grande)
   const LAYOUT_SEND_MS = 40;  // enquanto arrasta: no máximo um aviso a cada 40 ms
-  const MAIN_BOARD = "main";  // o quadro que sempre existe (não fecha)
+  const MAIN_BOARD = "main";  // o quadro com que a sala começa (pode ser fechado)
   const BOARD_ID = /^[a-z0-9-]{1,40}$/;
 
   const CAN_PIP = !!document.pictureInPictureEnabled ||
@@ -7572,8 +7687,8 @@
   // No mundo; maximizada no PC: por cima da vista; no celular as telas vão para a aba Telas.
   function placeWindow(view) {
 
-    // Tela cheia do iPhone: fica na página até sair.
-    if (view.el.classList.contains("win-full")) return;
+    // Tela cheia do iPhone: fica na página até sair. No PiP: fica lá.
+    if (view.el.classList.contains("win-full") || view.pip) return;
 
     const parent = !DESKTOP_LAYOUT.matches && view.kind === "screen" ? $("screenGrid")
       : DESKTOP_LAYOUT.matches && layoutOf(view.id).max ? $("maxLayer")
@@ -7587,6 +7702,9 @@
   }
 
   function positionWindow(view) {
+
+    // No PiP a janela de verdade está lá; aqui só o lugar dela na sala.
+    if (view.pip) return positionPipHolder(view);
 
     const entry = layoutOf(view.id);
     const el = view.el;
@@ -7681,6 +7799,9 @@
 
     const view = { id, kind, el, head, body, label, aspect: kind === "board" ? 1 : 16 / 9 };
 
+    view.pipBtn = windowButton("📌", "Picture-in-picture: abre esta janela numa janela flutuante (só aqui). Mover a flutuante não mexe na sala; o tamanho e o que você fizer dentro valem para todos.", () => toggleWindowPip(view), "win-pip");
+    view.pipBtn.hidden = !CAN_DOC_PIP;
+
     view.minBtn = windowButton("–", "Minimizar", () => {
       const entry = layoutOf(id);
       setLayout(id, entry.max ? { max: false, min: true } : { min: !entry.min });
@@ -7691,9 +7812,12 @@
       setLayout(id, { max: !entry.max, min: false, z: ++topZ });
     }, "desktop-only");
 
-    head.append(bubble, dot, label, spacer, ...extraButtons, view.minBtn, view.maxBtn);
+    head.append(bubble, dot, label, spacer, ...extraButtons, view.pipBtn, view.minBtn, view.maxBtn);
 
-    if (closable) head.append(windowButton("✕", "Fechar (para todos)", onClose));
+    if (closable) {
+      view.closeBtn = windowButton("✕", "Fechar (para todos)", onClose);
+      head.append(view.closeBtn);
+    }
 
     body.append(handle);
     el.append(head, body);
@@ -7777,6 +7901,11 @@
     view.cleanup?.();
     view.el.remove();
     session.windows.delete(id);
+
+    if (view.pip) {
+      view.pipHolder.remove();
+      view.pip.close();
+    }
 
   }
 
@@ -7977,7 +8106,7 @@
       id: "board:" + id,
       kind: "board",
       extraButtons: [clearBtn, fullBtn],
-      closable: id !== MAIN_BOARD,
+      closable: true,
       onClose: () => closeBoard(id)
     });
 
@@ -8068,7 +8197,7 @@
   // fromPeer: quem fechou (null = fui eu, avisa os outros). silent: veio do histórico.
   function closeBoard(id, fromPeer = null, silent = false) {
 
-    if (id === MAIN_BOARD || !session.boards.has(id)) return;
+    if (!session.boards.has(id)) return;
 
     const title = session.boards.get(id).title;
 
@@ -8649,7 +8778,7 @@
       keyEvent.stopPropagation();
     };
 
-    document.body.appendChild(input);
+    view.el.ownerDocument.body.appendChild(input);
     redrawBoard(view.board);
 
     setTimeout(() => {
@@ -8735,7 +8864,7 @@
       keyEvent.stopPropagation();
     };
 
-    document.body.appendChild(input);
+    view.el.ownerDocument.body.appendChild(input);
 
     // O clique que abriu a caixa ainda está terminando: só depois dele o
     // "sair da caixa" passa a valer como confirmar.
@@ -12274,6 +12403,304 @@
     for (const entry of session?.displays.values() || []) if (entry.kind === "palette") renderDisplay(entry.id);
   }
 
+
+  /* ---- janela em picture-in-picture (Document PiP) ---- */
+
+  /*
+   * 📌 em qualquer janela: ela vai inteira (a mesma, com tudo funcionando)
+   * para uma janela flutuante do navegador (documentPictureInPicture, Chrome
+   * e Edge no computador), que fica por cima de tudo, até de outros
+   * programas. Só aqui: na sala ela continua no mesmo lugar para todos, e no
+   * meu mundo fica um marcador. Mover a flutuante não muda nada na sala;
+   * mudar o tamanho dela muda o da janela para todos. Uma de cada vez (o
+   * navegador só deixa uma).
+   */
+
+  const CAN_DOC_PIP = "documentPictureInPicture" in window;
+  const PIP_RESIZE_MS = 300;
+
+  async function toggleWindowPip(view) {
+
+    if (view.pip) return view.pip.close();
+    if (!CAN_DOC_PIP) return toast("📌 Este navegador não abre janelas flutuantes (só Chrome e Edge no computador).");
+
+    if (document.fullscreenElement === view.el) await document.exitFullscreen().catch(() => {});
+    if (view.el.classList.contains("win-full")) exitWindowFull(view);
+
+    const rect = view.el.getBoundingClientRect();
+    let pip;
+
+    try {
+      pip = await documentPictureInPicture.requestWindow({
+        width: Math.round(clamp(rect.width, 280, screen.availWidth * 0.8)),
+        height: Math.round(clamp(rect.height, 200, screen.availHeight * 0.8))
+      });
+    } catch (error) {
+      toast("📌 Não foi possível abrir a janela flutuante: " + error.message);
+      return;
+    }
+
+    // Fechou (ou saiu da sala) enquanto abria.
+    if (!session?.windows.has(view.id)) return pip.close();
+
+    // Os estilos da página e a aparência do documento.
+    for (const node of document.head.querySelectorAll("style, link[rel=stylesheet]")) pip.document.head.append(node.cloneNode(true));
+    pip.document.title = view.label.textContent || "Janela";
+    pip.document.documentElement.className = document.documentElement.className;
+    pip.document.body.className = "pip-body";
+
+    // Site sendo transmitido: o recorte da captura era desta aba.
+    if (view.displayId && session.screenFor === view.displayId) {
+      setVideoTrack(null);
+      toast("🌐 A transmissão do site parou: dentro da janela flutuante ela não funciona.");
+    }
+
+    // Marcador no lugar da janela, no meu mundo (tocar traz de volta).
+    const holder = document.createElement("div");
+    holder.className = "win pip-holder";
+    holder.textContent = "📌 Aberta numa janela flutuante · clique para trazer de volta";
+    holder.style.setProperty("--person", view.el.style.getPropertyValue("--person"));
+    holder.onclick = () => pip.close();
+    $("workspace").append(holder);
+
+    view.pip = pip;
+    view.pipHolder = holder;
+    view.pipBtn.title = "Trazer de volta para a sala";
+    view.el.classList.add("in-pip");
+    view.el.classList.remove("minimized", "maximized", "free-h");
+    for (const property of ["left", "top", "width", "zIndex"]) view.el.style[property] = "";
+
+    pip.document.body.append(view.el);
+    view.remount?.();
+    positionPipHolder(view);
+    setTimeout(() => resizeCanvas(view), 50);
+
+    // Tamanho da flutuante -> tamanho da janela (para todos). A posição não.
+    let timer = null;
+    pip.addEventListener("resize", () => {
+      resizeCanvas(view);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!session?.windows.has(view.id) || view.pip !== pip) return;
+        const w = clamp(pip.innerWidth, WIN_MIN_W, WIN_MAX_W);
+        const h = Math.max(WIN_MIN_H, pip.innerHeight - view.head.offsetHeight);
+        setLayout(view.id, view.kind === "board" ? { w: clamp(Math.min(w, h), WIN_MIN_W, WIN_MAX_W) } : { w, h });
+      }, PIP_RESIZE_MS);
+    });
+
+    pip.addEventListener("pagehide", () => {
+
+      clearTimeout(timer);
+      holder.remove();
+
+      if (view.pip !== pip) return;
+
+      view.pip = null;
+      view.pipHolder = null;
+      view.pipBtn.title = "Picture-in-picture: abre esta janela numa janela flutuante (só aqui)";
+      view.el.classList.remove("in-pip");
+
+      // A janela foi fechada (para todos) enquanto estava lá.
+      if (!session?.windows.has(view.id)) return;
+
+      placeWindow(view);
+      positionWindow(view);
+      setTimeout(() => resizeCanvas(view), 50);
+
+    });
+
+  }
+
+  function positionPipHolder(view) {
+    const entry = layoutOf(view.id);
+    const holder = view.pipHolder;
+    holder.style.left = entry.x + "px";
+    holder.style.top = entry.y + "px";
+    holder.style.width = entry.w + "px";
+    holder.style.height = windowRect(view).h + "px";
+    holder.style.zIndex = entry.z;
+    holder.hidden = !!entry.min;
+  }
+
+
+  /* ---- menus do botão direito ---- */
+
+  /*
+   * No fundo do mundo: criar qualquer janela ali onde clicou, e a vista.
+   * Num quadro: ferramentas, desfazer, limpar. Na barra de uma janela:
+   * tudo o que dá para fazer com ela (os botões da barra e mais alguns).
+   * Dentro do conteúdo das janelas fica o menu normal do navegador.
+   */
+
+  function openMenu(x, y, items) {
+
+    const menu = $("ctxMenu");
+
+    menu.replaceChildren(...items.filter(Boolean).map(item => {
+
+      if (item === "-") return el("div", "ctx-sep");
+
+      const button = el("button", "ctx-item" + (item.active ? " active" : "") + (item.danger ? " danger" : ""));
+      button.type = "button";
+      button.disabled = !!item.disabled;
+      button.setAttribute("role", "menuitem");
+
+      const icon = el("span", "ctx-icon");
+      if (item.svg) icon.innerHTML = iconSvg(item.svg);
+      else icon.textContent = item.icon || "";
+
+      button.append(icon, el("span", "ctx-label", item.label));
+      if (item.hint) button.append(el("span", "ctx-hint", item.hint));
+
+      button.onclick = () => {
+        closeMenu();
+        item.action();
+      };
+
+      return button;
+
+    }));
+
+    show("ctxMenu");
+    menu.style.left = clamp(x, 8, innerWidth - menu.offsetWidth - 8) + "px";
+    menu.style.top = clamp(y, 8, innerHeight - menu.offsetHeight - 8) + "px";
+    menu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+
+  }
+
+  function closeMenu() {
+    show("ctxMenu", false);
+  }
+
+  document.addEventListener("pointerdown", event => {
+    if (!event.target.closest?.("#ctxMenu")) closeMenu();
+  }, true);
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeMenu();
+  });
+
+  window.addEventListener("blur", closeMenu);
+  window.addEventListener("resize", closeMenu);
+  $("stageArea").addEventListener("wheel", closeMenu, { passive: true });
+
+  // Setas e Enter dentro do menu.
+  $("ctxMenu").addEventListener("keydown", event => {
+    const buttons = [...$("ctxMenu").querySelectorAll("button:not(:disabled)")];
+    const index = buttons.indexOf(document.activeElement);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      buttons[(index + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length]?.focus();
+    }
+  });
+
+  $("stageArea").addEventListener("contextmenu", event => {
+
+    if (!session || event.target.closest(".stage-ui")) return;
+
+    const head = event.target.closest(".win-head");
+    const win = event.target.closest(".win");
+    const view = win && session.windows.get(win.dataset.id);
+
+    if (head && view) {
+      event.preventDefault();
+      openMenu(event.clientX, event.clientY, windowMenu(view));
+    } else if (view?.kind === "board" && event.target === view.canvas) {
+      event.preventDefault();
+      openMenu(event.clientX, event.clientY, boardMenu(view, event));
+    } else if (!win) {
+      event.preventDefault();
+      openMenu(event.clientX, event.clientY, backgroundMenu(event));
+    }
+
+  });
+
+  // O ponto do mundo embaixo do mouse.
+  function worldPoint(event) {
+    const box = stageBox();
+    const { x, y, z } = session.cam;
+    return { x: x + (event.clientX - box.left) / z, y: y + (event.clientY - box.top) / z };
+  }
+
+  // Aperta o botão de abrir e põe a janela nova onde clicou.
+  function createAt(button, point) {
+    const before = new Set(session.windows.keys());
+    button.click();
+    const id = [...session.windows.keys()].find(key => !before.has(key));
+    if (id) setLayout(id, { x: point.x, y: point.y, z: ++topZ });
+  }
+
+  function backgroundMenu(event) {
+
+    const point = worldPoint(event);
+
+    const create = [...document.querySelectorAll('#boardTools .tray[data-tray="more"] button')]
+      .filter(button => !button.hidden)
+      .map(button => ({
+        svg: button.querySelector(".ic")?.dataset.icon,
+        label: button.querySelector(".rail-label")?.textContent || button.title,
+        action: () => createAt(button, point)
+      }));
+
+    return [
+      ...create,
+      "-",
+      { icon: "⤢", label: "Ver tudo", hint: "Shift 1", action: () => fitAll() },
+      { icon: "🔍", label: "Zoom 100%", hint: "Ctrl 0", action: () => $("zoomResetBtn").click() },
+      { icon: "😊", label: "Mandar uma reação", action: () => toggleReactPicker(true) }
+    ];
+
+  }
+
+  function boardMenu(view, event) {
+
+    const point = worldPoint(event);
+    const editing = session.boardMode === "edit";
+
+    return [
+      ...Object.entries(TOOLS).map(([name, tool]) => ({
+        svg: tool.icon,
+        label: tool.label,
+        hint: tool.key.toUpperCase(),
+        active: editing && session.tool === name,
+        action: () => setTool(name)
+      })),
+      "-",
+      { svg: "undo", label: "Desfazer o meu último traço", hint: "Ctrl Z", action: () => undoMine() },
+      { svg: editing ? "eye" : "pen", label: editing ? "Só visualizar" : "Editar", action: () => $("boardModeBtn").click() },
+      { svg: "palette", label: "Barra de ferramentas aqui", action: () => createAt($("addPaletteBtn"), point) },
+      "-",
+      { icon: "🧹", label: "Limpar este quadro (para todos)", danger: true, action: () => clearBoard(view.board) }
+    ];
+
+  }
+
+  function windowMenu(view) {
+
+    const entry = layoutOf(view.id);
+    const floating = view.el.parentNode === $("workspace");
+
+    // Os botões próprios de cada janela (Transmitir, Trocar vídeo, Copiar…).
+    const own = [...view.head.querySelectorAll("button")]
+      .filter(button => !button.hidden && ![view.pipBtn, view.minBtn, view.maxBtn, view.closeBtn].includes(button) && button.textContent !== "⛶")
+      .map(button => ({ label: button.title || button.textContent, icon: button.title ? button.textContent.slice(0, 2) : "", action: () => button.click() }));
+
+    return [
+      ...own,
+      own.length ? "-" : null,
+      { icon: "🎯", label: "Ir até ela", action: () => focusWindow(view.id) },
+      { icon: "⬆️", label: "Trazer para a frente (para todos)", disabled: !floating, action: () => setLayout(view.id, { z: ++topZ }) },
+      { icon: entry.min ? "▢" : "–", label: entry.min ? "Mostrar (para todos)" : "Minimizar (para todos)", disabled: !DESKTOP_LAYOUT.matches, action: () => view.minBtn.click() },
+      { icon: entry.max ? "🗗" : "⤢", label: entry.max ? "Voltar ao tamanho da janela (para todos)" : "Maximizar (para todos)", disabled: !DESKTOP_LAYOUT.matches, action: () => view.maxBtn.click() },
+      freeHeight(view) && entry.h > 0 ? { icon: "↔️", label: "Voltar à proporção do conteúdo (para todos)", action: () => setLayout(view.id, { h: 0 }) } : null,
+      { icon: "⛶", label: "Tela cheia (só aqui)", action: () => toggleWindowFull(view) },
+      CAN_DOC_PIP ? { icon: "📌", label: view.pip ? "Trazer de volta do picture-in-picture" : "Picture-in-picture (só aqui)", action: () => toggleWindowPip(view) } : null,
+      view.closeBtn ? "-" : null,
+      view.closeBtn ? { icon: "✕", label: "Fechar (para todos)", danger: true, action: () => view.closeBtn.click() } : null
+    ];
+
+  }
+
   /* ---- reações flutuantes ---- */
 
   /*
@@ -12931,7 +13358,7 @@
 
     const view = session.windows.get(surface);
 
-    if (!view || !view.el.offsetParent || view.el.classList.contains("minimized")) return null;
+    if (!view || view.pip || !view.el.offsetParent || view.el.classList.contains("minimized")) return null;
 
     if (view.kind === "board") return view.canvas.getBoundingClientRect();
     if (view.kind === "display") return imageContentRect(view);
