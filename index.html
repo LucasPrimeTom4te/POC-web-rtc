@@ -790,28 +790,166 @@
       display: flex;
     }
 
-    /* A aba Tela só aparece enquanto o outro compartilha. */
-    .session:not(.has-screen) .s-tabs button[data-tab="screen"] {
+    .tab-count {
+      margin-left: 4px;
+      font-size: 12px;
+      color: var(--ok);
+    }
+
+    /* Telas: quem está aqui + grade com todas as telas compartilhadas. */
+    .screens-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 16px;
+    }
+
+    .screens-heading {
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .people {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .person {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: var(--surface-2);
+      font-size: 13px;
+    }
+
+    .person.sharing {
+      border-color: rgba(34, 197, 94, .45);
+      cursor: pointer;
+    }
+
+    .person .tags {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .screens-empty {
+      padding: 24px 12px;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .screens-empty span {
+      display: block;
+      margin-top: 4px;
+      font-size: 13px;
+    }
+
+    .screen-settings {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .screen-settings label {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .screen-settings select {
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+    }
+
+    .screen-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+      align-content: start;
+    }
+
+    .screen-grid:empty {
       display: none;
     }
 
-    .screen-wrap {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      padding: 0 16px 12px;
+    .screen-tile {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      max-height: 72vh;
+      overflow: hidden;
+      border-radius: 14px;
+      background: black;
+      outline: 2px solid transparent;
     }
 
-    #screenVideo {
+    /* Destacada: ocupa a linha toda, antes das outras. */
+    .screen-tile.focused {
+      grid-column: 1 / -1;
+      order: -1;
+      outline-color: var(--accent);
+    }
+
+    .screen-tile video {
+      display: block;
       width: 100%;
       height: 100%;
       object-fit: contain;
       background: black;
-      border-radius: 14px;
     }
 
-    #screenVideo:fullscreen {
+    .screen-tile video:fullscreen {
       border-radius: 0;
+    }
+
+    .screen-bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      padding: 18px 8px 8px;
+      background: linear-gradient(transparent, rgba(0, 0, 0, .8));
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .screen-bar .spacer {
+      flex: 1;
+    }
+
+    .screen-bar button {
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+
+    /* Chat: o cabeçalho (minimizar) só existe no computador. */
+    .chat-head {
+      display: none;
     }
 
     /* Quadro */
@@ -1136,10 +1274,6 @@
     }
 
     @media (min-width: 900px) {
-      .s-tabs {
-        display: none;
-      }
-
       .s-body {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 380px;
@@ -1162,9 +1296,42 @@
         border-left: 1px solid var(--border);
       }
 
-      /* Com tela compartilhada, as abas voltam para trocar Quadro/Tela. */
-      .session.has-screen .s-tabs {
+      /* As abas trocam o que fica à esquerda (Quadro/Telas). */
+      .s-tabs {
         display: flex;
+      }
+
+      .chat-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .chat-head .tool {
+        padding: 5px 10px;
+        font-size: 12px;
+      }
+
+      /* Chat minimizado: vira uma faixa estreita com o botão para abrir. */
+      .session.chat-min .s-body {
+        grid-template-columns: minmax(0, 1fr) 56px;
+      }
+
+      .session.chat-min .chat-pane > :not(.chat-head),
+      .session.chat-min .chat-head-title,
+      .session.chat-min #chatMinText {
+        display: none;
+      }
+
+      .session.chat-min .chat-head {
+        justify-content: center;
+        padding: 10px 0;
+        border-bottom: 0;
       }
 
       .s-tabs button[data-tab="chat"] {
@@ -1679,7 +1846,7 @@
   <div class="s-tabs">
     <button data-tab="chat" class="active">💬 Chat<span id="chatBadge" class="badge hidden"></span></button>
     <button data-tab="board">🎨 Quadro<span id="boardBadge" class="badge hidden"></span></button>
-    <button data-tab="screen">🖥️ Tela<span id="screenBadge" class="badge hidden"></span></button>
+    <button data-tab="screen">🖥️ Telas<span id="screenCount" class="tab-count"></span><span id="screenBadge" class="badge hidden"></span></button>
   </div>
 
   <div class="s-body">
@@ -1705,19 +1872,45 @@
 
     <section id="screenPane" class="pane screen-pane">
 
-      <div class="board-tools">
-        <span id="screenTitle">🖥️ Tela do outro aparelho</span>
-        <span class="spacer"></span>
-        <button id="screenFullBtn" class="tool">⛶ Tela cheia</button>
-      </div>
+      <div class="screens-wrap">
 
-      <div class="screen-wrap">
-        <video id="screenVideo" autoplay playsinline muted></video>
+        <div>
+          <div class="screens-heading">👥 Quem está aqui</div>
+          <div id="peopleList" class="people"></div>
+        </div>
+
+        <div class="screens-heading">🖥️ Telas compartilhadas</div>
+
+        <!-- Qualidade: mais leve = menos internet e menos processador. -->
+        <div class="screen-settings">
+          <label id="sendQualityField">
+            Minha tela (o que eu envio)
+            <select id="sendQuality"></select>
+          </label>
+          <label>
+            Telas que eu recebo
+            <select id="receiveQuality"></select>
+          </label>
+        </div>
+        <div id="screensEmpty" class="screens-empty">
+          Ninguém está compartilhando a tela agora.
+          <span id="screensEmptyHint">No computador, toque em 🖥️ Compartilhar tela: várias pessoas podem compartilhar ao mesmo tempo.</span>
+        </div>
+        <div id="screenGrid" class="screen-grid"></div>
+
       </div>
 
     </section>
 
     <section id="chatPane" class="pane chat-pane active">
+
+      <!-- Só no computador: minimizar o chat dá mais espaço ao quadro/telas. -->
+      <div class="chat-head">
+        <span class="chat-head-title">💬 Chat</span>
+        <button id="chatMinBtn" class="tool" title="Minimizar o chat">
+          <span id="chatMinIcon">⇥</span><span id="chatMinText"> Minimizar</span><span id="chatMinBadge" class="badge hidden"></span>
+        </button>
+      </div>
 
       <div id="chatList" class="chat-list"></div>
 
@@ -2117,7 +2310,7 @@
       audio: null,            // <audio> com o microfone dele
       shareAudio: null,       // <audio> com o áudio que ele compartilha
       videoStream: null,      // tela dele, quando compartilha
-      remote: { known: false, mic: false, speaker: true, screen: false, audioShare: false, device: null, name: "" },
+      remote: { known: false, mic: false, speaker: true, screen: false, audioShare: false, wantQuality: "high", device: null, name: "" },
       reconnect: null         // { startedAt, giveUp } enquanto a conexão está caída
     };
 
@@ -2369,7 +2562,9 @@
   }
 
   function isPaneVisible(name) {
-    if (DESKTOP_LAYOUT.matches) return name === "chat" || session?.stage === name;
+    if (DESKTOP_LAYOUT.matches) {
+      return name === "chat" ? !session?.chatMin : session?.stage === name;
+    }
     return session?.tab === name;
   }
 
@@ -2392,6 +2587,10 @@
       stage: "board",         // PC: o que aparece à esquerda (board | screen)
       unread: { chat: 0, board: 0, screen: 0 },
       screenTrack: null,
+      screenTiles: new Map(), // "me" ou id do aparelho -> { tile, video, name }
+      focusedScreen: null,    // tela destacada (mesma chave)
+      screenAutoFrom: null,   // a aba Telas abriu sozinha: de onde veio (para voltar)
+      chatMin: storageGet("rtc.chatMin") === "1", // PC: chat minimizado
       shareAudioTrack: null,  // áudio que estou compartilhando (sem vídeo)
       color: room ? colorFor(me.id) : role === "host" ? BOARD_COLORS[1] : BOARD_COLORS[2],
       width: BOARD_WIDTHS.thin,
@@ -2421,12 +2620,15 @@
     show("remoteDrawing", false);
     show("toast", false);
     renderConnectionState();
-    $("sessionView").classList.remove("has-screen");
     show("remoteScreenPill", false);
     show("screenBtn", CAN_SHARE_SCREEN);
     show("shareAudioBtn", CAN_SHARE_SCREEN);
     renderSwatches();
     renderBoardMode();
+    renderChatMin();
+    show("screensEmptyHint", CAN_SHARE_SCREEN);
+    show("sendQualityField", CAN_SHARE_SCREEN);
+    renderScreens();
     renderLocalControls();
     renderPeers();
     setTab("chat");
@@ -2458,7 +2660,7 @@
       if (event.track.kind === "video") {
         log(`Canal de vídeo (tela) de ${peerLabel(peer)} recebido.`);
         peer.videoStream = new MediaStream([event.track]);
-        if (peer.remote.screen) renderRemoteScreen();
+        if (peer.remote.screen) renderScreens();
         return;
       }
 
@@ -2493,6 +2695,10 @@
 
     sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name });
     sendState(peer);
+
+    if (screenQuality.receive !== "high") {
+      sendTo(peer, { type: "screen-quality", level: screenQuality.receive });
+    }
 
     // Sala: troca o que cada um fez; quem chegou (quem pediu) pede o resto.
     if (session.room && peer.room) {
@@ -2552,7 +2758,7 @@
 
     renderPeers();
     renderLocalControls();
-    renderRemoteScreen();
+    renderScreens();
     renderConnectionState();
 
   }
@@ -2572,8 +2778,10 @@
     session.shareAudioTrack?.stop();
     session.objectUrls.forEach(url => URL.revokeObjectURL(url));
 
-    $("screenVideo").srcObject = null;
-    $("sessionView").classList.remove("has-screen");
+    if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
+    session.screenTiles.forEach(({ video }) => { video.srcObject = null; });
+    $("screenGrid").replaceChildren();
+    $("sessionView").classList.remove("chat-min");
 
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     $("boardPane").classList.remove("board-full", "viewing");
@@ -2753,6 +2961,8 @@
 
     $("liveDot").classList.toggle("warn", !!reconnect);
 
+    renderPeople();
+
   }
 
 
@@ -2784,6 +2994,14 @@
 
       case "chat":
         receiveChat(peer, message);
+        break;
+
+      case "screen-quality":
+        // Ele quer receber as telas mais leves.
+        if (SCREEN_QUALITIES[message.level]) {
+          peer.remote.wantQuality = message.level;
+          applyScreenQuality(peer);
+        }
         break;
 
       case "sync-request":
@@ -3095,7 +3313,11 @@
   /* ---------------- abas (celular) ---------------- */
 
   document.querySelectorAll(".s-tabs button").forEach(button => {
-    button.onclick = () => setTab(button.dataset.tab);
+    button.onclick = () => {
+      // Escolheu uma aba: a aba Telas não volta mais sozinha.
+      session.screenAutoFrom = null;
+      setTab(button.dataset.tab);
+    };
   });
 
   function setTab(name) {
@@ -3136,12 +3358,47 @@
 
   function renderBadges() {
 
-    for (const name of ["chat", "board", "screen"]) {
-      const badge = $(name + "Badge");
-      const count = session.unread[name];
-      badge.textContent = count > 9 ? "9+" : count;
-      badge.classList.toggle("hidden", !count);
-    }
+    const setBadge = (id, count) => {
+      $(id).textContent = count > 9 ? "9+" : count;
+      $(id).classList.toggle("hidden", !count);
+    };
+
+    for (const name of ["chat", "board", "screen"]) setBadge(name + "Badge", session.unread[name]);
+
+    // Chat minimizado: as mensagens novas aparecem no botão de abrir.
+    setBadge("chatMinBadge", session.chatMin ? session.unread.chat : 0);
+
+  }
+
+
+  /* ---------------- minimizar o chat (PC) ---------------- */
+
+  $("chatMinBtn").onclick = () => {
+
+    if (!session) return;
+
+    session.chatMin = !session.chatMin;
+    storageSet("rtc.chatMin", session.chatMin ? "1" : "0");
+
+    if (!session.chatMin) session.unread.chat = 0;
+
+    renderChatMin();
+
+  };
+
+  function renderChatMin() {
+
+    const min = session.chatMin;
+
+    $("sessionView").classList.toggle("chat-min", min);
+    $("chatMinIcon").textContent = min ? "💬" : "⇥";
+    $("chatMinBtn").title = min ? "Abrir o chat" : "Minimizar o chat";
+
+    renderBadges();
+
+    if (!min) $("chatList").scrollTop = $("chatList").scrollHeight;
+
+    requestAnimationFrame(resizeBoard);
 
   }
 
@@ -3267,7 +3524,7 @@
 
     return Promise.all([
       peer.audioTransceiver.sender.replaceTrack(session.micTrack),
-      peer.videoTransceiver?.sender.replaceTrack(session.screenTrack),
+      peer.videoTransceiver?.sender.replaceTrack(session.screenTrack).then(() => applyScreenQuality(peer)),
       setShareAudio(peer.shareAudioTransceiver, session.shareAudioTrack)
     ]).catch(error => log("Erro ao trocar a trilha: " + error.message));
 
@@ -3451,6 +3708,8 @@
     $("shareAudioBtn").classList.toggle("on", sharingAudio);
     $("shareAudioLabel").textContent = sharingAudio ? "Parar o áudio" : "Compartilhar áudio";
 
+    renderPeople();
+
   }
 
   function handleRemoteState(peer, { mic, speaker, screen = false, audioShare = false }) {
@@ -3506,7 +3765,7 @@
     remote.screen = screen;
 
     renderRemoteState();
-    if (screenChanged) renderRemoteScreen();
+    if (screenChanged) renderScreens(screen ? peer : null);
 
   }
 
@@ -3579,6 +3838,8 @@
       if (peers.get(request.peer.id)?.connected) continue;
       container.append(pill("⏳ " + peerName(request.peer), "warn"));
     }
+
+    renderPeople();
 
   }
 
@@ -3725,8 +3986,10 @@
 
     try {
 
+      const quality = SCREEN_QUALITIES[screenQuality.send];
+
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 15, max: 30 } },
+        video: { frameRate: { ideal: quality.fps, max: quality.fps }, height: { max: quality.height } },
         audio: false
       });
 
@@ -3745,6 +4008,8 @@
 
       session.screenTrack = track;
       await replaceTrackEverywhere("video", track);
+      connectedPeers().forEach(applyScreenQuality);
+      renderScreens();
 
       log("Compartilhando a tela.");
 
@@ -3776,6 +4041,8 @@
 
     await replaceTrackEverywhere("video", null).catch(() => {});
 
+    renderScreens();
+
     log("Parou de compartilhar a tela.");
 
     renderLocalControls();
@@ -3783,43 +4050,344 @@
 
   }
 
-  // Alguém começou/parou de compartilhar: mostra ou esconde a Tela.
-  // Mostra a tela do primeiro que estiver compartilhando.
-  function renderRemoteScreen() {
+  /* ---------------- qualidade das telas ---------------- */
 
-    if (!session) return;
+  // Mais leve = menos internet (cada pessoa na sala recebe a sua cópia
+  // da minha tela) e menos processador para codificar e decodificar.
+  const SCREEN_QUALITIES = {
+    high:   { label: "Alta · 1080p, 30 fps",   height: 1080, fps: 30, bitrate: 4000000 },
+    medium: { label: "Média · 720p, 15 fps",   height: 720,  fps: 15, bitrate: 1500000 },
+    low:    { label: "Leve · 480p, 8 fps",     height: 480,  fps: 8,  bitrate: 500000 },
+    saver:  { label: "Economia · 360p, 4 fps", height: 360,  fps: 4,  bitrate: 200000 }
+  };
 
-    const video = $("screenVideo");
-    const presenter = connectedPeers().find(peer => peer.remote.screen) || null;
-    const sharing = !!presenter;
-    const stream = presenter?.videoStream || null;
-    const changed = video.srcObject !== stream;
+  const QUALITY_ORDER = ["high", "medium", "low", "saver"];
 
-    if (changed) video.srcObject = stream;
+  const savedQuality = (key, fallback) => {
+    const value = storageGet(key);
+    return SCREEN_QUALITIES[value] ? value : fallback;
+  };
 
-    $("sessionView").classList.toggle("has-screen", sharing);
-    show("remoteScreenPill", sharing);
-    $("screenTitle").textContent = "🖥️ Tela de " + peerLabel(presenter);
+  // send: o que eu envio. receive: o que peço para me mandarem ("high" = o que vier).
+  const screenQuality = {
+    send: savedQuality("rtc.sendQuality", "medium"),
+    receive: savedQuality("rtc.receiveQuality", "high")
+  };
 
-    if (sharing) {
-      video.play().catch(() => {});
-      if (changed) setTab("screen");
-    } else if (session.tab === "screen" || session.stage === "screen") {
-      session.stage = "board";
-      setTab(session.tab === "screen" ? "board" : session.tab);
+  function fillQualitySelect(select, value, receiving) {
+
+    select.replaceChildren(...QUALITY_ORDER.map(key => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = receiving && key === "high"
+        ? "Como o outro enviar"
+        : SCREEN_QUALITIES[key].label;
+      return option;
+    }));
+
+    select.value = value;
+
+  }
+
+  fillQualitySelect($("sendQuality"), screenQuality.send, false);
+  fillQualitySelect($("receiveQuality"), screenQuality.receive, true);
+
+  $("sendQuality").onchange = () => {
+
+    screenQuality.send = $("sendQuality").value;
+    storageSet("rtc.sendQuality", screenQuality.send);
+
+    const track = session?.screenTrack;
+
+    if (track) {
+      const quality = SCREEN_QUALITIES[screenQuality.send];
+      track.applyConstraints({ frameRate: { max: quality.fps }, height: { max: quality.height } })
+        .catch(() => {}) // alguns navegadores não mudam a captura: o limite no envio basta
+        .then(() => connectedPeers().forEach(applyScreenQuality));
+    }
+
+  };
+
+  $("receiveQuality").onchange = () => {
+
+    screenQuality.receive = $("receiveQuality").value;
+    storageSet("rtc.receiveQuality", screenQuality.receive);
+
+    if (session) send({ type: "screen-quality", level: screenQuality.receive });
+
+  };
+
+  // Para cada pessoa: a mais leve entre o que eu escolhi enviar e o que ela pediu.
+  async function applyScreenQuality(peer) {
+
+    const sender = peer.videoTransceiver?.sender;
+    const track = session?.screenTrack;
+
+    if (!sender || !track) return;
+
+    const level = QUALITY_ORDER[Math.max(
+      QUALITY_ORDER.indexOf(screenQuality.send),
+      QUALITY_ORDER.indexOf(peer.remote.wantQuality)
+    )];
+
+    const quality = SCREEN_QUALITIES[level];
+    const height = track.getSettings().height || quality.height;
+
+    try {
+
+      const parameters = sender.getParameters();
+      const encoding = parameters.encodings?.[0];
+
+      if (!encoding) return;
+
+      encoding.maxBitrate = quality.bitrate;
+      encoding.maxFramerate = quality.fps;
+      encoding.scaleResolutionDownBy = Math.max(1, height / quality.height);
+
+      await sender.setParameters(parameters);
+
+      log(`Tela para ${peerLabel(peer)}: ${quality.label}`);
+
+    } catch (error) {
+      log("Não foi possível ajustar a qualidade: " + error.message);
     }
 
   }
 
-  $("remoteScreenPill").onclick = () => setTab("screen");
 
-  $("screenFullBtn").onclick = () => {
+  /* ---------------- aba Telas ---------------- */
 
-    const video = $("screenVideo");
+  // Várias pessoas podem compartilhar ao mesmo tempo: cada tela vira um
+  // quadradinho na grade, com picture-in-picture, tela cheia e destacar.
+  // O <video> de cada um é mantido entre renderizações (não pisca e não
+  // derruba o picture-in-picture).
 
-    if (video.requestFullscreen) video.requestFullscreen().catch(() => {});
-    else video.webkitEnterFullscreen?.(); // iPhone
+  const CAN_PIP = !!document.pictureInPictureEnabled ||
+    typeof HTMLVideoElement.prototype.webkitSetPresentationMode === "function";
 
+  // started: quem acabou de começar a compartilhar (abre a aba se ninguém estava).
+  function renderScreens(started = null) {
+
+    if (!session) return;
+
+    const sharers = [];
+
+    if (session.screenTrack) {
+      sharers.push({ key: "me", name: "Você", track: session.screenTrack, mine: true });
+    }
+
+    for (const peer of connectedPeers()) {
+      const track = peer.videoStream?.getVideoTracks()[0];
+      if (peer.remote.screen && track) sharers.push({ key: peer.id, name: peerLabel(peer), track, mine: false });
+    }
+
+    const keys = new Set(sharers.map(sharer => sharer.key));
+    const hadRemote = [...session.screenTiles.keys()].some(key => key !== "me");
+
+    // Quem parou: some da grade.
+    for (const [key, entry] of session.screenTiles) {
+      if (keys.has(key)) continue;
+      if (document.pictureInPictureElement === entry.video) document.exitPictureInPicture().catch(() => {});
+      entry.video.srcObject = null;
+      entry.tile.remove();
+      session.screenTiles.delete(key);
+    }
+
+    if (!keys.has(session.focusedScreen)) session.focusedScreen = null;
+
+    for (const sharer of sharers) {
+
+      let entry = session.screenTiles.get(sharer.key);
+
+      if (!entry) {
+        entry = createScreenTile(sharer.key);
+        session.screenTiles.set(sharer.key, entry);
+        $("screenGrid").appendChild(entry.tile);
+      }
+
+      if (entry.video.srcObject?.getVideoTracks()[0] !== sharer.track) {
+        entry.video.srcObject = new MediaStream([sharer.track]);
+        entry.video.play().catch(() => {});
+      }
+
+      entry.label.textContent = sharer.mine ? "🖥️ Você (o que os outros veem)" : "🖥️ " + sharer.name;
+      entry.tile.classList.toggle("focused", session.focusedScreen === sharer.key);
+      entry.focusBtn.textContent = session.focusedScreen === sharer.key ? "↙ Normal" : "🔍 Destacar";
+
+    }
+
+    const remoteCount = sharers.filter(sharer => !sharer.mine).length;
+
+    show("screensEmpty", !sharers.length);
+    $("screenCount").textContent = sharers.length ? ` · ${sharers.length}` : "";
+
+    show("remoteScreenPill", remoteCount > 0);
+    $("remoteScreenPill").textContent = remoteCount === 1
+      ? `🖥️ ${sharers.find(sharer => !sharer.mine).name} compartilhando a tela`
+      : `🖥️ ${remoteCount} telas compartilhadas`;
+
+    // Primeira tela dos outros: abre a aba. Com outras já abertas, só avisa.
+    if (started && !hadRemote && remoteCount) {
+      if (session.stage !== "screen" || session.tab !== "screen") {
+        session.screenAutoFrom = { tab: session.tab, stage: session.stage };
+      }
+      setTab("screen");
+    } else if (started) {
+      bump("screen");
+    }
+
+    // Abriu sozinha e ninguém mais compartilha: volta para onde estava.
+    const from = session.screenAutoFrom;
+
+    if (!remoteCount && from) {
+      session.screenAutoFrom = null;
+      session.stage = from.stage === "screen" ? "board" : from.stage;
+      setTab(from.tab === "screen" ? session.stage : from.tab);
+    }
+
+    renderPeople();
+
+  }
+
+  function createScreenTile(key) {
+
+    const tile = document.createElement("div");
+    tile.className = "screen-tile";
+
+    const video = document.createElement("video");
+    video.autoplay = true;
+    video.playsInline = true;
+    video.muted = true;
+
+    const bar = document.createElement("div");
+    bar.className = "screen-bar";
+
+    const label = document.createElement("span");
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+
+    const button = (text, title, onClick) => {
+      const element = document.createElement("button");
+      element.className = "tool";
+      element.textContent = text;
+      element.title = title;
+      element.onclick = onClick;
+      return element;
+    };
+
+    const focusBtn = button("🔍 Destacar", "Deixar esta tela maior, na frente das outras", () => {
+      session.focusedScreen = session.focusedScreen === key ? null : key;
+      renderScreens();
+    });
+
+    const pipBtn = button("📺 PiP", "Picture-in-picture: assistir numa janelinha por cima de tudo", () => togglePip(video));
+
+    const fullBtn = button("⛶ Tela cheia", "Tela cheia", () => {
+      if (video.requestFullscreen) video.requestFullscreen().catch(() => {});
+      else video.webkitEnterFullscreen?.(); // iPhone
+    });
+
+    pipBtn.hidden = !CAN_PIP;
+
+    bar.append(label, spacer, focusBtn, pipBtn, fullBtn);
+    tile.append(video, bar);
+
+    // Toque duplo: tela cheia.
+    video.ondblclick = () => fullBtn.click();
+
+    return { tile, video, label, focusBtn };
+
+  }
+
+  async function togglePip(video) {
+
+    try {
+
+      if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture();
+      } else if (video.requestPictureInPicture) {
+        await video.requestPictureInPicture();
+      } else {
+        // Safari no iPhone/iPad.
+        video.webkitSetPresentationMode(
+          video.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture"
+        );
+      }
+
+    } catch (error) {
+      toast("📺 Não foi possível abrir o picture-in-picture: " + error.message);
+    }
+
+  }
+
+  // Quem está aqui e o que cada um está fazendo.
+  function renderPeople() {
+
+    if (!session) return;
+
+    const container = $("peopleList");
+    container.replaceChildren();
+
+    const person = (name, tags, sharingKey) => {
+
+      const element = document.createElement("span");
+      element.className = "person" + (sharingKey ? " sharing" : "");
+
+      const strong = document.createElement("strong");
+      strong.textContent = name;
+      element.appendChild(strong);
+
+      if (tags.length) {
+        const small = document.createElement("span");
+        small.className = "tags";
+        small.textContent = tags.join(" ");
+        element.appendChild(small);
+      }
+
+      // Clicar em quem compartilha destaca a tela dele.
+      if (sharingKey) {
+        element.title = "Destacar a tela";
+        element.onclick = () => {
+          session.focusedScreen = sharingKey;
+          renderScreens();
+          session.screenTiles.get(sharingKey)?.tile.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        };
+      }
+
+      container.appendChild(element);
+
+    };
+
+    const tagsOf = ({ mic, screen, audioShare, speaker }) => [
+      mic ? "🎙️" : "🤐",
+      screen ? "🖥️ tela" : "",
+      audioShare ? "🎵 áudio" : "",
+      speaker ? "" : "🔇 sem som"
+    ].filter(Boolean);
+
+    person(me.name + " (você)", tagsOf({
+      mic: !!session.micTrack,
+      screen: !!session.screenTrack,
+      audioShare: !!session.shareAudioTrack,
+      speaker: session.speakerOn
+    }), session.screenTrack ? "me" : null);
+
+    for (const peer of connectedPeers()) {
+      const tags = tagsOf(peer.remote);
+      if (peer.reconnect) tags.unshift("⚠️ reconectando");
+      person(peerLabel(peer), tags, peer.remote.screen && peer.videoStream ? peer.id : null);
+    }
+
+    for (const request of roomRequests.values()) {
+      if (peers.get(request.peer.id)?.connected) continue;
+      person(peerName(request.peer), ["⏳ conectando"], null);
+    }
+
+  }
+
+  $("remoteScreenPill").onclick = () => {
+    session.screenAutoFrom = null;
+    setTab("screen");
   };
 
 
