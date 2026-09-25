@@ -1674,6 +1674,42 @@
      * QR DO SITE (modal)
      * ---------------------------------------------------------- */
 
+    .share-actions {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .share-actions button {
+      flex: 1;
+    }
+
+    .update-banner {
+      position: fixed;
+      z-index: 19;
+      top: calc(8px + env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px 10px;
+      width: max-content;
+      max-width: calc(100% - 16px);
+      padding: 8px 10px 8px 14px;
+      border-radius: 14px;
+      background: #0f172a;
+      border: 1px solid var(--accent);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .5);
+      font-size: 14px;
+    }
+
+    .update-banner button {
+      padding: 7px 12px;
+      font-size: 13px;
+    }
+
     .modal {
       position: fixed;
       inset: 0;
@@ -2167,7 +2203,7 @@
     </div>
 
     <div class="s-actions">
-      <button id="roomLinkBtn" class="icon-btn hidden" title="Copiar o link da sala para chamar mais gente">🔗<span class="btn-text"> Link da sala</span></button>
+      <button id="roomLinkBtn" class="icon-btn hidden" title="QR code e link da sala para chamar mais gente">🔗<span class="btn-text"> Link da sala</span></button>
       <button id="rememberBtn" class="icon-btn" title="Lembrar este dispositivo para conectar de novo depois">☆ Lembrar</button>
       <button id="chatToggleBtn" class="icon-btn desktop-only" title="Fechar o chat">💬<span class="btn-text"> Chat</span><span id="chatToggleBadge" class="badge hidden"></span></button>
       <button id="sessionHelpBtn" class="icon-btn" title="Quero entender o que está acontecendo">💡</button>
@@ -2322,6 +2358,46 @@
 </div>
 
 <!-- QR com o endereço do site, para abrir em outro aparelho -->
+<!-- Link da sala: QR code, link, copiar e compartilhar -->
+<div id="roomShareModal" class="modal hidden">
+
+  <div class="card modal-card">
+
+    <h2>Chamar para a sala “<span id="roomShareName"></span>”</h2>
+
+    <p class="muted" style="margin:0">
+      Aponte a câmera do outro aparelho para o código, ou mande o link.
+    </p>
+
+    <div class="qr-box">
+      <canvas id="roomShareQr"></canvas>
+    </div>
+
+    <div id="roomShareUrl" class="site-url"></div>
+
+    <div id="roomShareWarning" class="status error hidden">
+      Este endereço só funciona neste computador. Para chamar alguém de
+      outro aparelho, abra a página pelo endereço público.
+    </div>
+
+    <div class="share-actions">
+      <button id="roomShareCopyBtn">🔗 Copiar link</button>
+      <button id="roomShareNativeBtn" class="hidden">📤 Compartilhar</button>
+    </div>
+
+    <button id="closeRoomShareBtn" class="primary big">Fechar</button>
+
+  </div>
+
+</div>
+
+<!-- Saiu uma versão nova (durante uma sessão: a pessoa escolhe quando). -->
+<div id="updateBanner" class="update-banner hidden" role="status">
+  <span id="updateText">✨ Saiu uma versão nova.</span>
+  <button id="updateNowBtn" class="primary">Atualizar agora</button>
+  <button id="updateLaterBtn" title="Atualiza sozinho quando você sair da sessão">Depois</button>
+</div>
+
 <div id="siteQrModal" class="modal hidden">
 
   <div class="card modal-card">
@@ -2859,7 +2935,7 @@
    * ============================================================
    */
 
-  const MODALS = ["siteQrModal", "helpModal"];
+  const MODALS = ["siteQrModal", "helpModal", "roomShareModal"];
 
   MODALS.forEach(id => {
     $(id).onclick = event => {
@@ -3230,19 +3306,47 @@
 
   }
 
-  $("roomLinkBtn").onclick = async () => {
+  // Link da sala: QR code para ler com a câmera, o link, copiar e compartilhar.
+  $("roomLinkBtn").onclick = () => {
 
     if (!session?.room) return;
 
     const link = roomLink(session.room);
 
+    $("roomShareName").textContent = session.room;
+    $("roomShareUrl").textContent = link;
+    show("roomShareWarning", !CAN_LINK);
+    show("roomShareNativeBtn", !!navigator.share);
+    $("roomShareCopyBtn").textContent = "🔗 Copiar link";
+
+    QRCode.toCanvas($("roomShareQr"), link, { width: 640, margin: 1 })
+      .catch(error => log("Erro ao gerar o QR da sala: " + error.message));
+
+    show("roomShareModal");
+
+  };
+
+  $("closeRoomShareBtn").onclick = () => show("roomShareModal", false);
+
+  $("roomShareCopyBtn").onclick = async () => {
+
+    const link = $("roomShareUrl").textContent;
+
     try {
       await navigator.clipboard.writeText(link);
-      toast("🔗 Link da sala copiado: " + link.replace(/^https?:\/\//, ""));
+      $("roomShareCopyBtn").textContent = "✓ Link copiado";
     } catch {
       prompt("Copie o link da sala:", link);
     }
 
+  };
+
+  $("roomShareNativeBtn").onclick = () => {
+    navigator.share?.({
+      title: "Sala “" + $("roomShareName").textContent + "”",
+      text: "Entra na sala comigo:",
+      url: $("roomShareUrl").textContent
+    }).catch(() => {}); // cancelou
   };
 
   $("sessionHelpBtn").onclick = () => show("helpModal");
@@ -6914,6 +7018,9 @@
 
     if (notice) homeNotice(notice, retryPeer);
 
+    // Tinha versão nova esperando a sessão acabar.
+    if (updateWaiting) setTimeout(updateWhenIdle, notice ? 2500 : 0);
+
   }
 
   let homeRetryPeer = null;
@@ -7564,6 +7671,88 @@
 
   renderRemembered();
   renderRoom();
+
+
+  /*
+   * ============================================================
+   * VERSÃO NOVA
+   *
+   * A cada minuto (e quando a página volta a ficar visível) pergunta
+   * a /api/version qual versão está no ar. Mudou: sem sessão aberta,
+   * recarrega na hora; com sessão, mostra o aviso e recarrega quando
+   * a pessoa escolher ou sair da sessão (recarregar no meio derrubaria
+   * a chamada; na sala, a pessoa volta para a sala e recebe o histórico).
+   * ============================================================
+   */
+
+  const VERSION_CHECK_MS = 60000;
+
+  let appVersion = null;      // versão com que esta página abriu
+  let updateWaiting = false;  // já tem versão nova no ar
+
+  async function checkVersion() {
+
+    // Já sabe que tem versão nova: só espera ficar sem nada em andamento.
+    if (updateWaiting) {
+      if (!session && !pending && !incoming) location.reload();
+      return;
+    }
+
+    let version = null;
+
+    try {
+      const response = await fetch("api/version", { cache: "no-store" });
+      if (response.ok) version = (await response.json()).version;
+    } catch {
+      return; // sem internet agora: tenta na próxima
+    }
+
+    if (typeof version !== "string" || !version) return;
+
+    if (!appVersion) {
+      appVersion = version;
+      return;
+    }
+
+    if (version === appVersion || updateWaiting) return;
+
+    updateWaiting = true;
+    log(`Versão nova no ar (${version.slice(0, 7)}).`);
+
+    updateWhenIdle();
+
+  }
+
+  // Nada em andamento: atualiza. Senão, avisa e espera.
+  function updateWhenIdle() {
+
+    if (!updateWaiting) return;
+
+    if (!session && !pending && !incoming) {
+      location.reload();
+      return;
+    }
+
+    $("updateText").textContent = session?.room
+      ? "✨ Saiu uma versão nova. Ao atualizar, você volta para a sala."
+      : "✨ Saiu uma versão nova. Ao atualizar, a conexão cai (dá para pedir de novo).";
+
+    show("updateBanner");
+
+  }
+
+  $("updateNowBtn").onclick = () => location.reload();
+  $("updateLaterBtn").onclick = () => show("updateBanner", false);
+
+  setInterval(checkVersion, VERSION_CHECK_MS);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkVersion();
+  });
+
+  window.addEventListener("online", checkVersion);
+
+  checkVersion();
 
 
   /*
