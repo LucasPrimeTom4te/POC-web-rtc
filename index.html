@@ -2857,6 +2857,120 @@
     }
 
     /* ----------------------------------------------------------
+     * BIBLIOTECA DE JOGOS (modal)
+     * ---------------------------------------------------------- */
+
+    .modal-card.games {
+      width: min(900px, 100%);
+      height: min(760px, 100%);
+      align-items: stretch;
+      text-align: left;
+      gap: 10px;
+    }
+
+    .games-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .games-filters {
+      display: flex;
+      gap: 8px;
+    }
+
+    .games-filters input,
+    .games-filters select {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+    }
+
+    .games-filters input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .games-cats {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      flex-shrink: 0;
+      padding-bottom: 2px;
+    }
+
+    .games-cats button {
+      flex-shrink: 0;
+      padding: 5px 10px;
+      font-size: 13px;
+      border-radius: 999px;
+      text-transform: capitalize;
+    }
+
+    .games-cats button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .game-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 0 0 8px;
+      overflow: hidden;
+      text-align: left;
+      border-radius: 12px;
+    }
+
+    .game-card img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      background: var(--border);
+    }
+
+    .game-card strong {
+      padding: 0 8px;
+      font-size: 13px;
+      line-height: 1.25;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .game-card span {
+      padding: 0 8px;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: capitalize;
+    }
+
+    .games-status:empty {
+      display: none;
+    }
+
+    .games-status,
+    .games-note {
+      margin: 0;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    /* ----------------------------------------------------------
      * EXPLICAÇÃO (modal)
      * ---------------------------------------------------------- */
 
@@ -3353,11 +3467,12 @@
           <button id="addDisplayBtn" class="tool" title="Mostrar uma imagem para todos (dá para trocar quando quiser)"><span class="ic" data-icon="image"></span><span class="rail-label">Imagem</span></button>
           <button id="addSiteBtn" class="tool" title="Abrir um site: todos veem ao vivo, só você mexe"><span class="ic" data-icon="site"></span><span class="rail-label">Site</span></button>
           <button id="addVideoBtn" class="tool" title="Mostrar um vídeo do YouTube para todos, com som (só você controla)"><span class="ic" data-icon="youtube"></span><span class="rail-label">YouTube</span></button>
+          <button id="addGameBtn" class="tool" title="Biblioteca de jogos: escolha um e ele abre numa janela de site (todos veem ao vivo, só você joga)"><span class="ic" data-icon="game"></span><span class="rail-label">Jogos</span></button>
           <button id="addCodeBtn" class="tool" title="Editor de código: todos veem e todos podem escrever"><span class="ic" data-icon="code"></span><span class="rail-label">Código</span></button>
         </div>
         <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
         <button id="boardModeBtn" class="tool active"><span id="boardModeIcon" class="ic"></span><span id="boardModeLabel" class="btn-label">Editando</span></button>
-        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo e código" aria-expanded="false">⋯</button>
+        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo, jogos e código" aria-expanded="false">⋯</button>
       </div>
 
       <!-- Espaço infinito: arrastar o fundo move, pinça / Ctrl+roda dá zoom. -->
@@ -3562,6 +3677,41 @@
 
 </div>
 
+<!-- Biblioteca de jogos (catálogos HTML5 públicos) -->
+<div id="gameModal" class="modal hidden">
+
+  <div class="card modal-card games">
+
+    <div class="games-head">
+      <h2>🎮 Jogos</h2>
+      <button id="closeGameBtn" class="tool" title="Fechar (Esc)">✕</button>
+    </div>
+
+    <div class="games-filters">
+      <select id="gameSource" aria-label="Catálogo">
+        <option value="gamepix">GamePix</option>
+        <option value="gamemonetize">GameMonetize</option>
+      </select>
+      <input id="gameSearch" type="search" placeholder="Procurar nos jogos carregados" autocomplete="off" spellcheck="false" aria-label="Procurar jogo">
+    </div>
+
+    <div id="gameCategories" class="games-cats"></div>
+
+    <div id="gameGrid" class="games-grid"></div>
+
+    <div id="gameStatus" class="muted games-status"></div>
+
+    <button id="gameMoreBtn" class="hidden">Carregar mais</button>
+
+    <p class="muted games-note">
+      O jogo abre numa janela 🌐 Site: só você joga, e os outros assistem ao vivo
+      quando você toca em 📡 Transmitir. O som do jogo não vai.
+    </p>
+
+  </div>
+
+</div>
+
 <!-- Explicação da prova de conceito -->
 <div id="helpModal" class="modal hidden">
 
@@ -3703,6 +3853,12 @@
           recebem um vídeo ao vivo dessa janela: a captura da própria aba,
           recortada no site (<em>Region Capture</em>,
           do Chrome e do Edge no computador), pelo mesmo canal de vídeo da tela.
+        </li>
+        <li>
+          <strong>🎮 Jogos</strong>: a biblioteca lê catálogos públicos de
+          jogos HTML5 (GamePix e GameMonetize, em JSON). O jogo escolhido abre
+          pela URL dele numa janela 🌐 Site, então funciona igual: só quem
+          abriu joga e os outros assistem ao vivo.
         </li>
         <li>
           <strong>▶️ YouTube</strong>: cada um carrega o mesmo vídeo no player
@@ -4094,7 +4250,7 @@
    * ============================================================
    */
 
-  const MODALS = ["siteQrModal", "helpModal", "roomShareModal"];
+  const MODALS = ["siteQrModal", "helpModal", "roomShareModal", "gameModal"];
 
   MODALS.forEach(id => {
     $(id).onclick = event => {
@@ -7260,6 +7416,7 @@
     site: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
     youtube: '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3Z"/>',
     code: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
+    game: '<rect x="2" y="6" width="20" height="12" rx="4"/><path d="M6 12h4"/><path d="M8 10v4"/><circle cx="15.5" cy="11" r=".6"/><circle cx="18" cy="13.5" r=".6"/>',
     mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/>',
     micOff: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/><path d="m3 3 18 18"/>',
     volume: '<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>',
@@ -8729,6 +8886,8 @@
   $("addSiteBtn").hidden = !CAN_SITE;
   $("addSiteBtn").onclick = () => openSiteWindow("site");
   $("addVideoBtn").onclick = () => openSiteWindow("youtube");
+  $("addGameBtn").hidden = !CAN_SITE;
+  $("addGameBtn").onclick = () => openGameLibrary();
 
   // Endereço http(s) (typed: o que a pessoa digitou, pode vir sem https://).
   // A própria página não: dentro do iframe ela sairia da caixa de areia.
@@ -9168,6 +9327,181 @@
     renderWinSwitcher();
 
   }
+
+  /* ---- biblioteca de jogos ---- */
+
+  /*
+   * 🎮 Jogos: catálogos públicos de jogos HTML5 (JSON com CORS aberto, sem
+   * chave). Cada catálogo vira uma lista de { title, url, thumb, category };
+   * escolher um abre uma janela 🌐 Site com a URL do jogo (e já pede para
+   * transmitir, como quando se digita um endereço).
+   */
+
+  const GAME_SOURCES = {
+    gamepix: {
+      page: page => `https://feeds.gamepix.com/v2/json?sid=1&order=quality&pagination=48&page=${page}`,
+      items: data => data?.items || [],
+      game: item => ({ title: item.title, url: item.url, thumb: item.banner_image || item.image, category: item.category })
+    },
+    gamemonetize: {
+      page: page => `https://gamemonetize.com/feed.php?format=0&num=48&page=${page}`,
+      items: data => Array.isArray(data) ? data : [],
+      game: item => ({ title: item.title, url: item.url, thumb: item.thumb, category: item.category })
+    }
+  };
+
+  const GAME_SOURCE_KEY = "rtc.gameSource";
+
+  const games = { source: null, list: [], page: 0, done: false, loading: false, category: "", seen: new Set() };
+
+  function openGameLibrary() {
+
+    setTray(null);
+
+    const saved = storageGet(GAME_SOURCE_KEY);
+    if (GAME_SOURCES[saved]) $("gameSource").value = saved;
+
+    show("gameModal");
+
+    if (games.source !== $("gameSource").value) resetGames();
+    else renderGames();
+
+    if (!matchMedia("(pointer: coarse)").matches) $("gameSearch").focus();
+
+  }
+
+  function resetGames() {
+    Object.assign(games, { source: $("gameSource").value, list: [], page: 0, done: false, category: "", seen: new Set() });
+    $("gameSearch").value = "";
+    document.querySelector("#gameModal .modal-card").scrollTop = 0;
+    loadMoreGames();
+  }
+
+  async function loadMoreGames() {
+
+    if (games.loading || games.done) return;
+
+    const source = games.source;
+    const feed = GAME_SOURCES[source];
+
+    games.loading = true;
+    renderGames();
+
+    try {
+
+      const response = await fetch(feed.page(games.page + 1));
+      if (!response.ok) throw new Error("HTTP " + response.status);
+
+      const items = feed.items(await response.json());
+
+      if (games.source !== source) return;
+
+      games.page++;
+      games.done = items.length === 0;
+
+      for (const item of items) {
+        const game = feed.game(item);
+        const url = cleanSiteUrl(game.url);
+        if (!url || !game.title || games.seen.has(url)) continue;
+        games.seen.add(url);
+        games.list.push({ ...game, url, category: String(game.category || "").replace(/-/g, " ").trim().toLowerCase() });
+      }
+
+    } catch (error) {
+
+      log("Erro ao carregar jogos: " + error.message);
+      if (games.source === source) toast("🎮 Não foi possível carregar os jogos agora.");
+
+    } finally {
+
+      if (games.source === source) {
+        games.loading = false;
+        renderGames();
+      }
+
+    }
+
+  }
+
+  function renderGames() {
+
+    const query = $("gameSearch").value.trim().toLowerCase();
+
+    // Categorias: as dos jogos já carregados, das que têm mais jogos para as que têm menos.
+    const counts = new Map();
+    for (const game of games.list) if (game.category) counts.set(game.category, (counts.get(game.category) || 0) + 1);
+
+    const cats = $("gameCategories");
+    cats.replaceChildren(...["", ...[...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a))].map(category => {
+      const button = document.createElement("button");
+      button.textContent = category || "Todos";
+      button.classList.toggle("active", category === games.category);
+      button.onclick = () => {
+        games.category = category;
+        renderGames();
+      };
+      return button;
+    }));
+
+    const shown = games.list.filter(game =>
+      (!games.category || game.category === games.category) &&
+      (!query || game.title.toLowerCase().includes(query)));
+
+    $("gameGrid").replaceChildren(...shown.map(game => {
+
+      const card = document.createElement("button");
+      card.className = "game-card";
+      card.title = game.title;
+
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      if (game.thumb) img.src = game.thumb;
+
+      const title = document.createElement("strong");
+      title.textContent = game.title;
+
+      const category = document.createElement("span");
+      category.textContent = game.category;
+
+      card.append(img, title, category);
+      card.onclick = () => openGame(game);
+
+      return card;
+
+    }));
+
+    $("gameStatus").textContent = games.loading ? "⏳ Carregando jogos…"
+      : !games.list.length ? (games.done ? "Nenhum jogo neste catálogo." : "")
+      : !shown.length ? "Nenhum jogo carregado com esse nome. Tente “Carregar mais”."
+      : "";
+
+    show("gameMoreBtn", !games.done && !games.loading && games.list.length > 0);
+
+  }
+
+  // Abre o jogo numa janela de site nova, como se o endereço tivesse sido digitado.
+  function openGame(game) {
+
+    show("gameModal", false);
+
+    const entry = openSiteWindow("site");
+    const view = entry && session.windows.get("display:" + entry.id);
+
+    if (view) submitSite(entry, view, game.url);
+
+  }
+
+  $("gameSource").onchange = () => {
+    storageSet(GAME_SOURCE_KEY, $("gameSource").value);
+    resetGames();
+  };
+  $("gameSearch").oninput = () => renderGames();
+  $("gameSearch").addEventListener("keydown", event => { if (event.key !== "Escape") event.stopPropagation(); });
+  $("gameMoreBtn").onclick = () => loadMoreGames();
+  $("closeGameBtn").onclick = () => show("gameModal", false);
+
 
   // O dono digitou um endereço (ou link do YouTube).
   function submitSite(entry, view, text) {
