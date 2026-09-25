@@ -4454,7 +4454,7 @@
 
       <section class="set-section">
         <h4>🔔 Sons</h4>
-        <label class="check"><input type="checkbox" id="sfxCheck"> Efeitos sonoros (alguém entra ou sai, janela abre ou fecha)</label>
+        <label class="check"><input type="checkbox" id="sfxCheck"> Efeitos sonoros (alguém entra ou sai, manda mensagem, janela abre ou fecha)</label>
       </section>
 
       <section class="set-section">
@@ -5949,6 +5949,7 @@
     addMessage(entry, Date.now());
 
     bump("chat");
+    sfx("message");
 
     if (!isPaneVisible("chat")) {
       toast("💬 " + (session.room ? entry.name + ": " : "") + text);
@@ -6960,8 +6961,8 @@
   /* ---------------- efeitos sonoros ---------------- */
 
   /*
-   * Sons curtos feitos na hora (Web Audio, sem arquivos): alguém entrou
-   * ou saiu, uma janela abriu ou fechou. Respeitam o 🔊 Som desligado.
+   * Sons curtos feitos na hora (Web Audio, sem arquivos): alguém entrou,
+   * saiu ou mandou mensagem, uma janela abriu ou fechou. Respeitam o 🔊 Som desligado.
    * Ao entrar na sala e quando chega o histórico de alguém, muitas
    * janelas aparecem de uma vez: essas ficam em silêncio.
    */
@@ -6971,7 +6972,8 @@
     join:  { wave: "sine",     notes: [[523, 523, 0, .12], [784, 784, .1, .18]] },
     leave: { wave: "sine",     notes: [[784, 784, 0, .12], [523, 523, .1, .2]] },
     open:  { wave: "triangle", notes: [[620, 940, 0, .09]] },
-    close: { wave: "triangle", notes: [[900, 520, 0, .09]] }
+    close: { wave: "triangle", notes: [[900, 520, 0, .09]] },
+    message: { wave: "sine",   notes: [[988, 988, 0, .08], [1319, 1319, .07, .14]] }
   };
 
   const SFX_VOLUME = 0.08;
