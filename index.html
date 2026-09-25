@@ -5,11 +5,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
-  <title>WebRTC P2P QR PoC</title>
+  <title>WebRTC P2P por som</title>
 
-  <!-- Apenas para gerar/ler QR durante a prova de conceito -->
+  <!-- QR só para abrir o site em outro aparelho -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+  <!-- Dados por som (FSK + Reed-Solomon), usado no pareamento -->
+  <script src="https://cdn.jsdelivr.net/npm/ggwave@0.4.0/ggwave.js"></script>
 
   <style>
     :root {
@@ -298,159 +300,64 @@
     }
 
     /* ----------------------------------------------------------
-     * WEBCAM (computador)
+     * PAREAMENTO POR SOM
      * ---------------------------------------------------------- */
 
-    .webcam {
-      position: relative;
-      background: black;
-      border-radius: 14px;
-      overflow: hidden;
-      aspect-ratio: 4 / 3;
-      width: min(100%, 560px, calc((100vh - 460px) * 4 / 3));
-      min-width: 260px;
+    .how {
+      margin: 0;
+      padding-left: 22px;
+      max-width: 560px;
+      text-align: left;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--muted);
     }
 
-    .webcam video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
+    .how strong {
+      color: var(--text);
     }
 
-    .webcam .frame {
-      position: absolute;
-      inset: 12% 24%;
-      border: 3px dashed rgba(255,255,255,.7);
-      border-radius: 14px;
-      pointer-events: none;
-    }
-
-    /* Câmera frontal: espelha só a pré-visualização (a leitura usa o frame original). */
-    video.mirrored {
-      transform: scaleX(-1);
-    }
-
-    /* ----------------------------------------------------------
-     * CELULAR — telas em tela cheia
-     * ---------------------------------------------------------- */
-
-    .fullscreen {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
+    .sound-box {
+      width: min(100%, 420px);
       display: flex;
       flex-direction: column;
-    }
-
-    .scanner-screen {
-      background: black;
-    }
-
-    .scanner-screen video {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .viewfinder {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: min(75vw, 60vh);
-      aspect-ratio: 1;
-      transform: translate(-50%, -50%);
-      border: 3px solid var(--ok);
-      border-radius: 22px;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
-      pointer-events: none;
-    }
-
-    .overlay-top,
-    .overlay-bottom {
-      position: relative;
-      z-index: 1;
-      padding: 16px;
-      text-align: center;
-    }
-
-    .overlay-top {
-      padding-top: max(16px, env(safe-area-inset-top));
-      font-size: 19px;
-      font-weight: 600;
-      text-shadow: 0 1px 4px black;
-    }
-
-    .overlay-top small {
-      display: block;
-      font-weight: 400;
-      font-size: 15px;
-      opacity: .85;
-      margin-top: 4px;
-    }
-
-    .overlay-bottom {
-      margin-top: auto;
-      padding-bottom: max(16px, env(safe-area-inset-bottom));
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-    }
-
-    .overlay-bottom button {
-      background: rgba(30, 38, 64, .85);
-      backdrop-filter: blur(6px);
-    }
-
-    /* QR de resposta: fundo branco e o maior possível, para a webcam ler. */
-    .answer-screen {
-      background: white;
-      color: #111;
       align-items: center;
+      gap: 12px;
+      padding: 22px 18px;
+      border-radius: 16px;
+      background: var(--surface-2);
+    }
+
+    .sound-icon {
+      font-size: 56px;
+      line-height: 1;
+    }
+
+    .sound-box .status {
+      width: 100%;
       justify-content: center;
-      gap: 14px;
-      padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+      background: var(--surface);
     }
 
-    .answer-screen canvas {
+    .sound-box .progress,
+    .meter {
+      width: 100%;
+    }
+
+    /* Medidor do microfone: mostra que está ouvindo. */
+    .meter {
+      height: 10px;
+      border-radius: 99px;
+      background: var(--border);
+      overflow: hidden;
+    }
+
+    .meter i {
       display: block;
-      width: min(94vw, calc(100dvh - 250px)) !important;
-      height: auto !important;
-      aspect-ratio: 1;
-      image-rendering: pixelated;
-    }
-
-    .answer-screen h2 {
-      margin: 0;
-      font-size: 22px;
-      line-height: 1.25;
-      text-align: center;
-      max-width: 420px;
-    }
-
-    .answer-screen p {
-      margin: 0;
-      text-align: center;
-      font-size: 16px;
-      max-width: 420px;
-    }
-
-    .answer-screen .small {
-      font-size: 13px;
-      color: #555;
-    }
-
-    .answer-screen .step-badge {
-      color: #2563eb;
-    }
-
-    .answer-screen button {
-      background: #e5e7eb;
-      color: #111;
-      font-size: 14px;
-      padding: 10px 16px;
+      height: 100%;
+      width: 0;
+      background: var(--ok);
+      transition: width .08s;
     }
 
     /* ----------------------------------------------------------
@@ -1136,16 +1043,6 @@
       .card {
         padding: 20px 16px;
       }
-
-      .qr-box canvas {
-        width: min(calc(100vw - 88px), 70vh) !important;
-        min-width: 0;
-      }
-
-      .webcam {
-        width: 100%;
-        min-width: 0;
-      }
     }
 
     @media (max-width: 1000px) {
@@ -1194,68 +1091,40 @@
 
   <section id="computerPanel" class="panel active">
 
-    <!-- Passo 1: o celular lê o QR do computador -->
-    <div id="computerStep1" class="card step">
+    <div class="card step">
 
-      <span class="step-badge">
-        <span class="dots"><i class="on"></i><i></i></span>
-        Passo 1 de 2
-      </span>
+      <span class="step-badge">🔊 Conectar pelo som</span>
 
-      <h2>Aponte a câmera do celular para este código</h2>
+      <h2>Conecte o celular pelo som</h2>
 
-      <p id="step1Lead" class="lead">
-        Use a <strong>câmera normal do celular</strong> e toque no link que aparecer.
-        O celular vai mostrar outro código na tela.
-      </p>
+      <ol class="how">
+        <li>
+          <strong>No celular</strong>, abra esta página (use o botão 🔳 aqui em
+          cima) e toque em <strong>🎧 Ouvir</strong>.
+        </li>
+        <li>
+          <strong>Aqui</strong>, com o celular perto, toque em
+          <strong>🔊 Tocar som</strong>. O celular responde sozinho.
+        </li>
+      </ol>
 
-      <div class="qr-box">
-        <canvas id="qrCanvas" class="hidden"></canvas>
-        <span id="qrLoading">Preparando código…</span>
+      <div class="sound-box">
+        <div id="hostIcon" class="sound-icon">⏳</div>
+        <div id="hostStatus" class="status working">Preparando o código…</div>
+        <div id="hostProgress" class="progress hidden"><i></i></div>
+        <div id="hostMeter" class="meter hidden" title="Nível do microfone"><i></i></div>
       </div>
 
       <div class="actions">
-        <button id="toStep2Btn" class="primary big" disabled>
-          O celular mostrou um código →
-        </button>
+        <button id="playOfferBtn" class="primary big" disabled>🔊 Tocar som</button>
       </div>
 
-      <div id="step1Status" class="status error hidden"></div>
-
-    </div>
-
-    <!-- Passo 2: a webcam lê o QR do celular -->
-    <div id="computerStep2" class="card step hidden">
-
-      <span class="step-badge">
-        <span class="dots"><i class="on"></i><i class="on"></i></span>
-        Passo 2 de 2
-      </span>
-
-      <h2>Agora mostre a tela do celular para a câmera do computador</h2>
-
-      <p class="lead">
-        Vire o celular com o código <strong>de frente para a câmera</strong>
-        (fica em cima da tela) e segure parado.
-      </p>
-
-      <div class="webcam">
-        <video id="computerVideo" autoplay playsinline muted></video>
-        <div class="frame"></div>
-      </div>
-
-      <div id="computerStatus" class="status working">Ligando a câmera…</div>
-
-      <div class="actions">
-        <button id="backToStep1Btn">← Voltar</button>
-        <button id="switchComputerCameraBtn" class="hidden">🔄 Trocar câmera</button>
-        <button id="restartComputerBtn" class="hidden">↺ Começar de novo</button>
-      </div>
+      <div id="hostNotice" class="status error hidden"></div>
 
       <ul class="tips">
-        <li>Não está lendo? Aproxime ou afaste o celular devagar.</li>
-        <li>Se o código aparecer muito claro ou com reflexo, incline um pouco o celular.</li>
-        <li>O código precisa aparecer inteiro dentro do quadro.</li>
+        <li>Deixe o volume do computador e do celular altos.</li>
+        <li>Fique perto (uns 30 a 50&nbsp;cm) e, se der, num lugar sem barulho.</li>
+        <li>Cada som leva uns 7 segundos: o do computador e a resposta do celular.</li>
       </ul>
 
     </div>
@@ -1268,30 +1137,41 @@
 
   <section id="phonePanel" class="panel">
 
-    <!-- Início (quando a página foi aberta sem o link do QR) -->
-    <div id="phoneStart" class="card step">
+    <div class="card step">
 
-      <span class="step-badge">
-        <span class="dots"><i class="on"></i><i></i></span>
-        Passo 1 de 2
-      </span>
+      <span class="step-badge">🎧 Conectar pelo som</span>
 
-      <h2>Leia o código que está na tela do computador</h2>
+      <h2>Conecte ao computador pelo som</h2>
 
-      <p class="lead">
-        Toque no botão abaixo e aponte a câmera para o código.
-      </p>
+      <ol class="how">
+        <li>Toque em <strong>🎧 Ouvir</strong> e permita o microfone.</li>
+        <li>
+          No computador, toque em <strong>🔊 Tocar som</strong>. Este celular
+          responde sozinho, com outro som.
+        </li>
+      </ol>
 
-      <button id="startPhoneBtn" class="primary big">📷 Ler código</button>
+      <div class="sound-box">
+        <div id="guestIcon" class="sound-icon">🎧</div>
+        <div id="guestStatus" class="status">Toque em Ouvir para começar.</div>
+        <div id="guestProgress" class="progress hidden"><i></i></div>
+        <div id="guestMeter" class="meter hidden" title="Nível do microfone"><i></i></div>
+      </div>
 
-      <div id="phoneStatus" class="status hidden"></div>
+      <div class="actions">
+        <button id="listenBtn" class="primary big">🎧 Ouvir</button>
+      </div>
+
+      <div id="guestNotice" class="status error hidden"></div>
 
       <p class="muted" style="margin:0; font-size:14px">
-        Dica: também dá para ler com a <strong>câmera normal do celular</strong>
-        e tocar no link que aparecer.
+        Deixe o volume do celular alto: ele responde tocando um som.
       </p>
 
     </div>
+
+  </section>
+
 
   </section>
 
@@ -1301,44 +1181,6 @@
   </details>
 
 </main>
-
-<!-- Celular: câmera em tela cheia -->
-<div id="phoneScanner" class="fullscreen scanner-screen hidden">
-
-  <video id="phoneVideo" autoplay playsinline muted></video>
-  <div class="viewfinder"></div>
-
-  <div class="overlay-top">
-    Aponte para o código na tela do computador
-    <small id="phoneScanHint">Deixe o código dentro do quadro verde</small>
-  </div>
-
-  <div class="overlay-bottom">
-    <button id="switchPhoneCameraBtn" class="hidden">🔄 Trocar câmera</button>
-    <button id="cancelPhoneScanBtn">✕ Cancelar</button>
-  </div>
-
-</div>
-
-<!-- Celular: QR de resposta em tela cheia -->
-<div id="phoneAnswer" class="fullscreen answer-screen hidden">
-
-  <span class="step-badge">
-    <span class="dots"><i class="on"></i><i class="on"></i></span>
-    Passo 2 de 2
-  </span>
-
-  <h2>Agora vire esta tela para a câmera do computador</h2>
-
-  <p>No computador, clique em <strong>“O celular mostrou um código”</strong>.</p>
-
-  <canvas id="answerQrCanvas"></canvas>
-
-  <p id="phoneAnswerStatus" class="small">Segure parado até aparecer “Conectado”.</p>
-
-  <button id="rescanPhoneBtn">↺ Ler o código do computador de novo</button>
-
-</div>
 
 <!-- Sessão: o que dá para fazer depois de conectar (igual nos dois lados) -->
 <div id="sessionView" class="session hidden">
@@ -1502,15 +1344,16 @@
     </p>
 
     <p>
-      <strong>Aqui, quem faz esse papel é o QR code.</strong>
-      As informações viram um código na tela, e a câmera do outro aparelho lê.
+      <strong>Aqui, quem faz esse papel é o som.</strong>
+      As informações viram um "apito" que sai do alto-falante de um aparelho e
+      é ouvido pelo microfone do outro, como um modem antigo.
     </p>
 
     <div class="flow">
-      <div><b>💻</b>O computador cria uma <strong>oferta</strong> e mostra num QR</div>
-      <div><b>📱</b>O celular lê e cria uma <strong>resposta</strong> em outro QR</div>
-      <div><b>📷</b>A webcam do computador lê a resposta</div>
-      <div><b>🔗</b>Pronto: conexão direta, os QR não são mais usados</div>
+      <div><b>💻</b>O computador cria uma <strong>oferta</strong> e toca como som</div>
+      <div><b>📱</b>O celular ouve e responde com outro som (a <strong>resposta</strong>)</div>
+      <div><b>🎧</b>O computador ouve a resposta</div>
+      <div><b>🔗</b>Pronto: conexão direta, o som não é mais usado</div>
     </div>
 
     <details>
@@ -1518,22 +1361,31 @@
 
       <ul>
         <li>
+          O som é gerado pela biblioteca
+          <a href="https://github.com/ggerganov/ggwave" target="_blank" rel="noopener">ggwave</a>:
+          modulação <strong>FSK</strong> (cada pedaço de dado vira uma
+          combinação de tons) com correção de erros <strong>Reed-Solomon</strong>,
+          que aguenta um pouco de ruído. Ela leva no máximo 140 bytes por
+          mensagem, a uns 15 bytes por segundo.
+        </li>
+        <li>
           A oferta e a resposta são descrições <strong>SDP</strong>, que têm
-          de 1 a 3&nbsp;KB, grandes demais para um QR fácil de ler. A página
-          envia só o essencial (credenciais ICE, impressão digital DTLS e
-          candidatos de rede) em uns 300 caracteres e remonta o SDP do outro lado.
+          de 1 a 3&nbsp;KB, ou seja, minutos de som. A página envia só o
+          essencial (credenciais ICE, impressão digital DTLS e candidatos de
+          rede) empacotado em binário, uns 110 bytes, cerca de 7 segundos de
+          som, e remonta o SDP do outro lado.
         </li>
         <li>
-          O primeiro QR é um <strong>link</strong> com a oferta depois do
-          <code>#</code>. Assim a câmera normal do celular já abre a página
-          pronta. O que vem depois do <code>#</code> não é enviado ao servidor
-          do site.
+          Para ouvir, o microfone é aberto <strong>sem</strong> cancelamento de
+          eco e de ruído, que "limpariam" justamente o sinal. Se o computador
+          não ouvir a resposta, basta tocar de novo: o celular reconhece a
+          mesma oferta e repete a mesma resposta.
         </li>
         <li>
-          O QR só carrega o mínimo para abrir o canal de dados. O
-          <strong>áudio é combinado depois, pelo próprio canal de dados</strong>:
-          quem mostrou o primeiro QR manda uma descrição SDP nova (agora com
-          áudio) e o outro responde, sem precisar de outro QR. Isso se chama
+          O som só carrega o mínimo para abrir o canal de dados. O
+          <strong>áudio da conversa é combinado depois, pelo próprio canal de
+          dados</strong>: quem tocou primeiro manda uma descrição SDP nova
+          (agora com áudio) e o outro responde. Isso se chama
           <strong>renegociação</strong>.
         </li>
         <li>
@@ -1553,7 +1405,8 @@
         </li>
         <li>
           O microfone só funciona com a página em <strong>HTTPS</strong>
-          (ou <code>localhost</code>), como a câmera.
+          (ou <code>localhost</code>), e aqui os <strong>dois</strong> aparelhos
+          precisam dele já para conectar.
         </li>
         <li>
           Um servidor <strong>STUN</strong> público (do Google) é consultado só
@@ -1591,8 +1444,6 @@
 
 </div>
 
-<canvas id="computerScanCanvas" class="hidden"></canvas>
-<canvas id="phoneScanCanvas" class="hidden"></canvas>
 
 <script>
 
@@ -1608,24 +1459,8 @@
     ]
   };
 
-  // Tempo máximo esperando o ICE gathering antes de gerar o QR.
+  // Tempo máximo esperando o ICE gathering antes de gerar o código.
   const ICE_GATHERING_TIMEOUT_MS = 4000;
-
-  const SCAN_INTERVAL_MS = 80;
-
-  // Sem ler nada depois disso, mostra uma dica de como posicionar.
-  const SCAN_HINT_AFTER_MS = 7000;
-
-  // Renderiza grande e deixa o CSS reduzir (image-rendering: pixelated).
-  const QR_OPTIONS = {
-    width: 1024,
-    margin: 2,
-    // "L" gera um QR menor; lendo de uma tela, não precisa de mais.
-    errorCorrectionLevel: "L"
-  };
-
-  // Prefixo do offer dentro do link: <página>#o=<offer>
-  const OFFER_HASH = "#o=";
 
 
   /*
@@ -1702,111 +1537,84 @@
   };
 
   $("phoneModeBtn").onclick = () => {
-    computerScanner.stop();
+    stopSound();
     closeConnection();
     selectMode("phone");
     resetPhone();
   };
 
 
-  /*
-   * ============================================================
-   * LINK COM O OFFER
-   *
-   * O QR do computador é um link para esta página com o offer no
-   * hash. Assim a câmera nativa do celular já abre a página pronta
-   * para responder, sem precisar abrir nada antes. Só funciona se o
-   * celular conseguir acessar o endereço (não vale localhost/file).
-   * ============================================================
-   */
-
+  // O QR do site só funciona se o outro aparelho alcançar o endereço.
   const CAN_LINK =
     /^https?:$/.test(location.protocol) &&
     !/^(localhost|127\.|\[::1\]$)/.test(location.hostname);
 
-  // "|" não é válido em URL; "~" nunca aparece no offer compacto.
-  function offerToLink(offer) {
-    return location.origin + location.pathname + location.search +
-      OFFER_HASH + offer.replaceAll("|", "~");
-  }
-
-  // Aceita tanto o link quanto o offer puro (lido pelo scanner da página).
-  function offerFromText(text) {
-
-    const index = text.indexOf(OFFER_HASH);
-
-    if (index === -1) return text;
-
-    return decodeURIComponent(text.slice(index + OFFER_HASH.length))
-      .replaceAll("~", "|");
-
-  }
 
   /*
    * ============================================================
-   * SDP COMPACTO
+   * SDP COMPACTO (binário)
    *
-   * O SDP completo tem 1–3 KB, o que gera um QR denso demais para
-   * ser lido pela câmera. Enviamos só o essencial (ICE, DTLS e
-   * candidatos) e reconstruímos um SDP de DataChannel do outro lado.
+   * O SDP completo tem 1–3 KB, e o som (ggwave) leva no máximo
+   * 140 bytes por mensagem, a uns 15 bytes por segundo. Enviamos só
+   * o essencial (ICE, DTLS e candidatos) em ~110 bytes e remontamos
+   * um SDP de DataChannel do outro lado.
    *
-   * Formato: W2|tipo|mid|ufrag|pwd|fingerprint(base64)|setup|candidatos
-   * candidato: tipo,endereço,porta  (separados por ";")
+   * Formato:
+   *   [0]  versão (4 bits) | é oferta? (1 bit) | setup (2 bits)
+   *   mid, ice-ufrag, ice-pwd: [tamanho][texto]
+   *   fingerprint sha-256: 32 bytes
+   *   [n]  candidatos, cada um:
+   *        [tipo << 2 | formato] [endereço] [porta: 2 bytes]
+   *        formato 0 = IPv4 (4 bytes)
+   *                1 = mDNS "<uuid>.local" (16 bytes)
+   *                2 = texto (ex.: IPv6): [tamanho][texto]
    *
-   * Para o QR ficar o menos denso possível (mais fácil de ler):
-   * - hostname mDNS "<uuid>.local" vira "@<uuid em base64>"
-   * - prioridade não vai: é recalculada pelo tipo e pela ordem
-   * - no máximo MAX_CANDIDATES candidatos, sem repetidos
+   * A prioridade dos candidatos não vai: é recalculada pelo tipo e
+   * pela ordem. Entram os melhores candidatos que couberem.
    * ============================================================
    */
 
-  const MAX_CANDIDATES = 4;
+  const SOUND_MAX_BYTES = 140;
+  const CODEC_VERSION = 3;
 
-  // Prioridades padrão (RFC 8445) para host / srflx / prflx / relay.
+  const SETUP_VALUES = ["actpass", "active", "passive"];
+  const CANDIDATE_TYPES = ["host", "srflx", "prflx", "relay"];
+
+  // Prioridades padrão (RFC 8445) por tipo.
   const TYPE_PREFERENCE = { host: 126, srflx: 100, prflx: 110, relay: 0 };
 
   const MDNS_REGEX =
     /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})\.local$/i;
 
-  const CANDIDATE_TYPES = {
-    h: "host",
-    s: "srflx",
-    p: "prflx",
-    r: "relay"
-  };
+  const textEncoder = new TextEncoder();
+  const textDecoder = new TextDecoder();
 
-  // Hex (com ou sem ":") → base64 sem "=" no final.
-  function hexToBase64(hex) {
-    const bytes = hex.replace(/:/g, "").match(/../g).map(h => parseInt(h, 16));
-    return btoa(String.fromCharCode(...bytes)).replace(/=+$/, "");
-  }
+  const hexBytes = hex => hex.match(/../g).map(pair => parseInt(pair, 16));
+  const bytesHex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
 
-  function base64ToHex(base64, separator = ":") {
-    return Array.from(atob(base64), c =>
-      c.charCodeAt(0).toString(16).padStart(2, "0").toUpperCase()
-    ).join(separator);
-  }
+  function packCandidate(type, address, port) {
 
-  function packAddress(address) {
+    const typeCode = CANDIDATE_TYPES.indexOf(type);
 
-    const match = address.match(MDNS_REGEX);
+    if (typeCode === -1) return null;
 
-    return match
-      ? "@" + hexToBase64(match.slice(1).join(""))
-      : address;
+    const portBytes = [Number(port) >> 8, Number(port) & 255];
 
-  }
+    const ipv4 = address.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
 
-  function unpackAddress(address) {
+    if (ipv4) {
+      return [typeCode << 2 | 0, ...ipv4.slice(1).map(Number), ...portBytes];
+    }
 
-    if (!address.startsWith("@")) return address;
+    const mdns = address.match(MDNS_REGEX);
 
-    const hex = base64ToHex(address.slice(1), "").toLowerCase();
+    if (mdns) {
+      return [typeCode << 2 | 1, ...hexBytes(mdns.slice(1).join("")), ...portBytes];
+    }
 
-    return [
-      hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
-      hex.slice(16, 20), hex.slice(20)
-    ].join("-") + ".local";
+    const text = textEncoder.encode(address);
+
+    return [typeCode << 2 | 2, text.length, ...text, ...portBytes];
 
   }
 
@@ -1820,56 +1628,126 @@
       return match[1].trim();
     };
 
+    const bytes = [];
+
+    const pushText = value => {
+      const data = textEncoder.encode(value);
+      if (data.length > 255) throw new Error("Campo do SDP grande demais.");
+      bytes.push(data.length, ...data);
+    };
+
+    const setup = SETUP_VALUES.indexOf(get(/^a=setup:(.+)$/m));
+
+    if (setup === -1) throw new Error("a=setup desconhecido.");
+
+    bytes.push(
+      CODEC_VERSION << 4 | (description.type === "offer" ? 1 : 0) << 3 | setup
+    );
+
+    pushText(get(/^a=mid:(.+)$/m));
+    pushText(get(/^a=ice-ufrag:(.+)$/m));
+    pushText(get(/^a=ice-pwd:(.+)$/m));
+
+    const fingerprint = hexBytes(get(/^a=fingerprint:sha-256 (.+)$/m).replace(/:/g, ""));
+
+    if (fingerprint.length !== 32) throw new Error("Fingerprint inválido.");
+
+    bytes.push(...fingerprint);
+
     const candidates = [...sdp.matchAll(/^a=candidate:(.+)$/gm)]
       .map(match => match[1].trim().split(/\s+/))
       // Apenas componente 1 / UDP (DataChannel usa só isso).
       .filter(parts => parts[1] === "1" && parts[2].toLowerCase() === "udp")
       // Maior prioridade primeiro.
       .sort((a, b) => Number(b[3]) - Number(a[3]))
-      .map(parts => [
-        parts[7][0],              // tipo (h/s/p/r)
-        packAddress(parts[4]),    // ip ou hostname mDNS
-        parts[5]                  // porta
-      ].join(","))
-      .filter((candidate, index, all) => all.indexOf(candidate) === index)
-      .slice(0, MAX_CANDIDATES);
+      .map(parts => packCandidate(parts[7], parts[4], parts[5]))
+      .filter(Boolean)
+      .filter((candidate, index, all) =>
+        all.findIndex(other => other.join() === candidate.join()) === index
+      );
 
-    if (!candidates.length) {
+    const countIndex = bytes.length;
+    bytes.push(0);
+
+    for (const candidate of candidates) {
+      if (bytes.length + candidate.length > SOUND_MAX_BYTES) continue;
+      bytes.push(...candidate);
+      bytes[countIndex]++;
+    }
+
+    if (!bytes[countIndex]) {
       throw new Error("Nenhum candidato ICE encontrado.");
     }
 
-    return [
-      "W2",
-      description.type === "offer" ? "o" : "a",
-      get(/^a=mid:(.+)$/m),
-      get(/^a=ice-ufrag:(.+)$/m),
-      get(/^a=ice-pwd:(.+)$/m),
-      hexToBase64(get(/^a=fingerprint:sha-256 (.+)$/m)),
-      get(/^a=setup:(.+)$/m),
-      candidates.join(";")
-    ].join("|");
+    return new Uint8Array(bytes);
 
   }
 
-  function decodeDescription(text, expectedType) {
+  function decodeDescription(bytes, expectedType) {
 
-    const parts = text.split("|");
+    let offset = 0;
 
-    if (parts.length !== 8 || parts[0] !== "W2") {
-      throw new Error("QR não pertence a este app.");
+    const take = count => {
+      if (offset + count > bytes.length) throw new Error("Código incompleto.");
+      const slice = bytes.subarray(offset, offset + count);
+      offset += count;
+      return slice;
+    };
+
+    const byte = () => take(1)[0];
+    const text = () => textDecoder.decode(take(byte()));
+
+    const header = byte();
+
+    if (header >> 4 !== CODEC_VERSION) {
+      throw new Error("Som não pertence a este app.");
     }
 
-    const [, type, mid, ufrag, pwd, fingerprint, setup, candidates] = parts;
-    const fullType = type === "o" ? "offer" : "answer";
+    const fullType = header & 8 ? "offer" : "answer";
 
     if (fullType !== expectedType) {
-      throw new Error(
-        `Esperado QR de ${expectedType}, lido QR de ${fullType}.`
-      );
+      throw new Error(`Esperado ${expectedType}, recebido ${fullType}.`);
     }
 
-    const sessionId =
-      Math.floor(Math.random() * 1e15);
+    const setup = SETUP_VALUES[header & 3];
+    const mid = text();
+    const ufrag = text();
+    const pwd = text();
+
+    const fingerprint = bytesHex(take(32)).toUpperCase().match(/../g).join(":");
+
+    const candidates = [];
+    const count = byte();
+
+    for (let index = 0; index < count; index++) {
+
+      const kind = byte();
+      const type = CANDIDATE_TYPES[kind >> 2];
+      const format = kind & 3;
+
+      let address;
+
+      if (format === 0) {
+        address = Array.from(take(4)).join(".");
+      } else if (format === 1) {
+        const hex = bytesHex(take(16));
+        address = [
+          hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
+          hex.slice(16, 20), hex.slice(20)
+        ].join("-") + ".local";
+      } else {
+        address = text();
+      }
+
+      const [high, low] = take(2);
+
+      candidates.push({ type, address, port: high * 256 + low });
+
+    }
+
+    if (offset !== bytes.length) throw new Error("Código com bytes sobrando.");
+
+    const sessionId = Math.floor(Math.random() * 1e15);
 
     const lines = [
       "v=0",
@@ -1883,27 +1761,24 @@
       `a=ice-ufrag:${ufrag}`,
       `a=ice-pwd:${pwd}`,
       "a=ice-options:trickle",
-      `a=fingerprint:sha-256 ${base64ToHex(fingerprint)}`,
+      `a=fingerprint:sha-256 ${fingerprint}`,
       `a=setup:${setup}`,
       `a=mid:${mid}`,
       "a=sctp-port:5000",
       "a=max-message-size:262144"
     ];
 
-    candidates.split(";").forEach((candidate, index) => {
-
-      const [typeCode, address, port] = candidate.split(",");
-      const candidateType = CANDIDATE_TYPES[typeCode] || "host";
+    candidates.forEach(({ type, address, port }, index) => {
 
       const priority =
-        TYPE_PREFERENCE[candidateType] * 2 ** 24 +
+        TYPE_PREFERENCE[type] * 2 ** 24 +
         (65535 - index) * 2 ** 8 +
         255;
 
       let line =
-        `a=candidate:${index + 1} 1 udp ${priority} ${unpackAddress(address)} ${port} typ ${candidateType}`;
+        `a=candidate:${index + 1} 1 udp ${priority} ${address} ${port} typ ${type}`;
 
-      if (candidateType !== "host") {
+      if (type !== "host") {
         line += " raddr 0.0.0.0 rport 0";
       }
 
@@ -2016,14 +1891,6 @@
 
   }
 
-  async function renderQR(canvasId, text) {
-
-    log(`Gerando QR (${text.length} caracteres)...`);
-
-    await QRCode.toCanvas($(canvasId), text, QR_OPTIONS);
-
-  }
-
   async function keepScreenOn() {
 
     try {
@@ -2044,347 +1911,238 @@
 
   /*
    * ============================================================
-   * SCANNER DE QR (câmera)
+   * SOM (ggwave)
    *
-   * Usa o leitor nativo do navegador (BarcodeDetector) quando
-   * existe, que é bem mais robusto. Senão, usa o jsQR alternando:
-   * - o centro da imagem em resolução cheia (onde fica a mira), e
-   * - a imagem inteira reduzida (QR fora do centro).
-   * Reduzir a imagem inteira sempre deixava o QR com poucos pixels
-   * por quadradinho e ele não era lido.
+   * Transforma bytes em som (modulação FSK com correção de erros
+   * Reed-Solomon) e o contrário, ouvindo pelo microfone.
    * ============================================================
    */
 
-  // Lado máximo da imagem entregue ao jsQR (mais que isso fica lento).
-  const JSQR_MAX_SIDE = 1000;
+  // AUDIBLE_FAST: ~7 s para ~110 bytes e aguenta bem ruído ambiente.
+  const SOUND_PROTOCOL = "GGWAVE_PROTOCOL_AUDIBLE_FAST";
+  const SOUND_VOLUME = 50; // 0–100
 
-  let nativeDetectorPromise = null;
+  const sound = {
+    context: null,
+    gg: null,
+    instance: null,
+    listener: null,   // { stream, source, processor }
+    playing: null,    // AudioBufferSourceNode
+    progressFrame: 0
+  };
 
-  function getNativeDetector() {
+  // Precisa ser chamado a partir de um toque (política de autoplay).
+  async function initSound() {
 
-    nativeDetectorPromise ??= (async () => {
+    if (!window.ggwave_factory) {
+      throw new Error("a biblioteca de som não carregou (sem internet?)");
+    }
 
-      try {
+    sound.context ??= new AudioContext();
 
-        if (!("BarcodeDetector" in window)) return null;
+    await sound.context.resume();
 
-        const formats = await BarcodeDetector.getSupportedFormats();
+    if (!sound.gg) {
 
-        if (!formats.includes("qr_code")) return null;
+      // print vazio: o ggwave escreve no console a cada encode.
+      sound.gg = await ggwave_factory({ print() {}, printErr() {} });
+      sound.gg.disableLog();
 
-        return new BarcodeDetector({ formats: ["qr_code"] });
+      const parameters = sound.gg.getDefaultParameters();
+      parameters.sampleRateInp = sound.context.sampleRate;
+      parameters.sampleRateOut = sound.context.sampleRate;
 
-      } catch {
-        return null;
-      }
+      sound.instance = sound.gg.init(parameters);
 
-    })();
+      log(`Som pronto (${sound.context.sampleRate} Hz).`);
 
-    return nativeDetectorPromise;
+    }
 
   }
 
-  class QrScanner {
+  function micErrorMessage(error) {
 
-    constructor({ videoId, canvasId, switchButtonId, facingMode, onCode, onSlow }) {
-
-      this.video = $(videoId);
-      this.canvas = $(canvasId);
-      this.switchButton = $(switchButtonId);
-      this.context = this.canvas.getContext("2d", { willReadFrequently: true });
-      this.onCode = onCode;
-      this.onSlow = onSlow;
-
-      this.stream = null;
-      this.session = 0; // muda a cada start/stop: encerra loops antigos
-      this.facingMode = facingMode;
-      this.deviceId = null;
-      this.lastInvalid = null;
-      this.frame = 0;
-
-      this.switchButton.onclick = () =>
-        this.switchCamera().catch(error =>
-          log("Erro ao trocar câmera: " + error.message)
-        );
-
+    if (error.name === "NotAllowedError") {
+      return "Permissão do microfone negada. Libere o microfone para este site e tente de novo.";
     }
 
-    async start() {
+    return "Não foi possível usar o microfone: " + error.message;
 
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error(
-          "Câmera indisponível. Abra a página via HTTPS (ou localhost)."
-        );
-      }
+  }
 
-      this.stop();
+  // Ouve o microfone e chama onData(bytes) a cada mensagem reconhecida.
+  async function startListening({ onData, onLevel }) {
 
-      const session = this.session;
+    await initSound();
 
-      this.lastInvalid = null;
-      this.detector = await getNativeDetector();
+    stopListening();
 
-      log(this.detector
-        ? "Leitor de QR: nativo do navegador."
-        : "Leitor de QR: jsQR.");
-
-      const stream =
-        await this.openStream({ facingMode: { ideal: this.facingMode } });
-
-      // Cancelado enquanto a câmera abria: desliga o que acabou de abrir.
-      if (session !== this.session) {
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-
-      const devices =
-        (await navigator.mediaDevices.enumerateDevices())
-          .filter(device => device.kind === "videoinput");
-
-      this.switchButton.classList.toggle("hidden", devices.length < 2);
-
-      this.loop(session);
-
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("o microfone precisa que a página esteja em HTTPS (ou localhost)");
     }
 
-    async openStream(videoConstraints) {
+    // Sem cancelamento de eco/ruído: eles "limpariam" justamente o sinal.
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
 
-      this.stopTracks();
+    const source = sound.context.createMediaStreamSource(stream);
+    const processor = sound.context.createScriptProcessor(1024, 1, 1);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          ...videoConstraints,
-          // Quanto mais pixels, mais longe o QR ainda é lido.
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
-        audio: false
-      });
+    processor.onaudioprocess = event => {
 
-      const track = stream.getVideoTracks()[0];
+      const samples = event.inputBuffer.getChannelData(0);
 
-      // Foco contínuo, quando a câmera permite (ajuda muito no celular).
-      await track.applyConstraints({
-        advanced: [{ focusMode: "continuous" }]
-      }).catch(() => {});
+      let sum = 0;
+      for (let index = 0; index < samples.length; index++) sum += samples[index] ** 2;
+      onLevel?.(Math.sqrt(sum / samples.length));
 
-      const settings = track.getSettings();
-
-      this.stream = stream;
-      this.deviceId = settings.deviceId || null;
-
-      if (settings.facingMode) {
-        this.facingMode = settings.facingMode;
-      }
-
-      // Espelha a pré-visualização quando não é a câmera traseira.
-      this.video.classList.toggle(
-        "mirrored",
-        settings.facingMode !== "environment"
+      const result = sound.gg.decode(
+        sound.instance,
+        new Int8Array(new Float32Array(samples).buffer)
       );
 
-      this.video.srcObject = stream;
-      await this.video.play().catch(() => {});
-
-      log(`Câmera: ${track.label || "desconhecida"} (${settings.width}x${settings.height})`);
-
-      return stream;
-
-    }
-
-    async switchCamera() {
-
-      const next =
-        this.facingMode === "user" ? "environment" : "user";
-
-      const previousDevice = this.deviceId;
-
-      try {
-
-        await this.openStream({ facingMode: { exact: next } });
-
-        if (this.deviceId && this.deviceId === previousDevice) {
-          throw new Error("mesma câmera");
-        }
-
-        this.facingMode = next;
-        return;
-
-      } catch {
-        // Sem facingMode (ex.: notebook): alterna pela lista de câmeras.
+      if (result?.length) {
+        const bytes = new Uint8Array(result); // cópia: o ggwave reusa o buffer
+        log(`Som reconhecido: ${bytes.length} bytes.`);
+        onData(bytes);
       }
 
-      const devices =
-        (await navigator.mediaDevices.enumerateDevices())
-          .filter(device => device.kind === "videoinput");
+    };
 
-      const index =
-        devices.findIndex(device => device.deviceId === previousDevice);
+    source.connect(processor);
+    processor.connect(sound.context.destination); // o ScriptProcessor só roda conectado
 
-      const nextDevice =
-        devices[(index + 1) % devices.length];
+    sound.listener = { stream, source, processor };
 
-      await this.openStream({ deviceId: { exact: nextDevice.deviceId } });
+  }
 
-    }
+  function stopListening() {
 
-    async loop(session) {
+    const listener = sound.listener;
 
-      const startedAt = performance.now();
-      let hinted = false;
+    if (!listener) return;
 
-      while (session === this.session) {
+    listener.processor.onaudioprocess = null;
+    listener.source.disconnect();
+    listener.processor.disconnect();
+    listener.stream.getTracks().forEach(track => track.stop());
 
-        await new Promise(resolve => setTimeout(resolve, SCAN_INTERVAL_MS));
+    sound.listener = null;
 
-        if (session !== this.session) return;
+  }
 
-        if (!hinted && performance.now() - startedAt > SCAN_HINT_AFTER_MS) {
-          hinted = true;
-          this.onSlow?.();
-        }
+  // Toca os bytes como som. Resolve quando termina.
+  async function playBytes(bytes, progressId) {
 
-        if (
-          this.video.readyState < this.video.HAVE_CURRENT_DATA ||
-          !this.video.videoWidth
-        ) {
-          continue;
-        }
+    await initSound();
 
-        let data = null;
+    stopPlaying();
 
-        try {
-          data = await this.detect();
-        } catch (error) {
-          log("Erro na leitura: " + error.message);
-        }
+    const waveform = sound.gg.encode(
+      sound.instance, bytes, sound.gg.ProtocolId[SOUND_PROTOCOL], SOUND_VOLUME
+    );
 
-        if (session !== this.session) return;
+    const samples = new Float32Array(
+      waveform.buffer.slice(waveform.byteOffset, waveform.byteOffset + waveform.byteLength)
+    );
 
-        if (!data || data === this.lastInvalid) continue;
+    const buffer = sound.context.createBuffer(1, samples.length, sound.context.sampleRate);
+    buffer.getChannelData(0).set(samples);
 
-        const accepted = await this.onCode(data);
+    const node = sound.context.createBufferSource();
+    node.buffer = buffer;
+    node.connect(sound.context.destination);
 
-        if (accepted) {
-          this.stop();
-          return;
-        }
+    sound.playing = node;
 
-        // QR que não é deste app: ignora esse conteúdo e continua lendo.
-        this.lastInvalid = data;
+    log(`Tocando ${bytes.length} bytes (${buffer.duration.toFixed(1)} s).`);
 
+    // Barra de progresso acompanhando o som.
+    const bar = $(progressId);
+    const startedAt = performance.now();
+
+    bar.classList.remove("hidden");
+
+    const step = () => {
+      const fraction = Math.min(1, (performance.now() - startedAt) / 1000 / buffer.duration);
+      bar.firstElementChild.style.width = fraction * 100 + "%";
+      if (fraction < 1 && sound.playing === node) {
+        sound.progressFrame = requestAnimationFrame(step);
       }
+    };
 
+    step();
+
+    await new Promise(resolve => {
+      node.onended = resolve;
+      node.start();
+    });
+
+    bar.classList.add("hidden");
+
+    // Parado por stopPlaying(): quem chamou não deve continuar.
+    if (sound.playing !== node) throw new Error("cancelado");
+
+    sound.playing = null;
+
+  }
+
+  function stopPlaying() {
+
+    const node = sound.playing;
+
+    sound.playing = null;
+    cancelAnimationFrame(sound.progressFrame);
+
+    if (node) {
+      node.onended?.();
+      try { node.stop(); } catch {}
     }
 
-    async detect() {
+  }
 
-      if (this.detector) {
-        const codes = await this.detector.detect(this.video);
-        return codes[0]?.rawValue || null;
-      }
+  function stopSound() {
+    stopListening();
+    stopPlaying();
+  }
 
-      const videoWidth = this.video.videoWidth;
-      const videoHeight = this.video.videoHeight;
+  // Atualiza ícone, texto e medidor de uma das telas ("host" ou "guest").
+  function setSoundState(side, { icon, text, kind = "", meter = false }) {
 
-      let sx = 0, sy = 0, sw = videoWidth, sh = videoHeight;
+    $(side + "Icon").textContent = icon;
+    setStatus(side + "Status", text, kind);
+    show(side + "Meter", meter);
 
-      // Quadros alternados: centro em resolução cheia / imagem inteira.
-      if (this.frame++ % 2 === 0) {
+  }
 
-        const side = Math.round(Math.min(videoWidth, videoHeight) * 0.8);
-
-        sx = Math.round((videoWidth - side) / 2);
-        sy = Math.round((videoHeight - side) / 2);
-        sw = sh = side;
-
-      }
-
-      const scale = Math.min(1, JSQR_MAX_SIDE / Math.max(sw, sh));
-      const width = Math.round(sw * scale);
-      const height = Math.round(sh * scale);
-
-      this.canvas.width = width;
-      this.canvas.height = height;
-
-      this.context.drawImage(this.video, sx, sy, sw, sh, 0, 0, width, height);
-
-      const imageData = this.context.getImageData(0, 0, width, height);
-
-      // Os QR daqui são sempre escuros no claro: não precisa inverter.
-      const code = jsQR(imageData.data, width, height, {
-        inversionAttempts: "dontInvert"
-      });
-
-      return code?.data || null;
-
-    }
-
-    stopTracks() {
-
-      if (this.stream) {
-        this.stream.getTracks().forEach(track => track.stop());
-        this.stream = null;
-      }
-
-    }
-
-    stop() {
-
-      this.session++;
-      this.stopTracks();
-      this.video.srcObject = null;
-      this.switchButton.classList.add("hidden");
-
-    }
-
+  function setMeter(id, level) {
+    // Nível RMS típico de fala/som: 0–0.25.
+    $(id).firstElementChild.style.width = Math.min(100, level * 400) + "%";
   }
 
 
   /*
    * ============================================================
-   * COMPUTADOR
+   * COMPUTADOR (quem toca primeiro)
    *
-   * Passo 1: mostra o QR do offer (o celular lê).
-   * Passo 2: liga a webcam e lê o QR de resposta do celular.
-   * Uma coisa de cada vez, avançando por botão.
+   * Gera a oferta → toca como som → ouve a resposta do celular.
    * ============================================================
    */
 
-  const computerScanner = new QrScanner({
-    videoId: "computerVideo",
-    canvasId: "computerScanCanvas",
-    switchButtonId: "switchComputerCameraBtn",
-    facingMode: "user",
-    onCode: handleAnswer,
-    onSlow: () => setStatus(
-      "computerStatus",
-      "Ainda não achei o código. Aproxime ou afaste o celular devagar.",
-      "working"
-    )
-  });
+  // Sem resposta depois disso, pede para tocar de novo.
+  const ANSWER_TIMEOUT_MS = 25000;
 
-  $("toStep2Btn").onclick = showComputerStep2;
-  $("backToStep1Btn").onclick = showComputerStep1;
-  $("restartComputerBtn").onclick = startComputerPairing;
+  let hostOffer = null;         // bytes da oferta atual
+  let hostAnswerTimer = null;
 
-  if (!CAN_LINK) {
-    $("step1Lead").innerHTML =
-      "Abra <strong>esta mesma página no celular</strong>, toque em " +
-      "<strong>Ler código</strong> e aponte para este código.";
-  }
+  $("playOfferBtn").onclick = playOffer;
 
-  // O celular saiu: volta ao passo 1 com um código novo e avisa.
+  // O celular saiu: volta ao início com uma oferta nova e avisa.
   function computerDisconnected() {
 
     startComputerPairing();
-
-    setStatus(
-      "step1Status",
-      "O celular foi desconectado. Para conectar de novo, siga o passo a passo.",
-      "error"
-    );
-    show("step1Status");
+    hostNotice("O celular foi desconectado. Para conectar de novo, siga o passo a passo.");
 
   }
 
@@ -2395,28 +2153,30 @@
       return;
     }
 
-    setStatus("computerStatus", message, "error");
-    show("restartComputerBtn");
+    // A oferta atual não serve mais: gera outra.
+    startComputerPairing();
+    hostNotice(message);
 
   }
 
-  function showComputerStep(step) {
-
-    show("computerStep1", step === 1);
-    show("computerStep2", step === 2);
-
+  function hostNotice(text) {
+    setStatus("hostNotice", text, "error");
+    show("hostNotice");
   }
 
-  // Gera um offer novo e volta ao passo 1.
+  // Gera uma oferta nova e deixa pronto para tocar.
   async function startComputerPairing() {
 
-    computerScanner.stop();
-    showComputerStep(1);
+    stopSound();
+    clearTimeout(hostAnswerTimer);
 
-    show("qrCanvas", false);
-    show("qrLoading");
-    show("step1Status", false);
-    $("toStep2Btn").disabled = true;
+    hostOffer = null;
+
+    show("hostNotice", false);
+    $("playOfferBtn").disabled = true;
+    $("playOfferBtn").textContent = "🔊 Tocar som";
+
+    setSoundState("host", { icon: "⏳", text: "Preparando o código…", kind: "working" });
 
     try {
 
@@ -2431,75 +2191,114 @@
       await pc.setLocalDescription(await pc.createOffer());
       await waitForIceGathering(pc);
 
-      const offer = encodeDescription(pc.localDescription);
+      if (peerConnection !== pc) return; // recomeçou enquanto preparava
 
-      await renderQR("qrCanvas", CAN_LINK ? offerToLink(offer) : offer);
+      hostOffer = encodeDescription(pc.localDescription);
 
-      show("qrLoading", false);
-      show("qrCanvas");
-      $("toStep2Btn").disabled = false;
+      log(`Oferta pronta: ${hostOffer.length} bytes.`);
 
-      log("Offer pronto.");
+      setSoundState("host", { icon: "🔊", text: "Pronto! Toque em Tocar som com o celular perto." });
+      $("playOfferBtn").disabled = false;
 
     } catch (error) {
 
       console.error(error);
       log("Erro ao gerar offer: " + error.message);
-      setStatus("step1Status", "Erro ao gerar o código: " + error.message, "error");
-      show("step1Status");
+      setSoundState("host", { icon: "⚠️", text: "Erro ao preparar: " + error.message, kind: "error" });
 
     }
 
   }
 
-  function showComputerStep1() {
+  async function playOffer() {
 
-    computerScanner.stop();
-    showComputerStep(1);
+    if (!hostOffer) return;
 
-  }
+    const offer = hostOffer;
 
-  async function showComputerStep2() {
-
-    showComputerStep(2);
-    show("restartComputerBtn", false);
-    setStatus("computerStatus", "Ligando a câmera…", "working");
+    $("playOfferBtn").disabled = true;
+    show("hostNotice", false);
+    clearTimeout(hostAnswerTimer);
 
     try {
 
-      await computerScanner.start();
-      setStatus("computerStatus", "Procurando o código do celular…", "working");
+      // Pede o microfone antes de tocar: a resposta vem logo depois.
+      await startListening({ onData: () => {}, onLevel: () => {} });
+      stopListening();
+
+      setSoundState("host", {
+        icon: "🔊",
+        text: "Tocando o código… mantenha o celular perto.",
+        kind: "working"
+      });
+
+      await playBytes(offer, "hostProgress");
+
+      if (offer !== hostOffer) return;
+
+      await startListening({
+        onData: handleAnswerSound,
+        onLevel: level => setMeter("hostMeter", level)
+      });
+
+      setSoundState("host", {
+        icon: "🎧",
+        text: "Ouvindo a resposta do celular…",
+        kind: "working",
+        meter: true
+      });
+
+      hostAnswerTimer = setTimeout(() => {
+        stopListening();
+        setSoundState("host", {
+          icon: "🤔",
+          text: "Não ouvi a resposta. Aumente o volume dos dois aparelhos e toque de novo.",
+          kind: "error"
+        });
+        $("playOfferBtn").textContent = "🔊 Tocar de novo";
+        $("playOfferBtn").disabled = false;
+      }, ANSWER_TIMEOUT_MS);
 
     } catch (error) {
 
-      log("Erro na câmera: " + error.message);
-      computerFailed("Não foi possível ligar a câmera: " + error.message);
+      if (error.message === "cancelado") return;
+
+      stopSound();
+      log("Erro no som: " + error.message);
+      setSoundState("host", { icon: "⚠️", text: micErrorMessage(error), kind: "error" });
+      $("playOfferBtn").disabled = false;
 
     }
 
   }
 
-  async function handleAnswer(data) {
+  async function handleAnswerSound(bytes) {
+
+    let answer;
+
+    try {
+      answer = decodeDescription(bytes, "answer");
+    } catch (error) {
+      log("Som ignorado: " + error.message);
+      return;
+    }
+
+    if (peerConnection?.signalingState !== "have-local-offer") return;
+
+    clearTimeout(hostAnswerTimer);
+    stopListening();
+
+    setSoundState("host", { icon: "✅", text: "Resposta recebida! Conectando…", kind: "working" });
 
     try {
 
-      const answer = decodeDescription(data, "answer");
-
-      log("QR de resposta detectado!");
-
       await peerConnection.setRemoteDescription(answer);
-
       log("Answer aplicado. Aguardando conexão...");
-
-      setStatus("computerStatus", "Código lido! Conectando…", "working");
-
-      return true;
 
     } catch (error) {
 
       console.error(error);
-      log("QR ignorado: " + error.message);
-      return false;
+      computerFailed("Resposta inválida: " + error.message);
 
     }
 
@@ -2507,8 +2306,8 @@
 
   function showComputerConnected() {
 
-    computerScanner.stop();
-    showComputerStep(0);
+    stopSound();
+    clearTimeout(hostAnswerTimer);
     startSession("host");
 
   }
@@ -2516,34 +2315,31 @@
 
   /*
    * ============================================================
-   * CELULAR
+   * CELULAR (quem ouve primeiro)
    *
-   * Aberto pelo link do QR: gera a resposta direto.
-   * Aberto sem link: câmera traseira em tela cheia → lê o offer.
-   * Depois, QR de resposta em tela cheia para a webcam ler.
+   * Ouve a oferta → prepara a resposta → toca como som → volta a
+   * ouvir (se o computador não ouviu e tocar de novo, a mesma
+   * resposta é repetida).
    * ============================================================
    */
 
-  const phoneScanner = new QrScanner({
-    videoId: "phoneVideo",
-    canvasId: "phoneScanCanvas",
-    switchButtonId: "switchPhoneCameraBtn",
-    facingMode: "environment",
-    onCode: handleOffer,
-    onSlow: () => {
-      $("phoneScanHint").textContent =
-        "Chegue mais perto, até o código encher o quadro verde.";
-    }
-  });
+  let guestOfferKey = null;     // oferta já respondida (hex)
+  let guestAnswer = null;       // bytes da resposta a ela
 
-  $("startPhoneBtn").onclick = startPhoneScan;
-  $("rescanPhoneBtn").onclick = startPhoneScan;
-  $("cancelPhoneScanBtn").onclick = resetPhone;
+  $("listenBtn").onclick = () => {
+    if (sound.listener) resetPhone();
+    else startGuestListening();
+  };
+
+  function guestNotice(text) {
+    setStatus("guestNotice", text, "error");
+    show("guestNotice");
+  }
 
   // O computador saiu: volta ao início e avisa.
   function phoneDisconnected() {
     phoneFailed(
-      "O computador foi desconectado. Para conectar de novo, toque em Ler código."
+      "O computador foi desconectado. Para conectar de novo, toque em Ouvir."
     );
   }
 
@@ -2551,90 +2347,115 @@
 
     if (session?.role === "guest") {
       message =
-        "O computador foi desconectado. Para conectar de novo, toque em Ler código.";
+        "O computador foi desconectado. Para conectar de novo, toque em Ouvir.";
     }
 
     resetPhone();
-    setStatus("phoneStatus", message, "error");
-    show("phoneStatus");
+    guestNotice(message);
 
   }
 
-  async function startPhoneScan() {
+  async function startGuestListening(waitingForHost = false) {
 
-    closeConnection();
-
-    $("phoneScanHint").textContent = "Deixe o código dentro do quadro verde";
-
-    show("phoneAnswer", false);
-    show("phoneScanner");
+    show("guestNotice", false);
+    $("listenBtn").disabled = true;
 
     try {
 
-      await phoneScanner.start();
+      keepScreenOn();
+
+      await startListening({
+        onData: handleOfferSound,
+        onLevel: level => setMeter("guestMeter", level)
+      });
+
+      setSoundState("guest", {
+        icon: "🎧",
+        text: waitingForHost
+          ? "Resposta enviada. Aguardando o computador… (se ele tocar de novo, respondo de novo)"
+          : "Ouvindo… Agora, no computador, toque em Tocar som.",
+        kind: "working",
+        meter: true
+      });
+
+      $("listenBtn").textContent = "⏹ Parar";
+      $("listenBtn").disabled = false;
 
     } catch (error) {
 
-      console.error(error);
-      log("Erro na câmera: " + error.message);
-      phoneFailed("Não foi possível abrir a câmera: " + error.message);
+      log("Erro no microfone: " + error.message);
+      resetPhone();
+      guestNotice(micErrorMessage(error));
 
     }
 
   }
 
-  async function handleOffer(data) {
+  async function handleOfferSound(bytes) {
 
     let offer;
 
     try {
-      offer = decodeDescription(offerFromText(data), "offer");
+      offer = decodeDescription(bytes, "offer");
     } catch (error) {
-      log("QR ignorado: " + error.message);
-      $("phoneScanHint").textContent = /^https?:/.test(data)
-        ? "Esse é o código do site. Leia o código grande do Passo 1."
-        : "Esse código não é o do computador.";
-      return false;
+      log("Som ignorado: " + error.message);
+      return;
     }
 
-    $("phoneScanHint").textContent = "Código lido! Preparando…";
-
-    await answerOffer(offer);
-
-    return true;
-
-  }
-
-  async function answerOffer(offer) {
+    // Para de ouvir enquanto responde (e para não ouvir a si mesmo).
+    stopListening();
+    $("listenBtn").disabled = true;
 
     try {
 
-      log("Offer recebido.");
+      const key = bytesHex(bytes);
 
-      keepScreenOn();
+      if (key !== guestOfferKey) {
 
-      const pc = createPeerConnection(phoneFailed);
+        setSoundState("guest", { icon: "✅", text: "Código recebido! Preparando a resposta…", kind: "working" });
 
-      pc.ondatachannel = event => {
-        dataChannel = event.channel;
-        setupDataChannel(dataChannel, showPhoneConnected, phoneDisconnected);
-      };
+        log("Offer recebido.");
 
-      await pc.setRemoteDescription(offer);
-      await pc.setLocalDescription(await pc.createAnswer());
-      await waitForIceGathering(pc);
+        const pc = createPeerConnection(phoneFailed);
 
-      await renderQR("answerQrCanvas", encodeDescription(pc.localDescription));
+        pc.ondatachannel = event => {
+          dataChannel = event.channel;
+          setupDataChannel(dataChannel, showPhoneConnected, phoneDisconnected);
+        };
 
-      show("phoneScanner", false);
-      show("phoneAnswer");
+        await pc.setRemoteDescription(offer);
+        await pc.setLocalDescription(await pc.createAnswer());
+        await waitForIceGathering(pc);
 
-      log("Answer QR criado.");
+        guestAnswer = encodeDescription(pc.localDescription);
+        guestOfferKey = key;
+
+        log(`Resposta pronta: ${guestAnswer.length} bytes.`);
+
+      } else {
+        log("Mesma oferta de novo: repetindo a resposta.");
+      }
+
+      if (session) return;
+
+      setSoundState("guest", {
+        icon: "🔊",
+        text: "Respondendo pelo som… mantenha perto do computador.",
+        kind: "working"
+      });
+
+      await playBytes(guestAnswer, "guestProgress");
+
+      if (session) return; // conectou enquanto tocava
+
+      await startGuestListening(true);
 
     } catch (error) {
 
+      if (error.message === "cancelado") return;
+
       console.error(error);
-      log("Erro ao processar offer: " + error.message);
+      log("Erro ao responder: " + error.message);
       phoneFailed("Erro: " + error.message);
 
     }
@@ -2643,24 +2464,25 @@
 
   function showPhoneConnected() {
 
-    phoneScanner.stop();
-
-    show("phoneScanner", false);
-    show("phoneAnswer", false);
+    stopSound();
     startSession("guest");
 
   }
 
   function resetPhone() {
 
-    phoneScanner.stop();
+    stopSound();
     closeConnection();
     releaseScreen();
 
-    show("phoneScanner", false);
-    show("phoneAnswer", false);
-    show("phoneStatus", false);
-    show("phoneStart");
+    guestOfferKey = null;
+    guestAnswer = null;
+
+    show("guestNotice", false);
+    $("listenBtn").textContent = "🎧 Ouvir";
+    $("listenBtn").disabled = false;
+
+    setSoundState("guest", { icon: "🎧", text: "Toque em Ouvir para começar." });
 
   }
 
@@ -2676,7 +2498,7 @@
 
   async function openSiteQr() {
 
-    // Sem o hash: o QR abre a página do zero, não um offer antigo.
+    // Sem o hash: o QR abre a página do zero.
     const url = location.href.split("#")[0];
 
     $("siteUrl").textContent = url;
@@ -2734,8 +2556,8 @@
    * Pelo DataChannel "control" (JSON): chat, estado do áudio,
    * desenho, pedidos de arquivo e a renegociação do áudio.
    *
-   * Áudio: o QR só abriu o canal de dados. Ao conectar, o host
-   * (quem mostrou o primeiro QR) cria um canal de áudio nos dois
+   * Áudio: o pareamento só abriu o canal de dados. Ao conectar, o host
+   * (quem tocou o primeiro som) cria um canal de áudio nos dois
    * sentidos e manda o SDP novo pelo próprio DataChannel. Depois
    * disso, ligar/desligar o microfone é só trocar a trilha
    * (replaceTrack), sem negociar de novo.
@@ -2788,7 +2610,7 @@
 
   /* ---------------- início / fim ---------------- */
 
-  // role: "host" (mostrou o primeiro QR) | "guest" (leu o QR)
+  // role: "host" (tocou o primeiro som) | "guest" (ouviu e respondeu)
   function startSession(role) {
 
     session = {
@@ -3937,24 +3759,7 @@
    * ============================================================
    */
 
-  if (location.hash.startsWith(OFFER_HASH)) {
-
-    // Aberto pelo QR do computador: responde direto.
-    const link = location.href;
-
-    // Tira o offer da barra de endereço (recarregar não reusa um offer velho).
-    history.replaceState(null, "", location.pathname + location.search);
-
-    selectMode("phone");
-
-    try {
-      answerOffer(decodeDescription(offerFromText(link), "offer"));
-    } catch (error) {
-      log("Link inválido: " + error.message);
-      phoneFailed("Link inválido. Toque em Ler código e leia de novo.");
-    }
-
-  } else if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
+  if (IS_MOBILE) {
 
     // Abre direto no modo celular em dispositivos móveis.
     selectMode("phone");
