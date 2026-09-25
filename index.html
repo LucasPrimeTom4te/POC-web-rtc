@@ -1219,6 +1219,14 @@
       background: transparent;
     }
 
+    /* No PC o zoom fica na barra de baixo (placeZoomBar). */
+    .s-controls .zoom-bar {
+      position: static;
+      margin-left: 12px;
+      box-shadow: none;
+      background: var(--surface-2);
+    }
+
     .zoom-bar #zoomResetBtn {
       min-width: 56px;
       font-size: 12.5px;
@@ -1411,6 +1419,15 @@
 
     .volume.off {
       opacity: .45;
+    }
+
+    .page-volume {
+      margin-bottom: 8px;
+    }
+
+    .page-volume input {
+      flex: 1;
+      width: auto;
     }
 
     .avatar[role="button"] {
@@ -2586,6 +2603,26 @@
       pointer-events: none;
     }
 
+    /* Balão rápido no lugar do title do navegador (mouse só). */
+    .hover-tip {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1000;
+      max-width: 260px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      white-space: pre-line;
+      pointer-events: none;
+    }
+
     @media (max-width: 899px) {
       .s-controls {
         gap: 8px !important;
@@ -2649,6 +2686,47 @@
 
     @media (prefers-reduced-motion: reduce) {
       .muted-alert, .ctl.muted-talking { animation: none; }
+    }
+
+    /* Alguém me chamou (👋): em cima, no meio. */
+    .ping-alert {
+      position: absolute;
+      top: calc(64px + env(safe-area-inset-top));
+      left: 50%;
+      z-index: 9;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: max-content;
+      max-width: calc(100% - 32px);
+      padding: 10px 12px 10px 16px;
+      border-radius: 14px;
+      background: var(--surface-2);
+      border: 2px solid var(--person, var(--accent));
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+      font-size: 15px;
+      font-weight: 600;
+      animation: ping-shake .5s ease-in-out 2;
+    }
+
+    .ping-alert button {
+      padding: 7px 11px;
+      border-radius: 10px;
+    }
+
+    #pingAlertClose {
+      background: transparent;
+      padding: 7px;
+    }
+
+    @keyframes ping-shake {
+      25% { transform: translateX(calc(-50% - 6px)); }
+      75% { transform: translateX(calc(-50% + 6px)); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ping-alert { animation: none; }
     }
 
     /* Aviso rápido: fica logo acima da caixa de mensagem. */
@@ -4614,7 +4692,7 @@
       <div id="stageArea" class="stage-area">
         <div id="workspace" class="workspace"></div>
         <div id="maxLayer" class="max-layer"></div>
-        <div class="zoom-bar stage-ui" role="group" aria-label="Zoom (só aqui)">
+        <div id="zoomBar" class="zoom-bar stage-ui" role="group" aria-label="Zoom (só aqui)">
           <button id="zoomOutBtn" title="Diminuir o zoom (Ctrl −)">−</button>
           <button id="zoomResetBtn" title="Voltar a 100% (Ctrl 0)"><span id="zoomLabel">100%</span></button>
           <button id="zoomInBtn" title="Aumentar o zoom (Ctrl +)">+</button>
@@ -4716,6 +4794,11 @@
 
       <section class="set-section">
         <h4>🔔 Sons</h4>
+        <label class="volume page-volume" title="Volume de tudo nesta página: vozes, telas, vídeos, rádio, sons e efeitos (só aqui)">
+          <span>🔊 Volume geral</span>
+          <input id="pageVolumeRange" type="range" min="0" max="100" aria-label="Volume geral da página">
+          <output id="pageVolumeValue"></output>
+        </label>
         <label class="check"><input type="checkbox" id="sfxCheck"> Efeitos sonoros (alguém entra ou sai, manda mensagem, janela abre ou fecha)</label>
       </section>
 
@@ -4765,6 +4848,12 @@
     <span>🎙️ Você está falando com o microfone desligado</span>
     <button id="mutedAlertOn">Ligar microfone</button>
     <button id="mutedAlertClose" aria-label="Fechar o aviso" title="Fechar">✕</button>
+  </div>
+
+  <div id="pingAlert" class="ping-alert hidden" role="alert">
+    <span id="pingAlertText"></span>
+    <button id="pingAlertGo" title="Levar a minha vista até onde a pessoa está olhando">📍 Ir até lá</button>
+    <button id="pingAlertClose" aria-label="Fechar o aviso" title="Fechar">✕</button>
   </div>
 
   <!-- Um <audio> por pessoa conectada (criados pelo JS). -->
@@ -5610,7 +5699,6 @@
       audio.remove();
     }
 
-    clearTimeout(peer.cursorIdle);
     peer.cursorEl?.remove();
 
     if (peer.pc) {
@@ -6442,6 +6530,10 @@
 
       case "react":
         receiveReaction(peer, message);
+        break;
+
+      case "ping":
+        receivePing(peer, message);
         break;
 
       case "transcript-live":
@@ -7423,6 +7515,9 @@
     remote.speaker = speaker;
     remote.audioShare = audioShare;
 
+    const screenView = session?.windows.get("screen:" + peer.id);
+    if (screenView?.soundBtn) renderScreenSound(screenView);
+
     const screenChanged = screen !== remote.screen;
     remote.screen = screen;
 
@@ -7593,7 +7688,8 @@
     leave: { wave: "sine",     notes: [[784, 784, 0, .12], [523, 523, .1, .2]] },
     open:  { wave: "triangle", notes: [[620, 940, 0, .09]] },
     close: { wave: "triangle", notes: [[900, 520, 0, .09]] },
-    message: { wave: "sine",   notes: [[988, 988, 0, .08], [1319, 1319, .07, .14]] }
+    message: { wave: "sine",   notes: [[988, 988, 0, .08], [1319, 1319, .07, .14]] },
+    ping:  { wave: "sine",     notes: [[880, 880, 0, .1], [1175, 1175, .12, .1], [1568, 1568, .24, .22]] }
   };
 
   const SFX_VOLUME = 0.08;
@@ -7613,6 +7709,34 @@
     if (sfxState.enabled) sfx("open");
   };
 
+  // Volume geral da página (0–1, só aqui): multiplica tudo o que toca.
+  const PAGE_VOLUME_KEY = "rtc.pageVolume";
+  const savedPageVolume = Number(storageGet(PAGE_VOLUME_KEY));
+  let pageVolume = storageGet(PAGE_VOLUME_KEY) !== null && savedPageVolume >= 0 && savedPageVolume <= 100
+    ? savedPageVolume / 100 : 1;
+
+  function renderPageVolume() {
+    $("pageVolumeRange").value = Math.round(pageVolume * 100);
+    $("pageVolumeValue").textContent = Math.round(pageVolume * 100) + "%";
+  }
+
+  renderPageVolume();
+
+  $("pageVolumeRange").oninput = () => {
+    pageVolume = Number($("pageVolumeRange").value) / 100;
+    storageSet(PAGE_VOLUME_KEY, Math.round(pageVolume * 100));
+    renderPageVolume();
+    applyPageVolume();
+  };
+
+  function applyPageVolume() {
+    if (!session) return;
+    peers.forEach(applyPeerVolume);
+    renderRadios();
+    for (const view of session.windows.values()) if (view.player) applyLocalVolume(view);
+    for (const audio of soundPlayers.values()) audio.volume = pageVolume;
+  }
+
   function quietWindowSounds() {
     sfxState.quietUntil = Date.now() + SFX_QUIET_MS;
   }
@@ -7622,7 +7746,8 @@
     const sound = SFX[name];
     const now = Date.now();
 
-    if (!sound || !sfxState.enabled || !session?.speakerOn) return;
+    // Chamar (👋) toca mesmo com os efeitos desligados: é de propósito.
+    if (!sound || (!sfxState.enabled && name !== "ping") || !session?.speakerOn) return;
     if ((name === "open" || name === "close") && now < sfxState.quietUntil) return;
     // Várias de uma vez (fechou três janelas juntas): um som só.
     if (now - (sfxState.last[name] || 0) < 250) return;
@@ -7646,7 +7771,7 @@
         oscillator.frequency.exponentialRampToValueAtTime(to, start + at + length);
 
         gain.gain.setValueAtTime(0.0001, start + at);
-        gain.gain.exponentialRampToValueAtTime(SFX_VOLUME, start + at + .01);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, SFX_VOLUME * pageVolume), start + at + .01);
         gain.gain.exponentialRampToValueAtTime(0.0001, start + at + length);
 
         oscillator.connect(gain).connect(context.destination);
@@ -9563,6 +9688,72 @@
   new MutationObserver(syncControlTips).observe(document.querySelector(".s-controls"),
     { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["title"] });
 
+  // Tooltips: qualquer coisa com title ganha um balão rápido ao passar o
+  // mouse. O title sai enquanto o mouse está em cima (senão o do navegador
+  // aparece junto) e volta quando sai.
+  const hoverTip = { el: document.createElement("div"), target: null, timer: 0 };
+
+  hoverTip.el.className = "hover-tip hidden";
+  hoverTip.el.setAttribute("role", "tooltip");
+  document.body.append(hoverTip.el);
+
+  function stashTitle(target) {
+    if (!target.getAttribute("title")) return;
+    target.dataset.tipTitle = target.title;
+    target.removeAttribute("title");
+  }
+
+  function hideHoverTip() {
+    clearTimeout(hoverTip.timer);
+    const target = hoverTip.target;
+    if (target && "tipTitle" in target.dataset) {
+      if (!target.getAttribute("title")) target.title = target.dataset.tipTitle;
+      delete target.dataset.tipTitle;
+    }
+    hoverTip.target = null;
+    hoverTip.el.classList.add("hidden");
+  }
+
+  function showHoverTip(target) {
+
+    if (hoverTip.target !== target || !target.isConnected) return;
+
+    // Mudou enquanto o mouse estava em cima: vale o novo.
+    stashTitle(target);
+    const text = (target.dataset.tipTitle || "").trim();
+    if (!text) return;
+
+    const tip = hoverTip.el;
+    tip.textContent = text;
+    tip.classList.remove("hidden");
+
+    const rect = target.getBoundingClientRect();
+    const size = tip.getBoundingClientRect();
+    const above = rect.top - size.height - 8;
+    const top = above >= 4 ? above : rect.bottom + 8;
+    const left = clamp(rect.left + rect.width / 2 - size.width / 2, 4, innerWidth - size.width - 4);
+
+    tip.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+
+  }
+
+  document.addEventListener("pointerover", event => {
+    if (event.pointerType !== "mouse") return;
+    const target = event.target.closest?.("[title], [data-tip-title]") || null;
+    if (target === hoverTip.target) return;
+    hideHoverTip();
+    if (!target?.getAttribute("title")?.trim()) return;
+    hoverTip.target = target;
+    stashTitle(target);
+    hoverTip.timer = setTimeout(() => showHoverTip(target), 350);
+  });
+
+  document.addEventListener("pointerout", event => { if (!event.relatedTarget) hideHoverTip(); });
+  document.addEventListener("pointerdown", hideHoverTip, true);
+  document.addEventListener("wheel", hideHoverTip, { capture: true, passive: true });
+  document.addEventListener("scroll", hideHoverTip, true);
+  document.addEventListener("keydown", hideHoverTip, true);
+
   const TOOLS = {
     pen:         { icon: "pen", label: "Caneta", key: "p" },
     highlighter: { icon: "highlighter", label: "Marca-texto", key: "h" },
@@ -11271,7 +11462,7 @@
     if (!site) {
 
       const saved = Number(storageGet(YT_VOLUME_KEY));
-      view.volume = saved >= 0 && saved <= 100 && storageGet(YT_VOLUME_KEY) !== null ? saved : 100;
+      view.volume = saved >= 0 && saved <= 100 && storageGet(YT_VOLUME_KEY) !== null ? saved : 75;
       view.localMuted = false;
 
       // Os outros: volume só aqui, e o toque para liberar o som.
@@ -11897,7 +12088,7 @@
 
     if (!view.ready || !player) return;
 
-    player.setVolume(view.volume);
+    player.setVolume(Math.round(view.volume * pageVolume));
 
     if (view.localMuted) player.mute();
     else if (!view.needsTap) player.unMute();
@@ -14102,6 +14293,7 @@
 
     if (!playing) {
       const audio = new Audio(url);
+      audio.volume = pageVolume;
       soundLib.preview = audio;
       soundLib.previewUrl = url;
       audio.onended = audio.onerror = () => {
@@ -14230,6 +14422,7 @@
     const id = entry.id + "|" + key;
     const audio = new Audio(src);
     audio.loop = false;
+    audio.volume = pageVolume;
 
     const finish = () => {
       if (soundPlayers.get(id) === audio) stopSound(entry, key);
@@ -14510,7 +14703,7 @@
       audio.pause();
     }
 
-    audio.volume = view.volume / 100;
+    audio.volume = view.volume / 100 * pageVolume;
     audio.muted = view.localMuted || !session.speakerOn;
 
     view.nowName.textContent = station ? station.name : "Nenhuma rádio";
@@ -14866,6 +15059,17 @@
   $("roomPipBtn").hidden = !CAN_DOC_PIP;
   $("roomPipBtn").onclick = () => toggleRoomPip();
 
+  // Zoom: no PC na barra de baixo; no celular e no picture-in-picture da
+  // sala, por cima da área (lá a barra de baixo não está).
+  function placeZoomBar() {
+    const bar = $("zoomBar");
+    if (DESKTOP_LAYOUT.matches && !roomPip) document.querySelector(".s-controls").append(bar);
+    else $("stageArea").append(bar);
+  }
+
+  placeZoomBar();
+  DESKTOP_LAYOUT.addEventListener("change", placeZoomBar);
+
   async function toggleRoomPip() {
 
     if (roomPip) return roomPip.close();
@@ -14939,6 +15143,7 @@
     window.cancelAnimationFrame = handle => pip.cancelAnimationFrame(handle);
 
     roomPip = pip;
+    placeZoomBar();
     $("roomPipBtn").title = "Trazer a sala de volta para a aba";
     setTimeout(() => {
       layoutWorkspace();
@@ -14955,6 +15160,7 @@
       closeMenu();
 
       roomPip = null;
+      placeZoomBar();
       $("roomPipBtn").title = "Picture-in-picture: a sala inteira numa janela flutuante (só aqui)";
 
       setTimeout(() => {
@@ -15280,6 +15486,7 @@
       view.label.textContent = sharer.name;
       view.el.style.setProperty("--person", personColor(sharer.id));
       view.setRotation(sharer.rotation);
+      renderScreenSound(view);
 
     }
 
@@ -15335,7 +15542,18 @@
     const rotateBtn = windowButton("⟳", "Girar a transmissão 90° (para todos)", () => rotateMyScreen());
     rotateBtn.hidden = id !== "screen:" + me.id;
 
-    const view = createWindow({ id, kind: "screen", extraButtons: [rotateBtn, pipBtn, fullBtn] });
+    // Som desta tela (o áudio que a pessoa compartilha junto): só aqui.
+    const soundBtn = windowButton("🔊", "", () => {
+      const peer = peers.get(id.slice("screen:".length));
+      if (!peer) return;
+      setVolume(peer, { shareMuted: !volumeOf(peer.id).shareMuted });
+      renderScreenSound(view);
+    });
+    soundBtn.hidden = true;
+
+    const view = createWindow({ id, kind: "screen", extraButtons: [soundBtn, rotateBtn, pipBtn, fullBtn] });
+
+    view.soundBtn = soundBtn;
 
     const video = document.createElement("video");
     video.autoplay = true;
@@ -15389,6 +15607,16 @@
 
     return view;
 
+  }
+
+  // 🔊/🔇 na janela da tela de alguém que compartilha áudio junto.
+  function renderScreenSound(view) {
+    const peer = !view.id.endsWith(":" + me.id) && peers.get(view.id.slice("screen:".length));
+    const muted = !!peer && volumeOf(peer.id).shareMuted;
+    view.soundBtn.hidden = !peer?.remote.audioShare;
+    view.soundBtn.textContent = muted ? "🔇" : "🔊";
+    view.soundBtn.title = muted ? "Ligar o som desta tela (só aqui)" : "Tirar o som desta tela (só aqui)";
+    view.soundBtn.classList.toggle("warn", muted);
   }
 
   async function togglePip(video) {
@@ -15506,6 +15734,86 @@
 
   }
 
+  /* ---- 👋 chamar a atenção ----
+   *
+   * { type: "ping", x, y, z }: quem chama manda o centro da vista dele
+   * (no mundo). Quem recebe ouve um som, vê o aviso e pode ir até lá.
+   */
+  const PING_EVERY_MS = 3000;
+  const PING_SHOW_MS = 12000;
+
+  const pingState = { sent: new Map(), got: new Map(), timer: 0, target: null, title: null };
+
+  function sendPing(peer) {
+
+    const now = Date.now();
+
+    if (now - (pingState.sent.get(peer.id) || 0) < PING_EVERY_MS) {
+      toast("👋 Espere um pouquinho para chamar de novo.");
+      return;
+    }
+
+    pingState.sent.set(peer.id, now);
+
+    const box = stageBox();
+    const { x, y, z } = session.cam;
+
+    sendTo(peer, { type: "ping", x: x + box.width / 2 / z, y: y + box.height / 2 / z, z });
+    toast(`👋 Você chamou ${peerLabel(peer)}.`);
+
+  }
+
+  function receivePing(peer, message) {
+
+    const now = Date.now();
+
+    if (now - (pingState.got.get(peer.id) || 0) < PING_EVERY_MS - 500) return;
+
+    pingState.got.set(peer.id, now);
+
+    const valid = [message.x, message.y, message.z].every(Number.isFinite);
+    pingState.target = valid ? { x: message.x, y: message.y, z: clamp(message.z, ZOOM_MIN, ZOOM_MAX) } : null;
+
+    const alert = $("pingAlert");
+    $("pingAlertText").textContent = `👋 ${peerLabel(peer)} está chamando você`;
+    alert.style.setProperty("--person", personColor(peer.id));
+    show("pingAlertGo", !!pingState.target && DESKTOP_LAYOUT.matches);
+
+    // Mostra de novo (e a animação recomeça).
+    show("pingAlert", false);
+    void alert.offsetWidth;
+    show("pingAlert");
+
+    sfx("ping");
+    log(`${peerLabel(peer)} chamou você.`);
+
+    // Em outra aba: o título avisa até voltar.
+    if (document.hidden) {
+      pingState.title ??= document.title;
+      document.title = `👋 ${peerLabel(peer)} está chamando`;
+    }
+
+    clearTimeout(pingState.timer);
+    pingState.timer = setTimeout(() => show("pingAlert", false), PING_SHOW_MS);
+
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || pingState.title === null) return;
+    document.title = pingState.title;
+    pingState.title = null;
+  });
+
+  $("pingAlertClose").onclick = () => show("pingAlert", false);
+
+  $("pingAlertGo").onclick = () => {
+    const target = pingState.target;
+    show("pingAlert", false);
+    if (!session || !target) return;
+    const box = stageBox();
+    animateCamera({ x: target.x - box.width / 2 / target.z, y: target.y - box.height / 2 / target.z, z: target.z });
+  };
+
   /* ---- volume de cada um (só aqui) ---- */
 
   // Por pessoa (id do aparelho): { voice: 0–1, share: 0–1, muted }.
@@ -15523,7 +15831,8 @@
 
   const volumes = loadVolumes();
 
-  const volumeOf = id => ({ voice: 1, share: 1, muted: false, ...volumes[id] });
+  // Áudio compartilhado (tela/guia) começa em 75%: costuma vir bem mais alto que a voz.
+  const volumeOf = id => ({ voice: 1, share: 0.75, muted: false, shareMuted: false, ...volumes[id] });
 
   function setVolume(peer, patch) {
 
@@ -15546,13 +15855,13 @@
     const silent = !session?.speakerOn || pref.muted;
 
     if (peer.audio) {
-      peer.audio.volume = clamp(pref.voice, 0, 1);
+      peer.audio.volume = clamp(pref.voice * pageVolume, 0, 1);
       peer.audio.muted = silent;
     }
 
     if (peer.shareAudio) {
-      peer.shareAudio.volume = clamp(pref.share, 0, 1);
-      peer.shareAudio.muted = silent;
+      peer.shareAudio.volume = clamp(pref.share * pageVolume, 0, 1);
+      peer.shareAudio.muted = silent || pref.shareMuted;
     }
 
   }
@@ -15616,7 +15925,13 @@
 
     };
 
-    box.append(mute, slider("🔊", "voice", "Volume da voz"));
+    const ping = document.createElement("button");
+    ping.className = "tool";
+    ping.textContent = "👋 Chamar";
+    ping.title = `Chamar a atenção de ${peerLabel(peer)} (toca um som e mostra onde você está olhando)`;
+    ping.onclick = () => sendPing(peer);
+
+    box.append(ping, mute, slider("🔊", "voice", "Volume da voz"));
 
     if (peer.remote.audioShare) box.append(slider("🎵", "share", "Volume do áudio compartilhado"));
 
@@ -15715,7 +16030,6 @@
   //   surface: o id da janela ("board:<id do quadro>" | "screen:<id de quem compartilha>")
 
   const CURSOR_SEND_MS = 50;
-  const CURSOR_IDLE_MS = 8000;
 
   const cursorPrefs = {
     show: storageGet("rtc.showCursors") !== "0",
@@ -15838,10 +16152,6 @@
     }
 
     renderCursor(peer);
-
-    // Parado muito tempo: some (volta quando mexer).
-    clearTimeout(peer.cursorIdle);
-    if (peer.cursor) peer.cursorIdle = setTimeout(() => { peer.cursor = null; renderCursor(peer); }, CURSOR_IDLE_MS);
 
   }
 
