@@ -4639,6 +4639,12 @@
           (4G, rede de empresa).
         </li>
         <li>
+          <strong>Ponte</strong>: se duas pessoas não conseguem a conexão
+          direta, mas uma terceira está ligada às duas, essa terceira repassa
+          as mensagens e reenvia o áudio e a tela de uma para a outra. Gasta
+          mais internet de quem faz a ponte; arquivos não passam por ela.
+        </li>
+        <li>
           Aceito o pedido, oferta e resposta (descrições <strong>SDP</strong>
           completas) vão por um canal só daquela conexão,
           <code>pair:&lt;id&gt;</code>. Cada lado espera juntar os seus
@@ -4927,7 +4933,9 @@
       images: new Set(),      // imagens (janelas de imagem) que ele já tem
       videoStream: null,      // tela dele, quando compartilha
       remote: { known: false, mic: false, speaker: true, screen: false, site: null, audioShare: false, want: { height: 0, fps: 0 }, device: null, name: "" },
-      reconnect: null         // { startedAt, giveUp } enquanto a conexão está caída
+      reconnect: null,        // { startedAt, giveUp } enquanto a conexão está caída
+      via: null,              // conectado por ponte: o id de quem repassa (sem pc próprio)
+      relayIn: new Map()      // mid -> { of, slot }: trilhas que chegam por aqui repassadas de outra pessoa
     };
 
   }
@@ -5303,10 +5311,17 @@
 
     const pc = peer.pc;
 
-    pc.ontrack = event => {
+    // Por ponte não há conexão própria: mensagens e trilhas vêm pela ponte.
+    if (pc) pc.ontrack = event => {
 
       // A conexão fechou (ou a sessão acabou) antes da trilha chegar.
       if (!session || peer.closed) return;
+
+      // Trilha de outra pessoa que este repassa (veja PONTE).
+      if (peer.relayIn.has(event.transceiver.mid)) {
+        receiveBridgedTrack(peer, event.transceiver.mid, event.track);
+        return;
+      }
 
       if (event.track.kind === "video") {
         log(`Canal de vídeo (tela) de ${peerLabel(peer)} recebido.`);
@@ -5325,21 +5340,12 @@
         ? `Canal do áudio compartilhado de ${peerLabel(peer)} recebido.`
         : `Áudio de ${peerLabel(peer)} recebido.`);
 
-      if (!peer[slot]) {
-        peer[slot] = document.createElement("audio");
-        peer[slot].autoplay = true;
-        peer[slot].playsInline = true;
-        $("remoteAudios").appendChild(peer[slot]);
-      }
-
-      peer[slot].srcObject = new MediaStream([event.track]);
-      applyPeerVolume(peer);
-      playRemoteAudio();
+      attachRemoteAudio(peer, slot, event.track);
 
     };
 
     // Canais abertos pelo outro lado depois de conectar = arquivos.
-    pc.ondatachannel = event => {
+    if (pc) pc.ondatachannel = event => {
       if (event.channel.label.startsWith("file:")) {
         receiveFileChannel(peer, event.channel);
       }
@@ -5365,7 +5371,7 @@
       if (isMine(entry) && entry.kind === "youtube") sendPlay(entry, peer);
     }
 
-    if (peer.role === "host") {
+    if (peer.role === "host" && pc) {
       negotiateAudio(peer).catch(error => {
         log("Erro ao preparar o áudio: " + error.message);
         audioFailed();
@@ -5377,12 +5383,30 @@
 
   }
 
+  // slot: "audio" (microfone) | "shareAudio" (áudio compartilhado)
+  function attachRemoteAudio(peer, slot, track) {
+
+    if (!peer[slot]) {
+      peer[slot] = document.createElement("audio");
+      peer[slot].autoplay = true;
+      peer[slot].playsInline = true;
+      $("remoteAudios").appendChild(peer[slot]);
+    }
+
+    peer[slot].srcObject = new MediaStream([track]);
+    applyPeerVolume(peer);
+    playRemoteAudio();
+
+  }
+
   // Um aparelho saiu da sessão. Sem mais ninguém, volta ao início.
   function removePeer(peer, notice) {
 
     const wasConnected = peer.connected;
 
     closePeer(peer);
+
+    if (session && wasConnected) peerGoneFromBridges(peer);
 
     if (!session || !wasConnected) return;
 
@@ -5428,6 +5452,7 @@
     if (!session) return;
 
     saveRoomMemory();
+    bridges.clear();
     clearInterval(session.roomSaveTimer);
     clearInterval(session.statsTimer);
     clearTimeout(session.paletteTimer);
@@ -5692,7 +5717,16 @@
         break;
 
       case "mesh":
-        receiveMesh(peer, message);
+        if (!peer.via) receiveMesh(peer, message);
+        break;
+
+      case "bridge-open":
+      case "bridge":
+      case "bridge-close":
+      case "bridge-media":
+      case "relay":
+      case "relayed":
+        if (!peer.via) handleBridgeMessage(peer, message);
         break;
 
       case "state":
@@ -5700,6 +5734,7 @@
         break;
 
       case "sdp":
+        if (peer.via) break;
         handleRemoteSdp(peer, message).catch(error => {
           log("Erro na renegociação: " + error.message);
           audioFailed();
@@ -6363,7 +6398,23 @@
 
     const pc = peer.pc;
 
+    // Os dois mandaram oferta ao mesmo tempo (a ponte renegocia de
+    // qualquer lado): o de id maior insiste, o outro desfaz a dele e
+    // refaz depois.
+    let again = false;
+
+    // Resposta atrasada (a oferta já foi desfeita): ignora.
+    if (description.type === "answer" && pc.signalingState !== "have-local-offer") return;
+
+    if (description.type === "offer" && pc.signalingState !== "stable") {
+      if (me.id > peer.id) return;
+      await pc.setLocalDescription({ type: "rollback" });
+      again = true;
+    }
+
     await pc.setRemoteDescription(description);
+
+    if (again) setTimeout(() => renegotiate(peer), 0);
 
     if (description.type === "offer") {
 
@@ -6780,6 +6831,12 @@
 
         stats.forEach(report => {
           if (report.kind !== "audio" || report.audioLevel == null) return;
+          const relayed = peer.relayIn.get(report.mid);
+          if (relayed) {
+            const source = peers.get(relayed.of);
+            if (relayed.slot === "audio" && source) remoteLevels.set(source, report.audioLevel);
+            return;
+          }
           if (report.type === "inbound-rtp") remoteLevels.set(peer, report.audioLevel);
           if (report.type === "media-source") localLevel = Math.max(localLevel, report.audioLevel);
         });
@@ -13664,7 +13721,14 @@
 
     if (!session) return;
 
-    for (const peer of connectedPeers()) {
+    // Arquivo vai num canal próprio da conexão: por ponte não dá.
+    const bridged = connectedPeers().filter(peer => peer.via);
+
+    if (bridged.length) {
+      addNote(`📎 ${bridged.map(peerLabel).join(", ")} está conectado por ponte: arquivos não chegam por ela.`);
+    }
+
+    for (const peer of connectedPeers().filter(peer => !peer.via)) {
 
       const id = randomId();
       const key = fileKey(peer, id);
@@ -14956,7 +15020,7 @@
     // Começa pública: quem entrar conecta sem pedir, até o dono mudar.
     // known: quem os outros contaram que está na sala (veja sendMesh).
     // declined: quem recusou (não peço de novo sozinho).
-    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), retries: new Map(), known: new Map(), declined: new Set(), warned: new Set(), public: true, ownerId: null, announced: false };
+    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), retries: new Map(), known: new Map(), declined: new Set(), failed: new Set(), bridgeAsked: new Map(), warned: new Set(), public: true, ownerId: null, announced: false };
 
     room.meshTimer = setInterval(meshTick, MESH_EVERY_MS);
 
@@ -15113,7 +15177,7 @@
     if (!room || !session?.room) return;
 
     const list = connectedPeers()
-      .filter(peer => peer.room && Number.isFinite(peer.remote.joinedAt))
+      .filter(peer => peer.room && !peer.via && Number.isFinite(peer.remote.joinedAt))
       .map(peer => ({ id: peer.id, name: peer.name, joinedAt: peer.remote.joinedAt }));
 
     const message = { type: "mesh", room: room.name, peers: list };
@@ -15129,6 +15193,9 @@
     if (!room || name !== room.name || !Array.isArray(list)) return;
 
     const now = Date.now();
+
+    // Com quem ele tem conexão direta: serve de ponte para esses.
+    from.remote.links = new Set(list.map(member => member?.id).filter(isDeviceId));
 
     for (const member of list.slice(0, ROOM_LIMIT * 2)) {
       if (!isDeviceId(member?.id) || member.id === me.id || !Number.isFinite(member.joinedAt)) continue;
@@ -15168,6 +15235,9 @@
 
       if (member === mine || !arrivedBefore(member, mine) || !needsConnection(member.id)) continue;
 
+      // A conexão direta já falhou: tenta por alguém conectado aos dois.
+      if (room.failed.has(member.id) && askBridge(member)) continue;
+
       room.attempted.add(member.id + ":" + member.joinedAt);
       log("Sala: " + peerName(member) + " está na sala mas não conectado comigo; pedindo.");
       requestRoomPeer({ id: member.id, name: cleanName(member.name) });
@@ -15179,6 +15249,318 @@
   function meshTick() {
     sendMesh();
     ensureMesh();
+  }
+
+
+  /*
+   * ---------------- PONTE ----------------
+   *
+   * Quando A e C não conseguem conexão direta (rede restrita, sem TURN),
+   * mas B está conectado com os dois, B vira a ponte:
+   *
+   *   - Mensagens: A manda a B {relay, to: C, data} e B entrega a C
+   *     {relayed, from: A, data}. Em A e C o outro vira uma "pessoa por
+   *     ponte" (peer.via = B), com um canal de mentira que manda por B:
+   *     todo o resto do app funciona igual (chat, quadro, janelas…).
+   *   - Mídia: B reenvia, na conexão com C, as trilhas que recebe de A
+   *     (microfone, tela, áudio compartilhado), e vice-versa, em canais
+   *     de mídia a mais. Antes da oferta, B diz a cada um qual canal (mid)
+   *     é de quem ({bridge-media}).
+   *
+   * Quem pede a ponte é quem chegou depois (o mesmo que pediria a conexão
+   * direta), a alguém que, pelo aviso em cadeia, está ligado aos dois.
+   * Arquivos não passam pela ponte (vão num canal próprio da conexão).
+   */
+  const BRIDGE_ASK_EVERY_MS = 20000;
+  const BRIDGE_SLOTS = ["audio", "video", "shareAudio"];
+
+  // Só no aparelho que é ponte: "idA|idC" -> { a, c, out: Map(destinoId -> [transceivers]) }
+  const bridges = new Map();
+  const bridgeKey = (a, b) => a < b ? a + "|" + b : b + "|" + a;
+
+  // Pede uma ponte até member. true: pediu (ou está esperando a resposta).
+  function askBridge(member) {
+
+    const asked = room.bridgeAsked.get(member.id);
+
+    if (asked && Date.now() - asked < BRIDGE_ASK_EVERY_MS) return true;
+
+    const bridge = connectedPeers().find(peer => !peer.via && peer.room && peer.remote.links?.has(member.id));
+
+    if (!bridge) return false;
+
+    room.bridgeAsked.set(member.id, Date.now());
+    log(`Sala: sem conexão direta com ${peerName(member)}; pedindo ponte a ${peerLabel(bridge)}.`);
+    sendTo(bridge, { type: "bridge-open", to: member.id });
+
+    return true;
+
+  }
+
+  function handleBridgeMessage(from, message) {
+
+    switch (message.type) {
+
+      // Sou a ponte: from quer falar com message.to.
+      case "bridge-open": {
+        const other = peers.get(message.to);
+        if (!room || !other?.connected || other.via || !other.room || other.id === from.id) return;
+        openBridge(from, other);
+        break;
+      }
+
+      // Sou uma ponta: from (a ponte) me liga a message.peer.
+      case "bridge":
+        acceptBridge(from, message.peer);
+        break;
+
+      case "bridge-close": {
+        const peer = peers.get(message.peer);
+        if (peer?.via === from.id) removePeer(peer, `A ponte até ${peerLabel(peer)} (por ${peerLabel(from)}) caiu.`);
+        break;
+      }
+
+      // Qual canal de mídia (mid) de from traz a trilha de quem.
+      case "bridge-media":
+        from.relayIn = new Map(Object.entries(message.map || {})
+          .filter(([, value]) => isDeviceId(value?.of) && BRIDGE_SLOTS.includes(value.slot)));
+        break;
+
+      // Sou a ponte: repasso.
+      case "relay": {
+        const target = peers.get(message.to);
+        if (typeof message.data !== "string" || !bridges.has(bridgeKey(from.id, message.to))) return;
+        if (target?.connected && !target.via) sendTo(target, { type: "relayed", from: from.id, data: message.data });
+        break;
+      }
+
+      // Sou uma ponta: chegou algo de outra pessoa pela ponte.
+      case "relayed": {
+        const peer = peers.get(message.from);
+        if (peer?.via === from.id && !peer.closed && typeof message.data === "string") peer.dc.onmessage?.({ data: message.data });
+        break;
+      }
+
+    }
+
+  }
+
+  // Sou a ponte entre a e c.
+  function openBridge(a, c) {
+
+    const key = bridgeKey(a.id, c.id);
+    const info = peer => ({ id: peer.id, name: peer.name, joinedAt: peer.remote.joinedAt });
+
+    if (!bridges.has(key)) {
+
+      const bridge = { a: a.id, c: c.id, out: new Map() };
+
+      bridges.set(key, bridge);
+
+      // Trilhas que recebo de um, reenviadas ao outro.
+      for (const [source, target] of [[a, c], [c, a]]) {
+
+        if (!source.audioReady || !target.audioReady || !target.pc) continue;
+
+        const tracks = {
+          audio: source.audioTransceiver?.receiver.track,
+          video: source.videoTransceiver?.receiver.track,
+          shareAudio: source.shareAudioTransceiver?.receiver.track
+        };
+
+        bridge.out.set(target.id, BRIDGE_SLOTS
+          .filter(slot => tracks[slot])
+          .map(slot => ({ slot, of: source.id, transceiver: target.pc.addTransceiver(tracks[slot], { direction: "sendonly" }) })));
+
+      }
+
+      log(`Ponte aberta entre ${peerLabel(a)} e ${peerLabel(c)}.`);
+      addNote(`🔀 Você está servindo de ponte entre ${peerLabel(a)} e ${peerLabel(c)} (eles não conseguiram conexão direta).`);
+
+      sendTo(a, { type: "bridge", peer: info(c) });
+      sendTo(c, { type: "bridge", peer: info(a) });
+
+      for (const target of [a, c]) if (bridge.out.get(target.id)?.length) renegotiate(target);
+
+      return;
+
+    }
+
+    // Pediu de novo (a ponta não recebeu?): só repete o aviso.
+    sendTo(a, { type: "bridge", peer: info(c) });
+    sendTo(c, { type: "bridge", peer: info(a) });
+
+  }
+
+  // Os canais de mídia que repasso para target, por mid.
+  function relayMapFor(target) {
+
+    const map = {};
+
+    for (const bridge of bridges.values()) {
+      for (const item of bridge.out.get(target.id) || []) {
+        if (item.transceiver.mid) map[item.transceiver.mid] = { of: item.of, slot: item.slot };
+      }
+    }
+
+    return map;
+
+  }
+
+  // Refaz a oferta pelo canal de dados (uma por vez por conexão).
+  function renegotiate(peer) {
+
+    const run = async () => {
+
+      const pc = peer.pc;
+
+      if (!pc || peer.closed || !peer.connected) return;
+
+      await waitStable(pc);
+      await pc.setLocalDescription(await pc.createOffer());
+
+      // Antes da oferta: quem chega por qual canal (o canal de dados é em ordem).
+      sendTo(peer, { type: "bridge-media", map: relayMapFor(peer) });
+      sendTo(peer, { type: "sdp", description: pc.localDescription.toJSON() });
+
+      await waitStable(pc);
+
+    };
+
+    peer.renego = (peer.renego || Promise.resolve())
+      .then(run)
+      .catch(error => log("Erro ao renegociar a ponte: " + error.message));
+
+    return peer.renego;
+
+  }
+
+  function waitStable(pc, timeout = 10000) {
+
+    return new Promise(resolve => {
+
+      if (pc.signalingState === "stable") return resolve();
+
+      const done = () => {
+        clearTimeout(timer);
+        pc.removeEventListener("signalingstatechange", check);
+        resolve();
+      };
+      const check = () => { if (pc.signalingState === "stable") done(); };
+      const timer = setTimeout(done, timeout);
+
+      pc.addEventListener("signalingstatechange", check);
+
+    });
+
+  }
+
+  // Sou uma ponta: a ponte me ligou a member.
+  function acceptBridge(bridge, member) {
+
+    if (!room || !session?.room || !isDeviceId(member?.id) || member.id === me.id) return;
+
+    const existing = peers.get(member.id);
+
+    // Já conectados (direto ou por outra ponte). Sala privada: não precisa
+    // perguntar de novo; a ponte só é pedida depois de um aceite cuja
+    // conexão direta não abriu (recusa não pede ponte).
+    if (existing?.connected) return;
+
+    // Conexão direta ainda tentando: desiste dela.
+    for (const entry of [...roomRequests.values()]) {
+      if (entry.peer.id !== member.id) continue;
+      clearTimeout(entry.timer);
+      roomRequests.delete(entry.pairId);
+    }
+
+    if (existing) closePeer(existing);
+
+    const peer = newPeer({ id: member.id, name: member.name }, "bridge", null);
+
+    peer.via = bridge.id;
+    peer.room = true;
+    peer.remote.joinedAt = Number.isFinite(member.joinedAt) ? member.joinedAt : undefined;
+
+    // Canal "de mentira": o que eu mandar vai pela ponte.
+    const channel = {
+      readyState: "open",
+      get bufferedAmount() { return bridge.dc?.bufferedAmount || 0; },
+      send: data => sendTo(bridge, { type: "relay", to: member.id, data }),
+      close() { this.readyState = "closed"; }
+    };
+
+    peers.set(peer.id, peer);
+
+    setupDataChannel(peer, channel, () => {}, () => onPeerLeft(peer));
+
+    room.bridgeAsked.delete(peer.id);
+    room.retries.delete(peer.id);
+    room.warned.delete(peer.id);
+
+    addPeerToSession(peer);
+
+    // As trilhas repassadas que já tinham chegado.
+    for (const [mid, item] of bridge.relayIn) {
+      if (item.of !== peer.id) continue;
+      const track = bridge.pc?.getTransceivers().find(transceiver => transceiver.mid === mid)?.receiver.track;
+      if (track) receiveBridgedTrack(bridge, mid, track);
+    }
+
+    addNote(`🔀 ${peerLabel(peer)} conectado por ponte, através de ${peerLabel(bridge)} (a conexão direta não abriu).`);
+    log(`Ponte: ${peerLabel(peer)} via ${peerLabel(bridge)}.`);
+
+  }
+
+  // Chegou, pela ponte, uma trilha de outra pessoa.
+  function receiveBridgedTrack(bridge, mid, track) {
+
+    const item = bridge.relayIn.get(mid);
+    const peer = item && peers.get(item.of);
+
+    if (!peer || peer.via !== bridge.id || peer.closed) return;
+
+    if (item.slot === "video") {
+      peer.videoStream = new MediaStream([track]);
+      if (peer.remote.screen) renderScreens();
+      if (peer.remote.site) renderSitesOf(peer.id);
+      return;
+    }
+
+    attachRemoteAudio(peer, item.slot, track);
+
+  }
+
+  // Alguém saiu: fecha as pontes em que ele estava.
+  function peerGoneFromBridges(peer) {
+
+    // Ele era a minha ponte até outros: esses caem junto.
+    for (const other of connectedPeers()) {
+      if (other.via === peer.id) removePeer(other, `A ponte até ${peerLabel(other)} (por ${peerLabel(peer)}) caiu.`);
+    }
+
+    // Eu era a ponte dele: aviso a outra ponta e paro de repassar.
+    for (const [key, bridge] of bridges) {
+
+      if (bridge.a !== peer.id && bridge.c !== peer.id) continue;
+
+      bridges.delete(key);
+
+      const other = peers.get(bridge.a === peer.id ? bridge.c : bridge.a);
+
+      if (!other?.connected) continue;
+
+      sendTo(other, { type: "bridge-close", peer: peer.id });
+
+      for (const item of bridge.out.get(other.id) || []) {
+        item.transceiver.sender.replaceTrack(null).catch(() => {});
+        item.transceiver.direction = "inactive";
+      }
+
+      if (bridge.out.get(other.id)?.length) renegotiate(other);
+
+    }
+
   }
 
   // Minha presença na sala (o dono também diz se ela é pública).
@@ -15349,6 +15731,9 @@
     if (peer && peer.pairId === entry.pairId && !peer.connected) closePeer(peer);
 
     log("Sala: " + text);
+
+    // Não abriu (sem ser recusa): da próxima vez, pode ir por ponte.
+    if (retry) room?.failed.add(entry.peer.id);
 
     // Quem pediu (chegou depois) pede de novo, se ele ainda estiver na sala.
     const tries = room?.retries.get(entry.peer.id) || 0;
