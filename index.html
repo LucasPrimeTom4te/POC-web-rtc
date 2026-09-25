@@ -723,49 +723,106 @@
       color: var(--muted);
     }
 
+    /* Quem está aqui: coluna na direita, uma bolinha de cor por pessoa;
+       microfone, som e o que compartilha em ícones na borda de baixo. */
+    .people-rail {
+      flex: none;
+      order: 99;
+      width: 52px;
+      padding: 12px 0 16px;
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
     .avatars {
       display: flex;
-      gap: 6px;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
     }
 
     .avatar {
+      position: relative;
       flex: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px 4px 8px;
-      border-radius: 999px;
-      background: var(--surface-2);
-      border: 1px solid transparent;
-      font-size: 13px;
-      color: var(--text);
-      white-space: nowrap;
-      transition: box-shadow .15s;
-    }
-
-    .avatar .dot {
-      flex: none;
-      width: 10px;
-      height: 10px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       background: var(--person, var(--accent));
-    }
-
-    .avatar .icons {
-      font-size: 12px;
-      color: var(--muted);
+      box-shadow: 0 0 0 2px var(--surface);
+      transition: box-shadow .15s, opacity .15s;
     }
 
     .avatar.me {
-      border-color: var(--border);
-    }
-
-    .avatar.pending {
-      opacity: .6;
+      box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--muted);
     }
 
     .avatar.speaking {
-      box-shadow: 0 0 0 3px rgba(34, 197, 94, .45);
+      box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px rgba(34, 197, 94, .85);
+    }
+
+    .avatar.pending {
+      opacity: .4;
+    }
+
+    .avatar .badges {
+      position: absolute;
+      left: 50%;
+      bottom: -9px;
+      transform: translateX(-50%);
+      display: flex;
+    }
+
+    .badge-ic {
+      display: grid;
+      place-items: center;
+      width: 19px;
+      height: 19px;
+      margin: 0 -2px;
+      border-radius: 50%;
+      background: var(--surface-2);
+      border: 2px solid var(--surface);
+      color: var(--muted);
+    }
+
+    .badge-ic svg {
+      display: block;
+      width: 11px;
+      height: 11px;
+    }
+
+    .badge-ic.on {
+      color: var(--ok);
+    }
+
+    .badge-ic.off {
+      color: #f87171;
+    }
+
+    .badge-ic.share {
+      color: var(--accent);
+    }
+
+    .avatar .flag {
+      position: absolute;
+      top: -7px;
+      right: -9px;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    @media (min-width: 900px) {
+      .people-rail {
+        grid-column: -2 / -1;
+        grid-row: 1;
+        width: 60px;
+      }
+
+      .avatar {
+        width: 38px;
+        height: 38px;
+      }
     }
 
     .pill {
@@ -1446,7 +1503,7 @@
     }
 
     .avatar.muted-by-me {
-      border-color: rgba(245, 158, 11, .5);
+      opacity: .6;
     }
 
     /* Mouse dos outros. */
@@ -2915,12 +2972,12 @@
 
       .s-body {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 340px;
+        grid-template-columns: minmax(0, 1fr) 340px auto;
       }
 
       .session.chat-min .s-body,
       .session.chat-floating .s-body {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) auto;
       }
 
       .pane {
@@ -4668,9 +4725,7 @@
       <div id="peerName" class="s-sub">direto com o outro aparelho</div>
     </div>
 
-    <!-- Quem está aqui: uma bolinha com a cor de cada um. -->
     <div class="s-remote">
-      <span id="peerList" class="avatars"></span>
       <button id="remoteScreenPill" class="pill on hidden" title="Ver as telas">🖥️ Compartilhando a tela</button>
       <button id="unlockAudioBtn" class="pill warn hidden">🔈 Toque aqui para ouvir</button>
     </div>
@@ -4771,6 +4826,11 @@
       <div id="screenGrid" class="screen-grid"></div>
 
     </section>
+
+    <!-- Quem está aqui: uma bolinha com a cor de cada um, numa coluna na direita. -->
+    <aside id="peopleRail" class="people-rail" aria-label="Quem está aqui">
+      <div id="peerList" class="avatars"></div>
+    </aside>
 
     <section id="chatPane" class="pane chat-pane active">
 
@@ -7584,8 +7644,9 @@
 
   }
 
-  // Quem está aqui, no topo: uma bolinha com a cor de cada um, o nome e
-  // o que está fazendo (🎙️ microfone, 🖥️ tela, 🎵 áudio, 🔇 sem som).
+  // Quem está aqui, na coluna da direita: uma bolinha com a cor de cada um
+  // e, na borda de baixo, microfone, som e o que compartilha. O nome fica
+  // no tooltip; botão direito abre as configurações da pessoa.
   function renderRemoteState() {
 
     if (!session) return;
@@ -7600,33 +7661,45 @@
       element.className = "avatar " + extra;
       element.style.setProperty("--person", personColor(id));
 
-      const dot = document.createElement("span");
-      dot.className = "dot";
+      const badges = document.createElement("span");
+      badges.className = "badges";
 
-      const label = document.createElement("span");
-      label.textContent = name;
+      const badge = (icon, kind = "") => {
+        const item = document.createElement("span");
+        item.className = "badge-ic " + kind;
+        item.innerHTML = iconSvg(icon);
+        badges.append(item);
+      };
 
-      const icons = document.createElement("span");
-      icons.className = "icons";
-      icons.textContent = [
-        state.mic ? "🎙️" : "",
-        state.screen ? "🖥️" : "",
-        state.site ? "🌐" : "",
-        state.audioShare ? "🎵" : "",
-        state.speaker === false ? "🔇" : "",
-        state.text || ""
-      ].join("");
+      if (!extra.includes("pending")) {
+        badge(state.mic ? "mic" : "micOff", state.mic ? "on" : "off");
+        badge(state.speaker === false ? "volumeOff" : "volume", state.speaker === false ? "off" : "");
+        if (state.screen) badge("monitor", "share");
+        if (state.site) badge("site", "share");
+        if (state.audioShare) badge("music", "share");
+      }
 
+      element.append(badges);
+
+      if (state.text?.trim()) {
+        const flag = document.createElement("span");
+        flag.className = "flag";
+        flag.textContent = state.text.trim();
+        element.append(flag);
+      }
+
+      // Nome no balão (o title vira o tooltip).
       element.title = [
         name,
-        state.mic ? "microfone ligado" : "microfone desligado",
-        state.screen ? "compartilhando a tela" : "",
-        state.site ? "transmitindo um site" : "",
-        state.audioShare ? "compartilhando áudio" : "",
-        state.speaker === false ? "com o som desligado (não está ouvindo)" : ""
-      ].filter(Boolean).join(" · ");
+        [
+          state.mic ? "🎙️ microfone ligado" : "🤐 microfone desligado",
+          state.speaker === false ? "🔇 som desligado (não está ouvindo)" : "🔊 som ligado",
+          state.screen ? "🖥️ compartilhando a tela" : "",
+          state.site ? "🌐 transmitindo um site" : "",
+          state.audioShare ? "🎵 compartilhando áudio" : ""
+        ].filter(Boolean).join(" · ")
+      ].join("\n");
 
-      element.append(dot, label, icons);
       container.appendChild(element);
 
       return element;
@@ -7641,6 +7714,15 @@
       speaker: session.speakerOn
     }, "me");
 
+    session.myAvatar.role = "button";
+    session.myAvatar.tabIndex = 0;
+    session.myAvatar.title += "\nBotão direito: configurações";
+    session.myAvatar.onclick = () => setSettingsOpen(true);
+    session.myAvatar.oncontextmenu = event => {
+      event.preventDefault();
+      setSettingsOpen(true);
+    };
+
     for (const peer of connectedPeers()) {
 
       const muted = volumeOf(peer.id).muted;
@@ -7650,7 +7732,8 @@
         text: (muted ? "🔕" : "") + (peer.reconnect ? " ⚠️" : "")
       }, muted ? "muted-by-me" : "");
 
-      if (muted) peer.micPill.title += " · você mutou (só para você)";
+      if (muted) peer.micPill.title += "\n🔕 você mutou (só para você)";
+      peer.micPill.title += "\nBotão direito: volume e mais";
 
       // Tocar na bolinha: volume e mudo dessa pessoa (nas configurações).
       peer.micPill.role = "button";
@@ -7666,7 +7749,7 @@
     // Sala: quem ainda está conectando.
     for (const request of roomRequests.values()) {
       if (peers.get(request.peer.id)?.connected) continue;
-      avatar(request.peer.id, peerName(request.peer), { text: " ⏳" }, "pending");
+      avatar(request.peer.id, peerName(request.peer), { text: "⏳" }, "pending").title = peerName(request.peer) + "\n⏳ conectando";
     }
 
     renderPeople();
@@ -17648,7 +17731,7 @@
 
   }
 
-  // Botão direito na bolinha de alguém (no topo): como estou conectado
+  // Botão direito na bolinha de alguém (na coluna da direita): como estou conectado
   // com ela e as minhas configurações dela (só para mim).
   async function openPersonMenu(peer, x, y) {
 
