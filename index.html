@@ -7,11 +7,9 @@
   <meta name="theme-color" content="#0b1020">
   <title>WebRTC P2P com Supabase</title>
 
-  <!-- QR com o link do aparelho / da sala -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
-
-  <!-- Supabase Realtime: só para a troca inicial (sinalização) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"></script>
+  <!-- As bibliotecas vêm do jsDelivr (carregadas logo antes do script
+       principal, no fim da página): a conexão já começa a abrir aqui. -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 
   <style>
     :root {
@@ -5418,6 +5416,12 @@
 </div>
 
 
+<!-- QR com o link do aparelho / da sala -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
+
+<!-- Supabase Realtime: só para a troca inicial (sinalização) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"></script>
+
 <script>
 
   // Log técnico em memória (vai junto quando dá erro; aba 📜 Log do card de erros).
@@ -7933,7 +7937,6 @@
 
   const sfxState = {
     enabled: storageGet("rtc.sfx") !== "0",
-    context: null,
     quietUntil: 0,
     last: {}
   };
@@ -7977,6 +7980,16 @@
     sfxState.quietUntil = Date.now() + SFX_QUIET_MS;
   }
 
+  // Um AudioContext só para a página toda (efeitos, bipe do timer, ondinha
+  // e aviso de microfone desligado): o navegador limita quantos existem.
+  let pageAudio = null;
+
+  function sharedAudio() {
+    pageAudio ||= new AudioContext();
+    if (pageAudio.state === "suspended") pageAudio.resume().catch(() => {});
+    return pageAudio;
+  }
+
   function sfx(name) {
 
     const sound = SFX[name];
@@ -7992,8 +8005,7 @@
 
     try {
 
-      const context = sfxState.context ||= new AudioContext();
-      if (context.state === "suspended") context.resume().catch(() => {});
+      const context = sharedAudio();
 
       const start = context.currentTime + .01;
 
@@ -8039,7 +8051,7 @@
   const mutedWatch = {
     enabled: storageGet("rtc.mutedAlert") !== "0",
     stream: null,
-    context: null,
+    source: null,   // no AudioContext da página (sharedAudio)
     timer: null,
     starting: false,
     voiced: [],     // instantes com voz, na janela
@@ -8084,8 +8096,8 @@
     mutedWatch.timer = null;
     mutedWatch.stream?.getTracks().forEach(track => track.stop());
     mutedWatch.stream = null;
-    mutedWatch.context?.close().catch(() => {});
-    mutedWatch.context = null;
+    mutedWatch.source?.disconnect();
+    mutedWatch.source = null;
     mutedWatch.voiced = [];
     showMutedAlert(false);
 
@@ -8120,14 +8132,15 @@
         return;
       }
 
-      const context = new AudioContext();
+      const context = sharedAudio();
       const analyser = context.createAnalyser();
       analyser.fftSize = 1024;
-      context.createMediaStreamSource(stream).connect(analyser);
+      const source = context.createMediaStreamSource(stream);
+      source.connect(analyser);
       const samples = new Float32Array(analyser.fftSize);
 
       mutedWatch.stream = stream;
-      mutedWatch.context = context;
+      mutedWatch.source = source;
 
       mutedWatch.timer = setInterval(() => {
 
@@ -13578,19 +13591,19 @@
   // Três bipes (Web Audio: não precisa de arquivo).
   function beep() {
     try {
-      const context = new AudioContext();
+      const context = sharedAudio();
+      const peak = Math.max(0.0001, 0.25 * pageVolume);
       [0, 0.35, 0.7].forEach(start => {
         const osc = context.createOscillator();
         const gain = context.createGain();
         osc.frequency.value = 880;
         gain.gain.setValueAtTime(0.0001, context.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(0.25, context.currentTime + start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(peak, context.currentTime + start + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + start + 0.25);
         osc.connect(gain).connect(context.destination);
         osc.start(context.currentTime + start);
         osc.stop(context.currentTime + start + 0.3);
       });
-      setTimeout(() => context.close(), 1500);
     } catch {}
   }
 
@@ -16038,7 +16051,6 @@
   const WAVE_LEVEL = 0.01;
 
   const waveMeters = new WeakMap(); // faixa de áudio -> { analyser, samples }
-  let waveContext = null;
 
   // Nível (0–1, RMS) de uma faixa de áudio.
   function trackLevel(track) {
@@ -16049,10 +16061,10 @@
 
     if (!meter) {
       try {
-        waveContext ||= new AudioContext();
-        const analyser = waveContext.createAnalyser();
+        const context = sharedAudio();
+        const analyser = context.createAnalyser();
         analyser.fftSize = 512;
-        const source = waveContext.createMediaStreamSource(new MediaStream([track]));
+        const source = context.createMediaStreamSource(new MediaStream([track]));
         source.connect(analyser);
         track.addEventListener("ended", () => source.disconnect(), { once: true });
         meter = { analyser, samples: new Float32Array(analyser.fftSize) };
@@ -16062,7 +16074,8 @@
       }
     }
 
-    if (waveContext.state === "suspended") waveContext.resume().catch(() => {});
+    // Criado antes de um clique, o contexto nasce suspenso: tenta de novo.
+    sharedAudio();
 
     meter.analyser.getFloatTimeDomainData(meter.samples);
 
