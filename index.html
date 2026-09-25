@@ -5317,7 +5317,8 @@
       erased: new Set(),      // traços desfeitos (não voltam por um histórico atrasado)
       pendingEnd: null,       // fim da forma que estou arrastando (ainda não enviado)
       boardMode: "edit",      // "edit" (desenha) | "view" (só olha)
-      boards: new Map([[MAIN_BOARD, { id: MAIN_BOARD, title: "Quadro", version: 0, by: "" }]]),
+      // Na sala o quadro inicial só nasce se eu estiver sozinho (veja startRoomWorkspace).
+      boards: new Map(room ? [] : [[MAIN_BOARD, { id: MAIN_BOARD, title: "Quadro", version: 0, by: "" }]]),
       closedBoards: new Set(),// quadros fechados (não voltam por um histórico atrasado)
       displays: new Map(),    // janelas de imagem (veja "janelas de imagem")
       closedDisplays: new Set(),
@@ -5347,7 +5348,7 @@
     $("workspace").replaceChildren();
     $("screenGrid").replaceChildren();
     topZ = 1;
-    ensureBoard(MAIN_BOARD, "Quadro");
+    if (!room) ensureBoard(MAIN_BOARD, "Quadro");
     $("peerName").textContent = "direto com o outro aparelho";
     show("unlockAudioBtn", false);
     show("remoteDrawing", false);
@@ -5378,7 +5379,7 @@
 
     session.statsTimer = setInterval(updateAudioLevels, 250);
     session.roomSaveTimer = setInterval(saveRoomMemory, ROOM_SAVE_MS);
-    session.paletteTimer = setTimeout(ensurePalette, 2500);
+    if (!room) session.paletteTimer = setTimeout(ensurePalette, 2500);
 
   }
 
@@ -5509,6 +5510,12 @@
     if (!connectedPeers().length && !session.room) {
       goHome(notice, { id: peer.id, name: peer.name });
       return;
+    }
+
+    // Sala: fiquei sozinho antes de receber qualquer coisa: começo o meu.
+    if (session.room && !connectedPeers().length && !session.boards.size && !session.displays.size) {
+      ensureBoard(MAIN_BOARD, "Quadro");
+      ensurePalette();
     }
 
     sfx("leave");
@@ -6159,6 +6166,19 @@
 
   }
 
+  // Entrei na sala e não tem mais ninguém: o quadro inicial, o que eu
+  // tinha desta sala e a barra de ferramentas.
+  function startRoomWorkspace() {
+
+    if (!session?.room || session.roomRestoreChecked) return;
+
+    ensureBoard(MAIN_BOARD, "Quadro");
+    restoreRoomMemory();
+    ensurePalette();
+    initialCamera();
+
+  }
+
   // Entrei e não tem mais ninguém: volta o que eu tinha desta sala.
   function restoreRoomMemory() {
 
@@ -6606,7 +6626,19 @@
 
   }
 
-  $("micBtn").onclick = async () => {
+  // Ligado ou desligado da última vez: volta assim ao entrar de novo.
+  const MIC_KEY = "rtc.micOn";
+
+  // Uma vez por sessão, quando o áudio fica pronto.
+  function restoreMic() {
+    if (!session || session.micRestored || !audioReady() || $("micBtn").disabled) return;
+    session.micRestored = true;
+    if (storageGet(MIC_KEY) === "1" && !session.micTrack) toggleMic();
+  }
+
+  $("micBtn").onclick = () => toggleMic();
+
+  async function toggleMic() {
 
     if (!session || !audioReady()) return;
 
@@ -6656,10 +6688,12 @@
 
     }
 
+    storageSet(MIC_KEY, session.micTrack ? "1" : "0");
+
     renderLocalControls();
     sendState();
 
-  };
+  }
 
   $("speakerBtn").onclick = () => {
 
@@ -6724,6 +6758,7 @@
 
     $("micBtn").disabled = !ready;
     $("micBtn").classList.toggle("on", micOn);
+    if (ready) setTimeout(restoreMic, 0);
     $("micBtn").classList.remove("speaking");
     $("micLabel").textContent = !ready
       ? "Preparando áudio…"
@@ -15650,8 +15685,10 @@
       room.announced = true;
 
       // Sozinho: restaura a memória da sala. Com gente: o histórico vem deles.
+      // Com gente, não crio quadro nem barra de ferramentas: vêm os deles
+      // (senão cada um que chega trazia um quadro vazio e mais uma barra).
       if (session) {
-        if (members.length === 1) restoreRoomMemory();
+        if (members.length === 1) startRoomWorkspace();
         else session.roomRestoreChecked = true;
       }
 
