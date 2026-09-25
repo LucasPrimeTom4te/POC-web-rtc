@@ -2881,7 +2881,7 @@
       font-size: 14px;
     }
 
-    .widget input:not([type="checkbox"]):not([type="range"]),
+    .widget input:not([type="checkbox"]):not([type="range"]):not([type="color"]),
     .widget select,
     .widget textarea {
       min-width: 0;
@@ -3275,6 +3275,54 @@
       .widget .task-remove {
         opacity: .6;
       }
+    }
+
+    /* 🖌️ Ferramentas flutuantes */
+
+    .palette-tools {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+
+    .widget .palette-tools .tool {
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      padding: 0;
+    }
+
+    .palette-tools .tool svg,
+    .widget .palette-mode svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .palette-tools .tool.active,
+    .widget .palette-mode.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .palette-colors {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .widget .palette-colors .swatch {
+      width: 26px;
+      height: 26px;
+      padding: 0;
+    }
+
+    .widget .palette-mode {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
     /* 📻 Rádio */
@@ -4093,10 +4141,11 @@
           <button id="addDiceBtn" class="tool" title="Sorteio: dado, moeda ou nome (todos veem o mesmo resultado)"><span class="ic" data-icon="dice"></span><span class="rail-label">Sorteio</span></button>
           <button id="addTasksBtn" class="tool" title="Lista de tarefas: todos adicionam e marcam"><span class="ic" data-icon="tasks"></span><span class="rail-label">Tarefas</span></button>
           <button id="addRadioBtn" class="tool" title="Rádio: música ambiente tocando para todos (cada um no seu volume)"><span class="ic" data-icon="radio"></span><span class="rail-label">Rádio</span></button>
+          <button id="addPaletteBtn" class="tool" title="Barra de ferramentas flutuante: pode ter várias; cada um que mexe muda só a própria ferramenta"><span class="ic" data-icon="palette"></span><span class="rail-label">Ferramentas</span></button>
         </div>
         <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
         <button id="boardModeBtn" class="tool active"><span id="boardModeIcon" class="ic"></span><span id="boardModeLabel" class="btn-label">Editando</span></button>
-        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo, jogos, código, enquete, timer, sorteio, tarefas e rádio" aria-expanded="false">⋯</button>
+        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo, jogos, código, enquete, timer, sorteio, tarefas, rádio e ferramentas" aria-expanded="false">⋯</button>
       </div>
 
       <!-- Espaço infinito: arrastar o fundo move, pinça / Ctrl+roda dá zoom. -->
@@ -8071,6 +8120,7 @@
     dice: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r=".8"/><circle cx="16" cy="8" r=".8"/><circle cx="12" cy="12" r=".8"/><circle cx="8" cy="16" r=".8"/><circle cx="16" cy="16" r=".8"/>',
     tasks: '<path d="m3 6 2 2 3-3"/><path d="m3 13 2 2 3-3"/><path d="M11 7h10"/><path d="M11 14h10"/><path d="M11 20h10"/>',
     radio: '<rect x="2" y="8" width="20" height="13" rx="2"/><path d="m6 8 11-5"/><circle cx="8" cy="14.5" r="2.5"/><path d="M15 13h3"/><path d="M15 16h3"/>',
+    palette: '<circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1a1.6 1.6 0 0 1 1.6-1.7h2A5.6 5.6 0 0 0 22 11c0-5-4.5-9-10-9z"/>',
     smile: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/>',
     game: '<rect x="2" y="6" width="20" height="12" rx="4"/><path d="M6 12h4"/><path d="M8 10v4"/><circle cx="15.5" cy="11" r=".6"/><circle cx="18" cy="13.5" r=".6"/>',
     mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/>',
@@ -8885,6 +8935,8 @@
     $("toolTrayIcon").innerHTML = iconSvg(TOOLS[session.tool].icon);
     $("toolTrayBtn").title = "Ferramenta: " + TOOLS[session.tool].label;
 
+    renderPalettes();
+
   }
 
   // Celular: cada botão da barra abre a sua bandeja (uma de cada vez).
@@ -8932,9 +8984,7 @@
       button.title = "Cor";
 
       button.onclick = () => {
-        session.color = color;
-        if (session.tool === "eraser") setTool("pen");
-        renderSwatches();
+        pickColor(color);
         setTray(null);
       };
 
@@ -8952,21 +9002,26 @@
     $("sizeDot").style.setProperty("--dot", session.color);
     $("colorTrayDot").style.setProperty("--now", session.color);
 
+    renderPalettes();
+
   }
 
-  $("customColor").oninput = () => {
+  function pickColor(color) {
     if (!session) return;
-    session.color = $("customColor").value;
+    session.color = color;
     if (session.tool === "eraser") setTool("pen");
     renderSwatches();
-  };
+  }
 
-  $("sizeRange").oninput = () => {
+  function pickSize(size) {
     if (!session) return;
-    session.size = Number($("sizeRange").value);
-    session.width = sizeToWidth(session.size);
+    session.size = size;
+    session.width = sizeToWidth(size);
     renderSwatches();
-  };
+  }
+
+  $("customColor").oninput = () => pickColor($("customColor").value);
+  $("sizeRange").oninput = () => pickSize(Number($("sizeRange").value));
 
   // Atalhos: letra da ferramenta e Ctrl+Z (fora de campos de texto).
   document.addEventListener("keydown", event => {
@@ -9012,6 +9067,8 @@
 
     $("boardPane").classList.toggle("viewing", !editing);
 
+    renderPalettes();
+
   }
 
 
@@ -9038,8 +9095,8 @@
   const isMine = entry => entry.owner === me.id;
 
   // kind: "image" | "site" | "youtube" (veja "janelas de site e de vídeo") | "code"
-  // | "poll" | "timer" | "dice" | "tasks" | "radio" (veja "ferramentas da sala").
-  const DISPLAY_KINDS = ["image", "site", "youtube", "code", "poll", "timer", "dice", "tasks", "radio"];
+  // | "poll" | "timer" | "dice" | "tasks" | "radio" | "palette" (veja "ferramentas da sala").
+  const DISPLAY_KINDS = ["image", "site", "youtube", "code", "poll", "timer", "dice", "tasks", "radio", "palette"];
 
   function ensureDisplay(id, owner, kind = "image") {
 
@@ -9546,7 +9603,7 @@
    * { kind: "youtube", video, play }.
    */
 
-  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻", poll: "📊", timer: "⏱️", dice: "🎲", tasks: "✅", radio: "📻" };
+  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻", poll: "📊", timer: "⏱️", dice: "🎲", tasks: "✅", radio: "📻", palette: "🖌️" };
 
   const CAN_SITE = CAN_SHARE_SCREEN && ("RestrictionTarget" in window || "CropTarget" in window);
   const YT_ID = /^[\w-]{11}$/;
@@ -10963,7 +11020,8 @@
     timer: { icon: "⏱️", name: "Timer", note: "um timer", w: 420, ar: [4, 3], create: createTimerWidget, render: renderTimerWidget, clean: cleanTimerKey },
     dice: { icon: "🎲", name: "Sorteio", note: "um sorteio", w: 440, ar: [1, 1], create: createDiceWidget, render: renderDiceWidget, clean: cleanDiceKey, prune: pruneDice },
     tasks: { icon: "✅", name: "Tarefas", note: "uma lista de tarefas", w: 420, ar: [4, 5], create: createTasksWidget, render: renderTasksWidget, clean: cleanTaskKey },
-    radio: { icon: "📻", name: "Rádio", note: "o rádio", w: 520, ar: [1, 1], create: createRadioWidget, render: renderRadioWidget, clean: cleanRadioKey }
+    radio: { icon: "📻", name: "Rádio", note: "o rádio", w: 520, ar: [1, 1], create: createRadioWidget, render: renderRadioWidget, clean: cleanRadioKey },
+    palette: { icon: "🖌️", name: "Ferramentas", note: "uma barra de ferramentas", w: 250, ar: [9, 10], create: createPaletteWidget, render: renderPaletteWidget, clean: () => undefined, label: "cada um muda só a sua" }
   };
 
   const WIDGET_KEYS_MAX = 400;
@@ -10974,6 +11032,7 @@
   $("addDiceBtn").onclick = () => openWidget("dice");
   $("addTasksBtn").onclick = () => openWidget("tasks");
   $("addRadioBtn").onclick = () => openWidget("radio");
+  $("addPaletteBtn").onclick = () => openWidget("palette");
 
   function openWidget(kind) {
 
@@ -11096,7 +11155,7 @@
 
     const widget = WIDGETS[entry.kind];
 
-    view.label.textContent = `${widget.icon} ${widget.name}` + (isMine(entry) ? "" : ` de ${ownerNameOf(entry)}`) + " · todos mexem";
+    view.label.textContent = `${widget.icon} ${widget.name}` + (isMine(entry) ? "" : ` de ${ownerNameOf(entry)}`) + " · " + (widget.label || "todos mexem");
     view.el.style.setProperty("--person", personColor(entry.owner));
     renderWinSwitcher();
 
@@ -12065,6 +12124,95 @@
     for (const entry of session?.displays.values() || []) if (entry.kind === "radio") renderDisplay(entry.id);
   }
 
+
+
+  /* 🖌️ Ferramentas flutuantes
+   * A mesma barra da esquerda, numa janela (pode ter várias). A janela
+   * aparece para todos, mas não tem estado comum: cada um que toca muda
+   * só a própria ferramenta, cor e espessura (as de session), e todas as
+   * barras (a da esquerda e as flutuantes) mostram o que é seu.
+   */
+
+  function createPaletteWidget(entry, view) {
+
+    view.tools = el("div", "palette-tools");
+    view.tools.append(...Object.entries(TOOLS).map(([name, tool]) => {
+      const button = widgetButton("", () => setTool(name));
+      button.innerHTML = iconSvg(tool.icon);
+      button.dataset.tool = name;
+      button.title = `${tool.label} (${tool.key.toUpperCase()})`;
+      return button;
+    }));
+
+    const undo = widgetButton("", () => undoMine());
+    undo.innerHTML = iconSvg("undo");
+    undo.title = "Desfazer o meu último traço (Ctrl+Z)";
+    view.tools.append(undo);
+
+    view.colors = el("div", "palette-colors");
+    view.colors.append(...BOARD_COLORS.map(color => {
+      const button = widgetButton("", () => pickColor(color), "swatch");
+      button.style.background = color;
+      button.dataset.color = color;
+      button.title = "Cor";
+      return button;
+    }));
+
+    const custom = el("label", "color-pick");
+    custom.title = "Outra cor";
+    view.customColor = el("input");
+    view.customColor.type = "color";
+    view.customColor.setAttribute("aria-label", "Outra cor");
+    view.customColor.oninput = () => pickColor(view.customColor.value);
+    custom.append(view.customColor);
+    view.colors.append(custom);
+    view.customPick = custom;
+
+    const size = el("label", "size-pick");
+    size.title = "Espessura";
+    view.sizeDot = el("span", "size-dot");
+    view.sizeRange = el("input");
+    view.sizeRange.type = "range";
+    view.sizeRange.min = "1";
+    view.sizeRange.max = "10";
+    view.sizeRange.setAttribute("aria-label", "Espessura");
+    view.sizeRange.oninput = () => pickSize(Number(view.sizeRange.value));
+    size.append(view.sizeDot, view.sizeRange);
+
+    view.modeBtn = widgetButton("", () => $("boardModeBtn").click(), "palette-mode");
+
+    view.box.append(view.tools, view.colors, size, view.modeBtn, el("div", "widget-hint", "Mudar aqui muda só a sua ferramenta."));
+
+  }
+
+  function renderPaletteWidget(entry, view) {
+
+    for (const button of view.tools.querySelectorAll("[data-tool]")) {
+      button.classList.toggle("active", button.dataset.tool === session.tool);
+      button.setAttribute("aria-pressed", button.dataset.tool === session.tool);
+    }
+
+    for (const button of view.colors.querySelectorAll("[data-color]")) button.classList.toggle("active", button.dataset.color === session.color);
+
+    const custom = !BOARD_COLORS.includes(session.color);
+    view.customPick.classList.toggle("active", custom);
+    if (custom) view.customColor.value = session.color;
+
+    view.sizeRange.value = session.size;
+    view.sizeDot.style.setProperty("--size", Math.round(3 + session.size * 1.8) + "px");
+    view.sizeDot.style.setProperty("--dot", session.color);
+
+    const editing = session.boardMode === "edit";
+    view.modeBtn.innerHTML = iconSvg(editing ? "pen" : "eye");
+    view.modeBtn.append(editing ? " Editando" : " Visualizando");
+    view.modeBtn.classList.toggle("active", editing);
+    view.modeBtn.title = $("boardModeBtn").title;
+
+  }
+
+  function renderPalettes() {
+    for (const entry of session?.displays.values() || []) if (entry.kind === "palette") renderDisplay(entry.id);
+  }
 
   /* ---- reações flutuantes ---- */
 
