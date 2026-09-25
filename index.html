@@ -1774,6 +1774,170 @@
       font-weight: 700;
     }
 
+    .win-head button.warn {
+      color: #fca5a5;
+    }
+
+    /* Janelas de site e de vídeo: o conteúdo ocupa o corpo; o dono do site
+       tem a barra de endereço em cima. */
+    .site-win .win-body,
+    .yt-win .win-body {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      background: #0b1220;
+    }
+
+    .site-bar {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .site-bar input,
+    .site-ask input {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 9px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .site-status {
+      flex: none;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .site-status.live {
+      background: #dc2626;
+      color: white;
+    }
+
+    /* Vídeo: o link no meio da janela (antes do primeiro e ao trocar). */
+    .site-ask {
+      position: absolute;
+      z-index: 3;
+      left: 50%;
+      top: 50%;
+      display: flex;
+      gap: 6px;
+      width: min(440px, calc(100% - 24px));
+      padding: 10px;
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .45);
+      transform: translate(-50%, -50%);
+    }
+
+    /* Element Capture pede um contexto de empilhamento próprio e plano. */
+    .site-frame {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      isolation: isolate;
+      transform-style: flat;
+      background: #000;
+    }
+
+    .site-win .site-frame:has(iframe) {
+      background: white;
+    }
+
+    .site-frame iframe,
+    .site-frame video,
+    .site-frame .yt-holder {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    .site-frame video {
+      object-fit: contain;
+    }
+
+    /* Os outros não clicam no site nem no player. */
+    .site-block {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      cursor: not-allowed;
+    }
+
+    .site-tap {
+      position: absolute;
+      z-index: 2;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 10px 16px !important;
+      font-size: 15px !important;
+    }
+
+    .site-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 24px;
+      background: #0b1220;
+      color: #cbd5e1;
+      font-size: 14px;
+      line-height: 1.45;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .site-win .site-bar ~ .site-overlay {
+      top: 46px;
+    }
+
+    .site-badge {
+      position: absolute;
+      z-index: 2;
+      left: 8px;
+      bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: calc(100% - 16px);
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, .72);
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+
+    .site-badge input {
+      width: 90px;
+      pointer-events: auto;
+    }
+
+    /* No vídeo o aviso sai da frente quando o mouse não está na janela. */
+    .yt-win:not(:hover) .site-badge.fade {
+      opacity: 0;
+    }
+
     /* Texto no quadro: a caixa aparece onde tocou. */
     .board-text-input {
       position: fixed;
@@ -2821,10 +2985,12 @@
         <div class="tray" data-tray="more">
           <button id="addBoardBtn" class="tool" title="Novo quadro (aparece para todos)">➕ Quadro</button>
           <button id="addDisplayBtn" class="tool" title="Mostrar uma imagem para todos (dá para trocar quando quiser)">🖼️ Imagem</button>
+          <button id="addSiteBtn" class="tool" title="Abrir um site: todos veem ao vivo, só você mexe">🌐 Site</button>
+          <button id="addVideoBtn" class="tool" title="Mostrar um vídeo do YouTube para todos, com som (só você controla)">▶️ YouTube</button>
         </div>
         <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
         <button id="boardModeBtn" class="tool active">✏️<span class="btn-label"> Editando</span></button>
-        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro e imagem" aria-expanded="false">⋯</button>
+        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site e vídeo" aria-expanded="false">⋯</button>
       </div>
 
       <!-- Espaço infinito: arrastar o fundo move, pinça / Ctrl+roda dá zoom. -->
@@ -3164,6 +3330,20 @@
           tela do computador.
         </li>
         <li>
+          <strong>🌐 Site</strong>: um site de outro endereço, dentro de um
+          <code>iframe</code>, não deixa a página ver nem repetir o que
+          acontece lá dentro. Por isso só quem abriu mexe, e os outros
+          recebem um vídeo ao vivo dessa janela: a captura da própria aba,
+          recortada no site (<em>Region Capture</em>,
+          do Chrome e do Edge no computador), pelo mesmo canal de vídeo da tela.
+        </li>
+        <li>
+          <strong>▶️ YouTube</strong>: cada um carrega o mesmo vídeo no player
+          do YouTube (com som e na qualidade de cada um). Quem abriu controla
+          e avisa pelo canal de dados quando dá play, pausa, pula ou muda a
+          velocidade; os outros seguem.
+        </li>
+        <li>
           <strong>Compartilhar áudio</strong> usa a mesma janela de escolha,
           mas só o som segue: o vídeo é descartado na hora. Vai por um segundo
           canal de áudio, separado do microfone. O som de uma guia funciona no
@@ -3363,7 +3543,7 @@
       shareAudio: null,       // <audio> com o áudio que ele compartilha
       images: new Set(),      // imagens (janelas de imagem) que ele já tem
       videoStream: null,      // tela dele, quando compartilha
-      remote: { known: false, mic: false, speaker: true, screen: false, audioShare: false, want: { height: 0, fps: 0 }, device: null, name: "" },
+      remote: { known: false, mic: false, speaker: true, screen: false, site: null, audioShare: false, want: { height: 0, fps: 0 }, device: null, name: "" },
       reconnect: null         // { startedAt, giveUp } enquanto a conexão está caída
     };
 
@@ -3651,6 +3831,7 @@
       screenAutoFrom: null,   // a aba Telas abriu sozinha: de onde veio (para voltar)
       chatMin: storageGet("rtc.chatMin") === "1", // PC: chat minimizado
       shareAudioTrack: null,  // áudio que estou compartilhando (sem vídeo)
+      screenFor: null,        // screenTrack é um site: o id da janela (null = a tela)
       color: room ? colorFor(me.id) : role === "host" ? BOARD_COLORS[1] : BOARD_COLORS[2],
       size: 2,                // espessura no controle (1–10)
       width: sizeToWidth(2),
@@ -3738,6 +3919,7 @@
         log(`Canal de vídeo (tela) de ${peerLabel(peer)} recebido.`);
         peer.videoStream = new MediaStream([event.track]);
         if (peer.remote.screen) renderScreens();
+        if (peer.remote.site) renderSitesOf(peer.id);
         return;
       }
 
@@ -3783,6 +3965,11 @@
       if (peer.role === "guest") requestSync();
     } else {
       for (const entry of session.displays.values()) if (isMine(entry)) publishDisplay(entry, peer);
+    }
+
+    // Onde estão os meus vídeos do YouTube (tocando ou não).
+    for (const entry of session.displays.values()) {
+      if (isMine(entry) && entry.kind === "youtube") sendPlay(entry, peer);
     }
 
     if (peer.role === "host") {
@@ -3932,6 +4119,7 @@
     renderConnectionState();
     renderRemoteState();
     renderRememberButton();
+    renderSitesOf();
 
   }
 
@@ -4148,6 +4336,10 @@
 
       case "display-close":
         closeDisplay(message.id, peer);
+        break;
+
+      case "yt":
+        receivePlay(peer, message);
         break;
 
       case "img-data":
@@ -4374,7 +4566,7 @@
       boards: [...session.boards.values()].map(({ id, title, version, by }) => ({ id, title, version, by })),
       closed: [...session.closedBoards],
       erased: [...session.erased],
-      displays: [...session.displays.values()].map(({ id, owner, current, rev }) => ({ id, owner, current, rev })),
+      displays: [...session.displays.values()].map(displayData),
       closedDisplays: [...session.closedDisplays],
       layout: [...session.layout].map(([id, entry]) => ({ id, ...pickLayout(entry), rev: entry.rev, by: entry.by }))
     };
@@ -4884,7 +5076,8 @@
       type: "state",
       mic: !!session.micTrack,
       speaker: session.speakerOn,
-      screen: !!session.screenTrack,
+      screen: sharingScreen(),
+      site: session.screenFor,
       audioShare: !!session.shareAudioTrack
     };
 
@@ -4912,7 +5105,7 @@
     $("speakerIcon").textContent = session.speakerOn ? "🔊" : "🔇";
     $("speakerLabel").textContent = session.speakerOn ? "Som: ligado" : "Som: desligado";
 
-    const sharing = !!session.screenTrack;
+    const sharing = sharingScreen();
 
     $("screenBtn").disabled = !canShareScreen();
     $("screenBtn").classList.toggle("on", sharing);
@@ -4928,10 +5121,17 @@
 
   }
 
-  function handleRemoteState(peer, { mic, speaker, screen = false, audioShare = false }) {
+  function handleRemoteState(peer, { mic, speaker, screen = false, site = null, audioShare = false }) {
 
     const remote = peer.remote;
     const who = peerLabel(peer);
+
+    // Transmitindo um site: o vídeo vai para a janela do site, não é "a tela".
+    site = typeof site === "string" && BOARD_ID.test(site) ? site : null;
+    if (site) screen = false;
+
+    const siteChanged = site !== remote.site;
+    remote.site = site;
 
     // Avisa só mudanças (não o estado inicial).
     if (remote.known) {
@@ -4982,6 +5182,7 @@
 
     renderRemoteState();
     if (screenChanged) renderScreens(screen ? peer : null);
+    if (siteChanged) renderSitesOf(peer.id);
 
   }
 
@@ -5012,6 +5213,7 @@
       icons.textContent = [
         state.mic ? "🎙️" : "",
         state.screen ? "🖥️" : "",
+        state.site ? "🌐" : "",
         state.audioShare ? "🎵" : "",
         state.speaker === false ? "🔇" : "",
         state.text || ""
@@ -5021,6 +5223,7 @@
         name,
         state.mic ? "microfone ligado" : "microfone desligado",
         state.screen ? "compartilhando a tela" : "",
+        state.site ? "transmitindo um site" : "",
         state.audioShare ? "compartilhando áudio" : "",
         state.speaker === false ? "com o som desligado (não está ouvindo)" : ""
       ].filter(Boolean).join(" · ");
@@ -5034,7 +5237,8 @@
 
     session.myAvatar = avatar(me.id, me.name + " (você)", {
       mic: !!session.micTrack,
-      screen: !!session.screenTrack,
+      screen: sharingScreen(),
+      site: session.screenFor,
       audioShare: !!session.shareAudioTrack,
       speaker: session.speakerOn
     }, "me");
@@ -5200,11 +5404,14 @@
 
   /* ---------------- compartilhar tela ---------------- */
 
+  // Estou compartilhando a tela (e não transmitindo um site).
+  const sharingScreen = () => !!session?.screenTrack && !session.screenFor;
+
   $("screenBtn").onclick = async () => {
 
     if (!session || !canShareScreen()) return;
 
-    if (session.screenTrack) {
+    if (sharingScreen()) {
       stopScreenShare();
       return;
     }
@@ -5225,17 +5432,11 @@
         return;
       }
 
-      // Tela tem texto: prioriza nitidez em vez de movimento.
-      track.contentHint = "detail";
+      // Um vídeo por pessoa: a tela entra no lugar do site.
+      if (session.screenFor) toast("🌐 A transmissão do site parou: agora os outros veem a sua tela.");
 
-      // "Parar compartilhamento" do próprio navegador.
-      track.onended = () => stopScreenShare();
-
-      session.screenTrack = track;
       announceMyScreenWindow();
-      await replaceTrackEverywhere("video", track);
-      connectedPeers().forEach(applyScreenQuality);
-      renderScreens();
+      await setVideoTrack(track);
 
       log("Compartilhando a tela.");
 
@@ -5246,31 +5447,53 @@
         log("Erro ao compartilhar a tela: " + error.message);
         toast("🖥️ Não foi possível compartilhar a tela: " + error.message);
       }
-      return;
 
     }
-
-    renderLocalControls();
-    sendState();
 
   };
 
   async function stopScreenShare() {
 
-    const track = session?.screenTrack;
+    if (!sharingScreen()) return;
 
-    if (!track) return;
-
-    session.screenTrack = null;
-    track.onended = null;
-    track.stop();
-
-    await replaceTrackEverywhere("video", null).catch(() => {});
-
-    renderScreens();
+    await setVideoTrack(null);
 
     log("Parou de compartilhar a tela.");
 
+  }
+
+  // A minha trilha de vídeo (uma só, para todos): a tela ou um site
+  // (siteId = a janela do site). null para de mandar.
+  async function setVideoTrack(track, siteId = null) {
+
+    const old = session.screenTrack;
+    const oldSite = session.screenFor;
+
+    if (old && old !== track) {
+      old.onended = null;
+      old.stop();
+    }
+
+    session.screenTrack = track;
+    session.screenFor = track ? siteId : null;
+
+    if (track) {
+      // Tela tem texto: prioriza nitidez em vez de movimento.
+      track.contentHint = "detail";
+      // "Parar compartilhamento" do próprio navegador.
+      track.onended = () => {
+        if (session?.screenTrack === track) setVideoTrack(null);
+      };
+    }
+
+    await replaceTrackEverywhere("video", track).catch(() => {});
+
+    if (!session) return;
+
+    if (track) connectedPeers().forEach(applyScreenQuality);
+
+    renderScreens();
+    for (const id of new Set([oldSite, session.screenFor])) if (id) renderDisplay(id);
     renderLocalControls();
     sendState();
 
@@ -5996,7 +6219,7 @@
       : $("workspace");
 
     if (view.el.parentNode !== parent) {
-      parent.appendChild(view.el);
+      moveInto(parent, view);
       view.video?.play().catch(() => {});
     }
 
@@ -6057,7 +6280,11 @@
   function createWindow({ id, kind, extraButtons = [], closable = false, onClose = null }) {
 
     const el = document.createElement("div");
-    el.className = "win " + (kind === "board" ? "board-win" : kind === "display" ? "display-win" : "screen-tile");
+    el.className = "win " + (kind === "board" ? "board-win"
+      : kind === "display" ? "display-win"
+      : kind === "site" ? "display-win site-win"
+      : kind === "youtube" ? "display-win yt-win"
+      : "screen-tile");
     el.dataset.id = id;
 
     const head = document.createElement("div");
@@ -6081,7 +6308,7 @@
 
     const bubble = document.createElement("span");
     bubble.className = "bubble";
-    bubble.textContent = kind === "board" ? "🎨" : kind === "display" ? "🖼️" : "🖥️";
+    bubble.textContent = kind === "board" ? "🎨" : kind === "display" ? "🖼️" : kind === "site" ? "🌐" : kind === "youtube" ? "▶️" : "🖥️";
 
     const view = { id, kind, el, head, body, label, aspect: kind === "board" ? 1 : 16 / 9 };
 
@@ -6178,6 +6405,7 @@
 
     if (document.fullscreenElement === view.el) document.exitFullscreen().catch(() => {});
 
+    view.cleanup?.();
     view.el.remove();
     session.windows.delete(id);
 
@@ -6291,7 +6519,26 @@
   // Sem tela cheia de verdade: a janela vai para a página (fora do zoom do mundo).
   function enterWindowFull(view) {
     view.el.classList.add("win-full");
-    document.querySelector(".session").appendChild(view.el);
+    moveInto(document.querySelector(".session"), view);
+  }
+
+  // Muda a janela de lugar. moveBefore (Chrome) não recarrega o que tem
+  // dentro (site, YouTube); onde não existe, a janela remonta o player.
+  function moveInto(parent, view) {
+
+    const connected = view.el.isConnected;
+
+    if (connected && parent.moveBefore) {
+      try {
+        parent.moveBefore(view.el, null);
+        return;
+      } catch {}
+    }
+
+    parent.appendChild(view.el);
+
+    if (connected) view.remount?.();
+
   }
 
   function exitWindowFull(view) {
@@ -7442,18 +7689,26 @@
 
   const isMine = entry => entry.owner === me.id;
 
-  function ensureDisplay(id, owner) {
+  // kind: "image" | "site" | "youtube" (veja "janelas de site e de vídeo").
+  const DISPLAY_KINDS = ["image", "site", "youtube"];
+
+  function ensureDisplay(id, owner, kind = "image") {
 
     if (!BOARD_ID.test(id) || !isDeviceId(owner) || session.closedDisplays.has(id)) return null;
 
     let entry = session.displays.get(id);
 
     if (!entry) {
-      entry = { id, owner, current: null, rev: 0 };
+      entry = { id, owner, kind, current: null, url: null, video: null, play: null, rev: 0 };
       session.displays.set(id, entry);
     }
 
-    if (!session.windows.has("display:" + id)) createDisplayWindow(entry);
+    if (entry.kind !== kind || entry.owner !== owner) return null;
+
+    if (!session.windows.has("display:" + id)) {
+      if (kind === "image") createDisplayWindow(entry);
+      else createSiteWindow(entry);
+    }
 
     return entry;
 
@@ -7559,6 +7814,13 @@
 
   }
 
+  // "você", o nome de quem abriu a janela, ou "alguém".
+  function ownerNameOf(entry) {
+    if (isMine(entry)) return "você";
+    const name = peerLabel(peers.get(entry.owner));
+    return name === "O outro lado" ? "alguém" : name;
+  }
+
   function renderDisplay(id) {
 
     const entry = session.displays.get(id);
@@ -7566,9 +7828,10 @@
 
     if (!entry || !view) return;
 
+    if (entry.kind !== "image") return renderSite(entry, view);
+
     const mine = isMine(entry);
-    const owner = mine ? null : peers.get(entry.owner);
-    const ownerName = mine ? "você" : peerLabel(owner) === "O outro lado" ? "alguém" : peerLabel(owner);
+    const ownerName = ownerNameOf(entry);
     const image = entry.current && session.images.get(entry.current);
 
     view.label.textContent = mine ? "🖼️ Sua imagem" : `🖼️ Imagem de ${ownerName}`;
@@ -7715,7 +7978,7 @@
 
     for (const target of targets) {
       if (entry.current) sendImage(target, entry.current);
-      sendTo(target, { type: "display-set", id: entry.id, owner: entry.owner, current: entry.current, rev: entry.rev });
+      sendTo(target, { type: "display-set", ...displayData(entry) });
     }
 
   }
@@ -7812,6 +8075,9 @@
 
   }
 
+  // O que todos precisam saber de uma janela (vai no "display-set" e no histórico).
+  const displayData = ({ id, owner, kind, current, url, video, rev }) => ({ id, owner, kind, current, url, video, rev });
+
   // "display-set": ao vivo vem do dono; do histórico, de quem estava lá.
   function applyDisplay(data, from) {
 
@@ -7822,20 +8088,29 @@
     // Ao vivo, só o dono muda a janela dele.
     if (from && owner !== from.id) return;
 
-    const entry = ensureDisplay(data.id, owner);
+    // Versão antiga da página: só havia imagem.
+    const kind = DISPLAY_KINDS.includes(data.kind) ? data.kind : "image";
+
+    const entry = ensureDisplay(data.id, owner, kind);
 
     if (!entry || data.rev < entry.rev) return;
 
     const current = typeof data.current === "string" && BOARD_ID.test(data.current) ? data.current : null;
 
-    const isNew = entry.rev === 0 && !entry.current && from;
+    const isNew = entry.rev === 0 && !entry.current && !entry.url && !entry.video && from;
 
     entry.rev = data.rev;
     entry.current = current;
+    entry.url = kind === "site" ? cleanSiteUrl(data.url) : null;
+    entry.video = kind === "youtube" && YT_ID.test(data.video ?? "") ? data.video : null;
 
     renderDisplay(entry.id);
 
-    if (isNew && data.rev === 0) addNote(`🖼️ ${peerLabel(from)} abriu uma janela de imagem`);
+    if (isNew && data.rev === 0) {
+      addNote(kind === "site" ? `🌐 ${peerLabel(from)} abriu um site para todos verem`
+        : kind === "youtube" ? `▶️ ${peerLabel(from)} abriu um vídeo do YouTube`
+        : `🖼️ ${peerLabel(from)} abriu uma janela de imagem`);
+    }
 
   }
 
@@ -7851,9 +8126,12 @@
     if (fromPeer && fromPeer.id !== entry.owner && ownerHere) return;
 
     if (!fromPeer && !isMine(entry) && ownerHere) {
-      toast(`🖼️ Só ${peerLabel(peers.get(entry.owner))} fecha esta janela. Você pode minimizar (–).`);
+      toast(`${DISPLAY_ICONS[entry.kind]} Só ${peerLabel(peers.get(entry.owner))} fecha esta janela. Você pode minimizar (–).`);
       return;
     }
+
+    // Transmitindo este site: para.
+    if (session.screenFor === id) setVideoTrack(null);
 
     session.closedDisplays.add(id);
     session.displays.delete(id);
@@ -7863,6 +8141,837 @@
     removeWindow("display:" + id);
 
     if (!fromPeer) send({ type: "display-close", id });
+
+  }
+
+
+  /* ---- janelas de site e de vídeo (YouTube) ---- */
+
+  /*
+   * 🌐 Site: só quem abriu vê o site de verdade (num iframe) e mexe nele.
+   * Um site de outro domínio não deixa a página ler nem repetir o que
+   * acontece lá dentro, então o que os outros veem é um vídeo ao vivo
+   * da janela: a captura desta aba (getDisplayMedia) recortada no site
+   * (Region Capture, cropTo). Vai pelo
+   * mesmo canal de vídeo da tela: cada um transmite uma coisa por vez
+   * ("state" diz qual site: site = id da janela). Só Chrome e Edge no
+   * computador conseguem transmitir; qualquer um assiste.
+   *
+   * ▶️ YouTube: todos carregam o mesmo vídeo no player do YouTube (com
+   * som, na qualidade de cada um). Só quem abriu controla: ele avisa
+   * { type: "yt", playing, t, rate } quando muda e a cada YT_BEAT_MS;
+   * os outros seguem (e não conseguem clicar no player).
+   *
+   * Ficam em session.displays, como as imagens: { kind: "site", url } ou
+   * { kind: "youtube", video, play }.
+   */
+
+  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️" };
+
+  const CAN_SITE = CAN_SHARE_SCREEN && ("RestrictionTarget" in window || "CropTarget" in window);
+  const YT_ID = /^[\w-]{11}$/;
+  const YT_BEAT_MS = 5000;
+  const YT_VOLUME_KEY = "rtc.ytVolume";
+
+  $("addSiteBtn").hidden = !CAN_SITE;
+  $("addSiteBtn").onclick = () => openSiteWindow("site");
+  $("addVideoBtn").onclick = () => openSiteWindow("youtube");
+
+  // Endereço http(s) (typed: o que a pessoa digitou, pode vir sem https://).
+  // A própria página não: dentro do iframe ela sairia da caixa de areia.
+  function cleanSiteUrl(value, typed = false) {
+
+    if (typeof value !== "string" || !value.trim() || value.length > 2000) return null;
+
+    let text = value.trim();
+
+    if (typed && !/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) text = "https://" + text;
+
+    try {
+      const url = new URL(text);
+      if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+      if (url.origin === location.origin) return null;
+      return url.href;
+    } catch {
+      return null;
+    }
+
+  }
+
+  // Link (ou id) de vídeo do YouTube -> { video, start } (null se não for).
+  function parseYouTube(text) {
+
+    const value = String(text || "").trim();
+
+    if (YT_ID.test(value)) return { video: value, start: 0 };
+
+    let url;
+
+    try {
+      url = new URL(/^[a-z]+:\/\//i.test(value) ? value : "https://" + value);
+    } catch {
+      return null;
+    }
+
+    const host = url.hostname.replace(/^(www|m|music)\./, "");
+    let video = null;
+
+    if (host === "youtu.be") {
+      video = url.pathname.split("/")[1];
+    } else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+      video = url.searchParams.get("v") || url.pathname.match(/^\/(?:embed|shorts|live|v)\/([\w-]{11})/)?.[1];
+    }
+
+    if (!video || !YT_ID.test(video)) return null;
+
+    // t=90, t=90s, t=1m30s
+    const time = (url.searchParams.get("t") || url.searchParams.get("start") || "").match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+    const start = time ? (+time[1] || 0) * 3600 + (+time[2] || 0) * 60 + (+time[3] || 0) : 0;
+
+    return { video, start };
+
+  }
+
+  function openSiteWindow(kind, youtube = null) {
+
+    if (!session) return null;
+
+    setTray(null);
+
+    const id = me.id.slice(0, 8) + "-" + randomId();
+    const winId = "display:" + id;
+    const entry = ensureDisplay(id, me.id, kind);
+
+    publishDisplay(entry);
+
+    // Na frente, no lugar mais livre da minha vista, para todos.
+    const base = defaultLayout(winId);
+    const place = freeSpot({ ...base, w: kind === "site" ? 960 : 720 }, winId, kind === "site" ? 16 / 10 : 16 / 9);
+    setLayout(winId, { x: place.x, y: place.y, w: place.w, z: ++topZ });
+
+    renderDisplay(id);
+    revealWindow(winId);
+
+    if (youtube) setVideo(entry, youtube);
+    else setTimeout(() => session?.windows.get(winId)?.input?.focus(), 50);
+
+    return entry;
+
+  }
+
+  function createSiteWindow(entry) {
+
+    const id = entry.id;
+    const winId = "display:" + id;
+    const mine = isMine(entry);
+    const site = entry.kind === "site";
+
+    const extra = [];
+    let view = null;
+
+    if (site && mine) {
+      // Transmitir / parar (o site continua aberto aqui).
+      const liveBtn = windowButton("📡 Transmitir", "", () => {
+        if (session.screenFor === id) setVideoTrack(null);
+        else startSiteLive(id);
+      });
+      extra.push(liveBtn);
+    } else if (site) {
+      extra.push(windowButton("↗", "Abrir este site numa aba sua (aí você mexe, mas sozinho)", () => {
+        if (entry.url) window.open(entry.url, "_blank", "noopener,noreferrer");
+      }));
+    } else if (mine) {
+      const change = windowButton("🔄 Trocar vídeo", "Mostrar outro vídeo para todos", () => {
+        view.asking = !view.asking || !entry.video;
+        renderSite(entry, view);
+        if (view.asking) view.input.focus();
+      });
+      change.classList.add("display-change");
+      extra.push(change);
+    } else {
+      extra.push(windowButton("🔊", "", () => {
+        view.localMuted = !view.localMuted;
+        view.needsTap = false;
+        applyLocalVolume(view);
+        renderSite(entry, view);
+      }));
+    }
+
+    const fullBtn = windowButton("⛶", "Tela cheia (só aqui)", () => toggleWindowFull(view));
+    extra.push(fullBtn);
+
+    view = createWindow({
+      id: winId,
+      kind: entry.kind,
+      extraButtons: extra,
+      closable: true,
+      onClose: () => closeDisplay(id)
+    });
+
+    view.displayId = id;
+    view.headBtn = extra[0];
+    view.aspect = site ? 16 / 10 : 16 / 9;
+    view.body.style.setProperty("--ar", site ? "16 / 10" : "16 / 9");
+
+    // O que aparece: o site (dono), o vídeo ao vivo (os outros) ou o player.
+    const frame = document.createElement("div");
+    frame.className = "site-frame";
+    view.frame = frame;
+
+    const overlay = document.createElement("div");
+    overlay.className = "site-overlay";
+    view.overlay = overlay;
+
+    const badge = document.createElement("div");
+    badge.className = "site-badge";
+    badge.hidden = true;
+    view.badge = badge;
+
+    // Dono: campo para o endereço (site: sempre em cima; vídeo: no meio, quando pede).
+    if (mine) {
+
+      const form = document.createElement("form");
+      form.className = site ? "site-bar" : "site-ask";
+
+      const status = document.createElement("span");
+      status.className = "site-status";
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.inputMode = "url";
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.placeholder = site ? "Endereço do site (ex.: pt.wikipedia.org)" : "Cole o link do vídeo do YouTube";
+      input.setAttribute("aria-label", input.placeholder);
+
+      const go = document.createElement("button");
+      go.className = "tool primary";
+      go.textContent = site ? "Abrir" : "Mostrar";
+
+      form.onsubmit = event => {
+        event.preventDefault();
+        submitSite(entry, view, input.value);
+      };
+
+      // Digitar aqui não mexe no quadro nem arrasta a vista.
+      form.addEventListener("pointerdown", event => event.stopPropagation());
+      form.addEventListener("keydown", event => event.stopPropagation());
+
+      if (site) form.append(status, input, go);
+      else form.append(input, go);
+
+      view.form = form;
+      view.status = status;
+      view.input = input;
+
+    }
+
+    if (site && mine) {
+
+      const iframe = document.createElement("iframe");
+      iframe.title = "Site";
+      iframe.allow = "autoplay; fullscreen; clipboard-write; encrypted-media; picture-in-picture";
+      iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation");
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      frame.append(iframe);
+      view.iframe = iframe;
+
+    } else if (site) {
+
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      frame.append(video);
+      view.video = video;
+
+      const fitRatio = () => {
+        if (!video.videoWidth || !video.videoHeight) return;
+        view.aspect = video.videoWidth / video.videoHeight;
+        view.body.style.setProperty("--ar", `${video.videoWidth} / ${video.videoHeight}`);
+        positionWindow(view);
+      };
+
+      video.addEventListener("loadedmetadata", fitRatio);
+      video.addEventListener("resize", fitRatio);
+      video.ondblclick = () => fullBtn.click();
+
+    }
+
+    // Os outros não clicam no site / no player (e o mouse avisa isso).
+    if (!mine) {
+      const block = document.createElement("div");
+      block.className = "site-block";
+      block.ondblclick = () => fullBtn.click();
+      frame.append(block);
+    }
+
+    if (!site) {
+
+      const saved = Number(storageGet(YT_VOLUME_KEY));
+      view.volume = saved >= 0 && saved <= 100 && storageGet(YT_VOLUME_KEY) !== null ? saved : 100;
+      view.localMuted = false;
+
+      // Os outros: volume só aqui, e o toque para liberar o som.
+      if (!mine) {
+
+        const range = document.createElement("input");
+        range.type = "range";
+        range.min = "0";
+        range.max = "100";
+        range.value = view.volume;
+        range.title = "Volume do vídeo (só aqui)";
+        range.setAttribute("aria-label", range.title);
+        range.addEventListener("pointerdown", event => event.stopPropagation());
+        range.oninput = () => {
+          view.volume = Number(range.value);
+          view.localMuted = false;
+          storageSet(YT_VOLUME_KEY, view.volume);
+          applyLocalVolume(view);
+          renderSite(entry, view);
+        };
+        view.range = range;
+
+        view.badgeText = document.createElement("span");
+        badge.classList.add("fade");
+        badge.append(view.badgeText, range);
+
+        const tap = windowButton("🔊 Toque para ouvir o vídeo", "O navegador só deixa tocar com som depois de um toque", () => {
+          view.needsTap = false;
+          view.localMuted = false;
+          applyLocalVolume(view);
+          view.player?.playVideo();
+          renderSite(entry, view);
+        }, "primary site-tap");
+        tap.hidden = true;
+        frame.append(tap);
+        view.tap = tap;
+
+      }
+
+      // O dono confere a cada segundo se pausou, pulou ou mudou a velocidade.
+      if (mine) view.timer = setInterval(() => ownerTick(entry, view), 1000);
+
+      view.remount = () => {
+        if (!view.player) return;
+        const resume = mine && view.ready ? playerState(view, entry) : null;
+        mountYouTube(view, entry, resume);
+      };
+
+    }
+
+    view.cleanup = () => {
+      clearInterval(view.timer);
+      clearTimeout(view.autoplayTimer);
+      destroyPlayer(view);
+    };
+
+    const children = [frame, overlay, badge];
+    if (view.form) children.unshift(view.form);
+    view.body.prepend(...children);
+
+    enableCursorSurface(view.body, () => winId, () => siteContentRect(view));
+
+    return view;
+
+  }
+
+  // Onde está o conteúdo (para o mouse de cada um cair no mesmo ponto).
+  function siteContentRect(view) {
+    if (view.video?.srcObject) return videoContentRect(view.video);
+    return view.frame.getBoundingClientRect();
+  }
+
+  function renderSitesOf(peerId = null) {
+    for (const entry of session?.displays.values() || []) {
+      if (entry.kind !== "image" && (!peerId || entry.owner === peerId)) renderDisplay(entry.id);
+    }
+  }
+
+  function renderSite(entry, view) {
+
+    const mine = isMine(entry);
+    const name = ownerNameOf(entry);
+    const owner = peers.get(entry.owner);
+    const ownerHere = mine || !!owner?.connected;
+
+    view.el.style.setProperty("--person", personColor(entry.owner));
+
+    let message = "";
+
+    if (entry.kind === "site") {
+
+      const live = mine ? session.screenFor === entry.id : ownerHere && owner.remote.site === entry.id;
+
+      view.label.textContent = mine
+        ? `🌐 Seu site · ${live ? "📡 ao vivo para todos" : "⏸️ os outros não estão vendo"}`
+        : `🌐 Site de ${name} · só ${name} mexe`;
+
+      if (mine) {
+
+        view.headBtn.hidden = !entry.url;
+        view.headBtn.textContent = live ? "⏸️ Parar" : "📡 Transmitir";
+        view.headBtn.title = live
+          ? "Parar de transmitir (o site continua aberto aqui)"
+          : "Transmitir: todos veem esta janela ao vivo, só você mexe";
+        view.headBtn.classList.toggle("warn", live);
+
+        view.status.textContent = live ? "📡 Ao vivo" : entry.url ? "⏸️ Parado" : "🌐";
+        view.status.classList.toggle("live", live);
+        view.status.title = live
+          ? "Todos estão vendo esta janela ao vivo. Só você mexe no site. (O som do site não vai.)"
+          : "Os outros não estão vendo agora. Use 📡 Transmitir.";
+
+        if (entry.url && view.iframe.dataset.url !== entry.url) {
+          view.iframe.dataset.url = entry.url;
+          view.iframe.src = entry.url;
+        }
+
+        if (document.activeElement !== view.input) view.input.value = entry.url || "";
+
+        message = entry.url ? "" : "Digite o endereço aí em cima. Todos vão ver ao vivo o que acontecer nesta janela, mas só você mexe. " +
+          "Alguns sites não deixam ser abertos dentro de outra página (fica em branco ou dá erro). O som do site não vai: para vídeo com som, use ▶️ YouTube.";
+
+      } else {
+
+        view.headBtn.hidden = !entry.url;
+
+        const track = live ? owner.videoStream?.getVideoTracks()[0] : null;
+
+        if (track && view.video.srcObject?.getVideoTracks()[0] !== track) {
+          view.video.srcObject = new MediaStream([track]);
+          view.video.play().catch(() => {});
+        } else if (!track && view.video.srcObject) {
+          view.video.srcObject = null;
+        }
+
+        view.video.hidden = !track;
+
+        message = !entry.url ? `${name} está escolhendo o site…`
+          : !ownerHere ? `${name} saiu. O site parou de ser transmitido.`
+          : !live ? `⏸️ ${name} não está transmitindo este site agora.`
+          : !track ? "⏳ Conectando ao vídeo…"
+          : "";
+
+        view.badge.hidden = !track;
+        view.badge.textContent = `👀 Você está assistindo · só ${name} mexe neste site`;
+
+      }
+
+    } else {
+
+      view.label.textContent = mine ? "▶️ Seu vídeo · você controla" : `▶️ Vídeo de ${name} · só ${name} controla`;
+
+      // Vídeo novo (ou o primeiro): carrega.
+      if (entry.video && view.mountedVideo !== entry.video) {
+        view.error = null;
+        if (view.player && view.ready) {
+          view.mountedVideo = entry.video;
+          if (mine) view.player.loadVideoById({ videoId: entry.video, startSeconds: view.pendingStart || 0 });
+          else view.player.cueVideoById(entry.video);
+          view.pendingStart = 0;
+        } else {
+          mountYouTube(view, entry);
+        }
+      }
+
+      view.frame.hidden = !entry.video;
+
+      if (mine) {
+        view.form.hidden = entry.video && !view.asking;
+        view.headBtn.hidden = !entry.video;
+        view.headBtn.textContent = view.asking ? "✕ Cancelar" : "🔄 Trocar vídeo";
+      } else {
+        const silent = view.localMuted || view.volume === 0;
+        view.headBtn.textContent = silent ? "🔇" : "🔊";
+        view.headBtn.title = silent ? "Ligar o som do vídeo (só aqui)" : "Tirar o som do vídeo (só aqui)";
+        view.tap.hidden = !view.needsTap || !entry.video;
+        view.badge.hidden = !entry.video;
+        view.badgeText.textContent = `▶️ Só ${name} controla`;
+      }
+
+      message = view.error
+        || (entry.video ? "" : mine ? "" : `${name} está escolhendo o vídeo…`);
+
+    }
+
+    view.overlay.hidden = !message;
+    view.overlay.textContent = message;
+
+    renderWinSwitcher();
+
+  }
+
+  // O dono digitou um endereço (ou link do YouTube).
+  function submitSite(entry, view, text) {
+
+    const youtube = parseYouTube(text);
+
+    if (entry.kind === "youtube") {
+      if (!youtube) return toast("▶️ Isso não parece um link de vídeo do YouTube.");
+      setVideo(entry, youtube);
+      return;
+    }
+
+    // Vídeo do YouTube no 🌐 Site: vira janela de vídeo (com som para todos).
+    if (youtube) {
+      closeDisplay(entry.id);
+      openSiteWindow("youtube", youtube);
+      toast("▶️ É um vídeo do YouTube: abri como vídeo, com som para todos.");
+      return;
+    }
+
+    const url = cleanSiteUrl(text, true);
+
+    if (!url) return toast("🌐 Esse endereço não dá para abrir aqui.");
+
+    view.input.blur();
+
+    const wasLive = session.screenFor === entry.id;
+
+    entry.url = url;
+    entry.rev++;
+
+    publishDisplay(entry);
+    renderSite(entry, view);
+
+    // Ainda no toque: o navegador só abre a janela de escolha assim.
+    if (!wasLive) startSiteLive(entry.id);
+
+  }
+
+  // Começa a transmitir a janela do site: captura esta aba e recorta no site.
+  async function startSiteLive(id) {
+
+    const view = session?.windows.get("display:" + id);
+
+    if (!view?.frame) return;
+
+    if (!canShareScreen()) {
+      toast("🌐 Espere a conexão ficar pronta e toque em 📡 Transmitir.");
+      return;
+    }
+
+    const { fps } = screenQuality.send;
+    let track = null;
+
+    try {
+
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: fps, max: fps } },
+        audio: false,
+        preferCurrentTab: true,
+        selfBrowserSurface: "include",
+        surfaceSwitching: "exclude",
+        monitorTypeSurfaces: "exclude"
+      });
+
+      track = stream.getVideoTracks()[0];
+
+      // Só o site: Region Capture (o retângulo do site na tela). Element
+      // Capture só onde não houver Region Capture: em testes ele não mandou
+      // imagem dentro desta página.
+      if ("CropTarget" in window) {
+        await track.cropTo(await CropTarget.fromElement(view.frame));
+      } else {
+        await track.restrictTo(await RestrictionTarget.fromElement(view.frame));
+      }
+
+    } catch (error) {
+
+      track?.stop();
+
+      if (error.name !== "NotAllowedError") {
+        log("Erro ao transmitir o site: " + error.message);
+        toast(track
+          ? "🌐 Para transmitir o site, escolha “esta aba” na janela do navegador."
+          : "🌐 Não foi possível transmitir o site: " + error.message);
+      }
+
+      return;
+
+    }
+
+    if (!session?.displays.has(id)) {
+      track.stop();
+      return;
+    }
+
+    if (sharingScreen()) toast("🖥️ Parou de compartilhar a tela: agora os outros veem o site.");
+
+    await setVideoTrack(track, id);
+
+    log("Transmitindo o site.");
+
+  }
+
+  /* YouTube */
+
+  let youTubeApi = null;
+
+  function loadYouTubeApi() {
+
+    if (window.YT?.Player) return Promise.resolve(window.YT);
+
+    youTubeApi ??= new Promise((resolve, reject) => {
+
+      const previous = window.onYouTubeIframeAPIReady;
+
+      window.onYouTubeIframeAPIReady = () => {
+        previous?.();
+        resolve(window.YT);
+      };
+
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.onerror = () => {
+        youTubeApi = null;
+        script.remove();
+        reject(new Error("não carregou"));
+      };
+
+      document.head.append(script);
+
+    });
+
+    return youTubeApi;
+
+  }
+
+  // O dono escolheu um vídeo: todos carregam.
+  function setVideo(entry, { video, start }) {
+
+    const view = session.windows.get("display:" + entry.id);
+
+    if (!view || !isMine(entry)) return;
+
+    entry.video = video;
+    entry.play = null;
+    entry.rev++;
+
+    view.pendingStart = start;
+    view.asking = false;
+    view.input.value = "";
+    view.input.blur();
+
+    publishDisplay(entry);
+    renderSite(entry, view);
+
+  }
+
+  function destroyPlayer(view) {
+    view.mountToken = null;
+    view.ready = false;
+    try {
+      view.player?.destroy();
+    } catch {}
+    view.player = null;
+  }
+
+  // resume: onde o dono estava (a janela mudou de lugar e o player recarregou).
+  async function mountYouTube(view, entry, resume = null) {
+
+    destroyPlayer(view);
+
+    const token = view.mountToken = {};
+    const mine = isMine(entry);
+
+    view.mountedVideo = entry.video;
+
+    let YT;
+
+    try {
+      YT = await loadYouTubeApi();
+    } catch {
+      if (view.mountToken !== token) return;
+      view.error = "Não foi possível carregar o YouTube (sem internet ou bloqueado).";
+      view.mountedVideo = null;
+      renderSite(entry, view);
+      return;
+    }
+
+    if (view.mountToken !== token || session?.windows.get(view.id) !== view) return;
+
+    const holder = document.createElement("div");
+    view.frame.querySelector(".yt-holder, iframe")?.remove();
+    holder.className = "yt-holder";
+    view.frame.prepend(holder);
+
+    const start = Math.floor(resume ? resume.t : mine ? view.pendingStart || 0 : 0);
+
+    view.pendingStart = 0;
+
+    view.player = new YT.Player(holder, {
+      width: "100%",
+      height: "100%",
+      videoId: entry.video,
+      playerVars: {
+        autoplay: mine && (!resume || resume.playing) ? 1 : 0,
+        start,
+        controls: mine ? 1 : 0,
+        disablekb: mine ? 0 : 1,
+        fs: mine ? 1 : 0,
+        rel: 0,
+        playsinline: 1,
+        iv_load_policy: 3
+      },
+      events: {
+        onReady: () => {
+          if (view.mountToken !== token) return;
+          view.ready = true;
+          applyLocalVolume(view);
+          if (mine) sendPlay(entry);
+          else applyPlay(view, entry);
+        },
+        onStateChange: event => {
+          if (view.mountToken !== token) return;
+          if (mine) sendPlay(entry);
+          else viewerStateChanged(view, entry, event.data);
+        },
+        onPlaybackRateChange: () => {
+          if (mine && view.mountToken === token) sendPlay(entry);
+        },
+        onError: event => {
+          if (view.mountToken !== token) return;
+          view.error = [101, 150].includes(event.data)
+            ? "O dono deste vídeo não deixa ele ser exibido fora do YouTube."
+            : "O YouTube não conseguiu tocar este vídeo.";
+          renderSite(entry, view);
+        }
+      }
+    });
+
+  }
+
+  function applyLocalVolume(view) {
+
+    const player = view.player;
+
+    if (!view.ready || !player) return;
+
+    player.setVolume(view.volume);
+
+    if (view.localMuted) player.mute();
+    else if (!view.needsTap) player.unMute();
+
+  }
+
+  // O que o player do dono está fazendo agora.
+  function playerState(view, entry) {
+
+    const player = view.player;
+    const state = player.getPlayerState();
+
+    return {
+      // Carregando depois de pular: continua valendo o que era.
+      playing: state === 1 || (state === 3 && !!entry.play?.playing),
+      t: player.getCurrentTime() || 0,
+      rate: player.getPlaybackRate() || 1
+    };
+
+  }
+
+  function sendPlay(entry, peer = null) {
+
+    const view = session?.windows.get("display:" + entry.id);
+
+    if (!isMine(entry) || !entry.video || !view?.ready) return;
+
+    const state = playerState(view, entry);
+
+    entry.play = { ...state, got: performance.now() };
+
+    const message = { type: "yt", id: entry.id, video: entry.video, playing: state.playing, t: +state.t.toFixed(2), rate: state.rate };
+
+    if (peer) sendTo(peer, message);
+    else send(message);
+
+  }
+
+  // Pausou, pulou ou mudou a velocidade sem o player avisar: manda de novo.
+  function ownerTick(entry, view) {
+
+    if (!view.ready || !entry.play) return;
+
+    const last = entry.play;
+    const now = playerState(view, entry);
+    const elapsed = performance.now() - last.got;
+    const expected = last.t + (last.playing ? elapsed / 1000 * last.rate : 0);
+
+    if (now.playing !== last.playing || now.rate !== last.rate || Math.abs(now.t - expected) > 1.2 || elapsed > YT_BEAT_MS) {
+      sendPlay(entry);
+    }
+
+  }
+
+  function receivePlay(peer, message) {
+
+    const entry = session.displays.get(message.id);
+
+    if (!entry || entry.kind !== "youtube" || entry.owner !== peer.id || message.video !== entry.video) return;
+    if (!Number.isFinite(message.t) || !Number.isFinite(message.rate)) return;
+
+    entry.play = {
+      playing: !!message.playing,
+      t: Math.max(0, message.t),
+      rate: clamp(message.rate, 0.25, 2),
+      got: performance.now()
+    };
+
+    const view = session.windows.get("display:" + entry.id);
+
+    if (view) applyPlay(view, entry);
+
+  }
+
+  // Os outros: vão para onde o dono está.
+  function applyPlay(view, entry) {
+
+    const player = view.player;
+
+    if (!view.ready || !player || !entry.play || isMine(entry)) return;
+
+    const { playing, t, rate, got } = entry.play;
+    const target = t + (playing ? (performance.now() - got) / 1000 * rate : 0);
+    const state = player.getPlayerState();
+
+    if (player.getPlaybackRate() !== rate) player.setPlaybackRate(rate);
+
+    if (Math.abs((player.getCurrentTime() || 0) - target) > (playing ? 1.5 : 0.5)) player.seekTo(target, true);
+
+    if (playing && state !== 1 && state !== 3) {
+
+      player.playVideo();
+
+      // O navegador não deixou tocar com som: toca mudo e pede um toque.
+      clearTimeout(view.autoplayTimer);
+      view.autoplayTimer = setTimeout(() => {
+        if (!view.ready || !entry.play?.playing || [1, 3].includes(view.player.getPlayerState())) return;
+        view.needsTap = true;
+        view.player.mute();
+        view.player.playVideo();
+        renderSite(entry, view);
+      }, 2500);
+
+    } else if (!playing && (state === 1 || state === 3)) {
+      player.pauseVideo();
+    }
+
+  }
+
+  function viewerStateChanged(view, entry, state) {
+
+    // Tocou sem o dono estar tocando (seekTo começa a tocar): pausa.
+    if (state === 1 && !entry.play?.playing) {
+      view.player.pauseVideo();
+      return;
+    }
+
+    // Tocando, mas mudo sem eu ter pedido: falta o toque.
+    if (state === 1 && view.player.isMuted() && !view.localMuted && !view.needsTap) {
+      view.needsTap = true;
+      renderSite(entry, view);
+    }
 
   }
 
@@ -7878,7 +8987,7 @@
 
     const sharers = [];
 
-    if (session.screenTrack) {
+    if (sharingScreen()) {
       sharers.push({ id: me.id, name: "Você (o que os outros veem)", track: session.screenTrack, mine: true });
     }
 
@@ -8074,19 +9183,21 @@
 
     };
 
-    const tagsOf = ({ mic, screen, audioShare, speaker }) => [
+    const tagsOf = ({ mic, screen, site, audioShare, speaker }) => [
       mic ? "🎙️ mic" : "🤐 mudo",
       screen ? "🖥️ tela" : "",
+      site ? "🌐 site" : "",
       audioShare ? "🎵 áudio" : "",
       speaker ? "" : "🔇 sem som"
     ].filter(Boolean);
 
     person(me.id, me.name + " (você)", tagsOf({
       mic: !!session.micTrack,
-      screen: !!session.screenTrack,
+      screen: sharingScreen(),
+      site: session.screenFor,
       audioShare: !!session.shareAudioTrack,
       speaker: session.speakerOn
-    }), !!session.screenTrack);
+    }), sharingScreen());
 
     for (const peer of connectedPeers()) {
       const tags = tagsOf(peer.remote);
@@ -8445,6 +9556,7 @@
 
     if (view.kind === "board") return view.canvas.getBoundingClientRect();
     if (view.kind === "display") return imageContentRect(view);
+    if (view.kind === "site" || view.kind === "youtube") return siteContentRect(view);
     return videoContentRect(view.video);
 
   }
