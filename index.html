@@ -13169,10 +13169,40 @@
 
   const soundSrc = sound => sound.url || session.images.get(sound.file)?.url || null;
 
+  // Cards de som que silenciei (só aqui): não ouço e não toco. Guardado por card.
+  const SOUND_MUTED_KEY = "rtc.mutedSounds";
+  const SOUND_MUTED_MAX = 50;
+
+  const mutedSoundCards = (() => {
+    try {
+      const list = JSON.parse(storageGet(SOUND_MUTED_KEY) || "[]");
+      return new Set(Array.isArray(list) ? list.filter(id => typeof id === "string").slice(-SOUND_MUTED_MAX) : []);
+    } catch {
+      return new Set();
+    }
+  })();
+
+  const soundCardMuted = entry => mutedSoundCards.has(entry.id);
+
+  function toggleSoundCardMute(entry) {
+    if (soundCardMuted(entry)) mutedSoundCards.delete(entry.id);
+    else {
+      mutedSoundCards.add(entry.id);
+      stopSoundsOf(entry.id);
+    }
+    storageSet(SOUND_MUTED_KEY, JSON.stringify([...mutedSoundCards].slice(-SOUND_MUTED_MAX)));
+    renderDisplay(entry.id);
+  }
+
   const soundCanEdit = (entry, sound) => sound.by === me.id;
   const soundCanRemove = (entry, sound) => sound.by === me.id || isMine(entry);
 
   function createSoundsWidget(entry, view) {
+
+    view.muteBar = el("div", "widget-actions");
+    view.muteHint = el("span", "widget-hint");
+    view.muteBtn = widgetButton("", () => toggleSoundCardMute(entry));
+    view.muteBar.append(view.muteHint, view.muteBtn);
 
     view.list = el("ul", "sounds-list widget-scroll");
     view.renaming = null;
@@ -13255,11 +13285,17 @@
 
     };
 
-    view.box.append(view.list, form, view.hint);
+    view.box.append(view.muteBar, view.list, form, view.hint);
 
   }
 
   function renderSoundsWidget(entry, view) {
+
+    const muted = soundCardMuted(entry);
+    view.muteBtn.textContent = muted ? "🔇 Silenciado" : "🔊 Silenciar";
+    view.muteBtn.title = muted ? "Voltar a ouvir e tocar este card (só aqui)" : "Parar de ouvir os sons deste card (só aqui); aí você também não toca";
+    view.muteBtn.classList.toggle("active", muted);
+    view.muteHint.textContent = muted ? "Você não ouve nem toca estes sons." : "";
 
     // Mudando o nome de um: não refaz a lista agora.
     if (view.renaming && view.list.contains(document.activeElement)) return;
@@ -13280,8 +13316,9 @@
       const playing = soundPlaying(entry, sound.key);
       const play = widgetButton("", () => playSoundForAll(entry, sound.key), "sound-play");
       play.append(el("span", "", playing ? "⏹" : "▶"), el("span", "sound-name", sound.name));
-      play.disabled = !src;
-      play.title = !src ? "Recebendo o arquivo…"
+      play.disabled = !src || muted;
+      play.title = muted ? "Você silenciou este card: toque em 🔇 para voltar"
+        : !src ? "Recebendo o arquivo…"
         : playing ? "Parar para todos"
         : `Tocar para todos · adicionado por ${sound.by === me.id ? "você" : peers.has(sound.by) ? peerLabel(peers.get(sound.by)) : "alguém que saiu"}`;
       play.classList.toggle("playing", playing);
@@ -13588,6 +13625,8 @@
   // ▶ toca uma vez para todos; ⏹ (apertar enquanto toca) para para todos.
   function playSoundForAll(entry, key) {
 
+    if (soundCardMuted(entry)) return;
+
     if (soundPlaying(entry, key)) {
       stopSound(entry, key);
       send({ type: "sound-play", id: entry.id, key, stop: true });
@@ -13645,7 +13684,7 @@
     // Já tocando (ou o outro apertou de novo): recomeça, não soma.
     stopSound(entry, key);
 
-    if (!session.speakerOn) return true;
+    if (!session.speakerOn || soundCardMuted(entry)) return true;
 
     const id = entry.id + "|" + key;
     const audio = new Audio(src);
