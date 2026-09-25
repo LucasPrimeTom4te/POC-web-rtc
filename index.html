@@ -1470,14 +1470,21 @@
     }
 
     /* Celular: abas dos quadros e imagens (só um aparece por vez). */
+    /* Área de trabalho com a faixa do "ir para" em cima (fora dela: não
+       cobre a barra de título nem o ✕ de nenhuma janela). */
+    .stage-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+    }
+
     .win-switcher {
-      top: 8px;
-      left: 8px;
-      right: 8px;
+      flex: none;
       display: flex;
       gap: 6px;
-      width: max-content;
-      max-width: calc(100% - 16px);
+      margin: 0 10px 6px;
       overflow-x: auto;
       scrollbar-width: none;
     }
@@ -1491,7 +1498,6 @@
       background: var(--surface);
       border: 1px solid var(--border);
       color: var(--text);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2180,9 +2186,8 @@
         padding-top: 10px;
       }
 
-      .board-pane > .stage-area {
+      .board-pane > .stage-col {
         align-self: stretch;
-        min-width: 0;
       }
 
       #boardTools {
@@ -3722,12 +3727,18 @@
     }
 
     /* A sala inteira na janela flutuante: ocupa tudo. */
-    .room-pip #stageArea {
+    .room-pip #stageCol {
       position: fixed;
       inset: 0;
-      width: auto;
-      height: auto;
+    }
+
+    .room-pip #stageArea {
+      margin: 0;
       border-radius: 0;
+    }
+
+    .room-pip .win-switcher {
+      margin: 6px 8px;
     }
 
     .room-pip-holder {
@@ -4596,12 +4607,13 @@
         <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo, jogos, código, enquete, timer, sorteio, tarefas, rádio, sons, transcrições, ferramentas e chat" aria-expanded="false">⋯</button>
       </div>
 
+      <div id="stageCol" class="stage-col">
+      <!-- Ir para um quadro, imagem ou tela: numa faixa só dela, em cima. -->
+      <div id="winSwitcher" class="win-switcher hidden" aria-label="Ir para"></div>
       <!-- Espaço infinito: arrastar o fundo move, pinça / Ctrl+roda dá zoom. -->
       <div id="stageArea" class="stage-area">
         <div id="workspace" class="workspace"></div>
         <div id="maxLayer" class="max-layer"></div>
-        <!-- Ir para um quadro, imagem ou tela. -->
-        <div id="winSwitcher" class="win-switcher stage-ui hidden" aria-label="Ir para"></div>
         <div class="zoom-bar stage-ui" role="group" aria-label="Zoom (só aqui)">
           <button id="zoomOutBtn" title="Diminuir o zoom (Ctrl −)">−</button>
           <button id="zoomResetBtn" title="Voltar a 100% (Ctrl 0)"><span id="zoomLabel">100%</span></button>
@@ -4609,6 +4621,7 @@
           <button id="zoomFitBtn" title="Ver tudo (Shift 1)">⤢</button>
           <button id="roomPipBtn" hidden title="Picture-in-picture: a sala inteira numa janela flutuante (só aqui)">📌</button>
         </div>
+      </div>
       </div>
 
     </section>
@@ -14892,10 +14905,12 @@
     holder.className = "room-pip-holder";
     holder.textContent = "📌 A sala está numa janela flutuante · clique para trazer de volta";
     holder.onclick = () => pip.close();
-    stage.before(holder);
+    // Vai a coluna toda: a área e a faixa do "ir para".
+    const column = $("stageCol");
+    column.before(holder);
 
     const menu = $("ctxMenu");
-    pip.document.body.append(stage, menu);
+    pip.document.body.append(column, menu);
 
     // Teclado da flutuante -> os atalhos daqui (menos quando está escrevendo).
     const forward = event => {
@@ -14935,7 +14950,7 @@
       window.requestAnimationFrame = raf;
       window.cancelAnimationFrame = caf;
 
-      holder.replaceWith(stage);
+      holder.replaceWith(column);
       document.body.append(menu);
       closeMenu();
 
