@@ -2575,6 +2575,60 @@
       }
     }
 
+    /* Falando com o microfone desligado: bem visível, em cima. */
+    .muted-alert {
+      position: absolute;
+      top: calc(64px + env(safe-area-inset-top));
+      left: 50%;
+      z-index: 8;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: max-content;
+      max-width: calc(100% - 32px);
+      padding: 12px 14px 12px 18px;
+      border-radius: 14px;
+      background: #dc2626;
+      color: #fff;
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, .35), 0 12px 32px rgba(0, 0, 0, .5);
+      font-size: 15px;
+      font-weight: 600;
+      animation: muted-pulse 1.2s ease-in-out infinite;
+    }
+
+    .muted-alert button {
+      border: 0;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    #mutedAlertOn {
+      background: #fff;
+      color: #b91c1c;
+    }
+
+    #mutedAlertClose {
+      background: transparent;
+      color: #fff;
+      padding: 8px;
+    }
+
+    .ctl.muted-talking {
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, .7);
+      animation: muted-pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes muted-pulse {
+      50% { box-shadow: 0 0 0 9px rgba(220, 38, 38, .15), 0 12px 32px rgba(0, 0, 0, .5); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .muted-alert, .ctl.muted-talking { animation: none; }
+    }
+
     /* Aviso rápido: fica logo acima da caixa de mensagem. */
     .toast {
       position: absolute;
@@ -4398,6 +4452,12 @@
         <p id="roomModeHint" class="muted small"></p>
       </section>
 
+      <section class="set-section">
+        <h4>🎙️ Microfone</h4>
+        <label class="check"><input type="checkbox" id="mutedAlertCheck"> Avisar quando eu falar com o microfone desligado</label>
+        <p class="muted small">Só ouve aqui, para avisar: nada é enviado enquanto o microfone está desligado. Funciona depois de você permitir o microfone uma vez.</p>
+      </section>
+
       <!-- Qualidade: menos = menos internet e menos processador. -->
       <section class="set-section">
         <h4>🖥️ Qualidade das telas</h4>
@@ -4405,12 +4465,18 @@
           <span>Minha tela (o que eu envio)</span>
           <select id="sendHeight" aria-label="Resolução da minha tela"></select>
           <select id="sendFps" aria-label="Quadros por segundo da minha tela"></select>
+          <select id="sendMode" aria-label="O que a minha tela mostra">
+            <option value="detail">Texto nítido (documentos, código)</option>
+            <option value="motion">Movimento (vídeo, jogo)</option>
+          </select>
         </div>
         <div class="quality-group">
           <span>Telas que eu recebo</span>
           <select id="receiveHeight" aria-label="Resolução máxima das telas que recebo"></select>
           <select id="receiveFps" aria-label="Quadros por segundo máximos das telas que recebo"></select>
         </div>
+        <label class="check"><input type="checkbox" id="autoBalanceCheck"> Permitir balanço automático de recursos</label>
+        <p id="autoBalanceHint" class="muted small">Com muita gente ou muita coisa aberta, baixa sozinho a qualidade das telas (a que eu envio e a que eu recebo).</p>
       </section>
 
       <section class="set-section">
@@ -4428,6 +4494,11 @@
   <div id="cursorLayer" class="cursor-layer"></div>
 
   <div id="toast" class="toast hidden"></div>
+  <div id="mutedAlert" class="muted-alert hidden" role="alert">
+    <span>🎙️ Você está falando com o microfone desligado</span>
+    <button id="mutedAlertOn">Ligar microfone</button>
+    <button id="mutedAlertClose" aria-label="Fechar o aviso" title="Fechar">✕</button>
+  </div>
 
   <!-- Um <audio> por pessoa conectada (criados pelo JS). -->
   <div id="remoteAudios" hidden></div>
@@ -5353,9 +5424,8 @@
     sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name, joinedAt: peer.room ? room?.joinedAt : undefined });
     sendState(peer);
 
-    if (screenQuality.receive.height || screenQuality.receive.fps) {
-      sendTo(peer, { type: "screen-quality", ...screenQuality.receive });
-    }
+    const wanted = effectiveReceive();
+    if (wanted.height || wanted.fps) sendTo(peer, { type: "screen-quality", ...wanted });
 
     // Sala: troca o que cada um fez; quem chegou (quem pediu) pede o resto.
     if (session.room && peer.room) {
@@ -5460,6 +5530,7 @@
     clearTimeout(session.remoteDrawingTimer);
 
     session.micTrack?.stop();
+    stopMutedWatch();
     session.screenTrack?.stop();
     session.shareAudioTrack?.stop();
     session.objectUrls.forEach(url => URL.revokeObjectURL(url));
@@ -6380,6 +6451,7 @@
 
     peer.videoTransceiver =
       pc.addTransceiver("video", { direction: "sendrecv" });
+    preferScreenCodecs(peer.videoTransceiver);
 
     // Áudio compartilhado (sem vídeo): um segundo canal de áudio.
     peer.shareAudioTransceiver =
@@ -6430,7 +6502,10 @@
 
       peer.audioTransceiver.direction = "sendrecv";
 
-      if (peer.videoTransceiver) peer.videoTransceiver.direction = "sendrecv";
+      if (peer.videoTransceiver) {
+        peer.videoTransceiver.direction = "sendrecv";
+        preferScreenCodecs(peer.videoTransceiver);
+      }
       if (peer.shareAudioTransceiver) peer.shareAudioTransceiver.direction = "sendrecv";
 
       await pc.setLocalDescription(await pc.createAnswer());
@@ -6519,6 +6594,8 @@
   $("micBtn").onclick = async () => {
 
     if (!session || !audioReady()) return;
+
+    stopMutedWatch();
 
     if (session.micTrack) {
 
@@ -6866,6 +6943,149 @@
   }
 
 
+  /* ---------------- falando mutado ---------------- */
+
+  /*
+   * O microfone começa desligado. Se a permissão já foi dada, com ele
+   * desligado fica um "ouvido" só local (a trilha não vai para ninguém):
+   * voz por um tempinho = aviso bem visível para ligar. Sem a permissão
+   * não dá para ouvir sem perguntar, então não avisa.
+   */
+
+  const MUTED_RMS = 0.02;       // ~ -34 dBFS (com supressão de ruído)
+  const MUTED_TALK_MS = 700;    // tanto tempo de voz em MUTED_WINDOW_MS
+  const MUTED_WINDOW_MS = 1500;
+  const MUTED_QUIET_MS = 6000;  // calado esse tempo: o aviso some
+  const MUTED_SNOOZE_MS = 60000; // fechou o aviso: não volta por um minuto
+
+  const mutedWatch = {
+    enabled: storageGet("rtc.mutedAlert") !== "0",
+    stream: null,
+    context: null,
+    timer: null,
+    starting: false,
+    voiced: [],     // instantes com voz, na janela
+    lastVoice: 0,
+    snoozeUntil: 0
+  };
+
+  $("mutedAlertCheck").checked = mutedWatch.enabled;
+
+  $("mutedAlertCheck").onchange = () => {
+    mutedWatch.enabled = $("mutedAlertCheck").checked;
+    storageSet("rtc.mutedAlert", mutedWatch.enabled ? "1" : "0");
+    syncMutedWatch();
+  };
+
+  $("mutedAlertOn").onclick = () => {
+    showMutedAlert(false);
+    if (!session?.micTrack) $("micBtn").click();
+  };
+
+  $("mutedAlertClose").onclick = () => {
+    mutedWatch.snoozeUntil = Date.now() + MUTED_SNOOZE_MS;
+    showMutedAlert(false);
+  };
+
+  function showMutedAlert(on) {
+    show("mutedAlert", on);
+    $("micBtn").classList.toggle("muted-talking", on);
+  }
+
+  async function micAllowed() {
+    try {
+      return (await navigator.permissions.query({ name: "microphone" })).state === "granted";
+    } catch {
+      return false;
+    }
+  }
+
+  function stopMutedWatch() {
+
+    clearInterval(mutedWatch.timer);
+    mutedWatch.timer = null;
+    mutedWatch.stream?.getTracks().forEach(track => track.stop());
+    mutedWatch.stream = null;
+    mutedWatch.context?.close().catch(() => {});
+    mutedWatch.context = null;
+    mutedWatch.voiced = [];
+    showMutedAlert(false);
+
+  }
+
+  // Liga ou desliga o "ouvido" conforme o estado (roda de tempos em tempos).
+  async function syncMutedWatch() {
+
+    const wanted = !!session && !session.micTrack && audioReady() && mutedWatch.enabled &&
+      !!navigator.mediaDevices?.getUserMedia;
+
+    if (!wanted) {
+      if (mutedWatch.stream) stopMutedWatch();
+      return;
+    }
+
+    if (mutedWatch.stream || mutedWatch.starting) return;
+
+    mutedWatch.starting = true;
+
+    try {
+
+      if (!await micAllowed()) return;
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+
+      // Mudou enquanto abria (ligou o microfone, saiu da sala...).
+      if (!session || session.micTrack || !mutedWatch.enabled) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      const context = new AudioContext();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 1024;
+      context.createMediaStreamSource(stream).connect(analyser);
+      const samples = new Float32Array(analyser.fftSize);
+
+      mutedWatch.stream = stream;
+      mutedWatch.context = context;
+
+      mutedWatch.timer = setInterval(() => {
+
+        if (context.state === "suspended") context.resume().catch(() => {});
+
+        analyser.getFloatTimeDomainData(samples);
+        let sum = 0;
+        for (const value of samples) sum += value * value;
+        const rms = Math.sqrt(sum / samples.length);
+
+        const now = Date.now();
+        if (rms > MUTED_RMS) {
+          mutedWatch.voiced.push(now);
+          mutedWatch.lastVoice = now;
+        }
+        mutedWatch.voiced = mutedWatch.voiced.filter(time => now - time < MUTED_WINDOW_MS);
+
+        const talking = mutedWatch.voiced.length * 100 >= MUTED_TALK_MS;
+        const visible = !$("mutedAlert").classList.contains("hidden");
+
+        if (talking && !visible && now > mutedWatch.snoozeUntil) showMutedAlert(true);
+        else if (visible && now - mutedWatch.lastVoice > MUTED_QUIET_MS) showMutedAlert(false);
+
+      }, 100);
+
+    } catch (error) {
+      log("Aviso de microfone desligado indisponível: " + error.message);
+    } finally {
+      mutedWatch.starting = false;
+    }
+
+  }
+
+  setInterval(syncMutedWatch, 1500);
+
+
   /* ---------------- compartilhar áudio (sem vídeo) ---------------- */
 
   // O getDisplayMedia não aceita pedir só áudio (o Chrome exige vídeo):
@@ -7055,8 +7275,8 @@
     session.screenFor = track ? siteId : null;
 
     if (track) {
-      // Tela tem texto: prioriza nitidez em vez de movimento.
-      track.contentHint = "detail";
+      // Texto: prioriza nitidez; movimento: prioriza fluidez.
+      track.contentHint = screenQuality.mode;
       // "Parar compartilhamento" do próprio navegador.
       track.onended = () => {
         if (session?.screenTrack === track) setVideoTrack(null);
@@ -7101,6 +7321,10 @@
       height: savedNumber("rtc.sendHeight", SCREEN_HEIGHTS, 720),
       fps: savedNumber("rtc.sendFps", SCREEN_FPS, 15)
     },
+    // contentHint da minha tela: "detail" (texto) ou "motion" (vídeo, jogo).
+    mode: storageGet("rtc.sendMode") === "motion" ? "motion" : "detail",
+    // Baixar sozinho com muita gente ou muita coisa (só neste aparelho).
+    auto: storageGet("rtc.autoBalance") !== "0",
     receive: {
       height: savedNumber("rtc.receiveHeight", [0, ...SCREEN_HEIGHTS], 0),
       fps: savedNumber("rtc.receiveFps", [0, ...SCREEN_FPS], 0)
@@ -7145,15 +7369,161 @@
 
   };
 
+  $("sendMode").value = screenQuality.mode;
+  $("autoBalanceCheck").checked = screenQuality.auto;
+
+  $("sendMode").onchange = () => {
+
+    screenQuality.mode = $("sendMode").value === "motion" ? "motion" : "detail";
+    storageSet("rtc.sendMode", screenQuality.mode);
+
+    if (session?.screenTrack) {
+      session.screenTrack.contentHint = screenQuality.mode;
+      connectedPeers().forEach(applyScreenQuality);
+    }
+
+  };
+
+  $("autoBalanceCheck").onchange = () => {
+
+    screenQuality.auto = $("autoBalanceCheck").checked;
+    storageSet("rtc.autoBalance", screenQuality.auto ? "1" : "0");
+
+    rebalance(true);
+
+  };
+
   $("receiveHeight").onchange = $("receiveFps").onchange = () => {
 
     screenQuality.receive = { height: Number($("receiveHeight").value), fps: Number($("receiveFps").value) };
     storageSet("rtc.receiveHeight", screenQuality.receive.height);
     storageSet("rtc.receiveFps", screenQuality.receive.fps);
 
-    if (session) send({ type: "screen-quality", ...screenQuality.receive });
+    sendReceiveQuality(true);
 
   };
+
+  /* ---- balanço automático ---- */
+
+  // Sem servidor central, quem compartilha manda uma cópia para cada
+  // pessoa (e a ponte manda mais uma para quem ela repassa); quem recebe
+  // decodifica cada tela. Com o balanço ligado, a carga baixa a qualidade:
+  // em "texto" cai primeiro os quadros, em "movimento" cai primeiro a resolução.
+  function balanceLoad() {
+
+    const viewers = connectedPeers().filter(peer => peer.audioReady && peer.videoTransceiver).length;
+    let relaying = 0;
+    for (const bridge of bridges.values()) {
+      for (const items of bridge.out.values()) relaying += items.filter(item => item.slot === "video").length;
+    }
+    const receiving = connectedPeers().filter(peer => peer.remote.screen).length;
+
+    return { viewers, relaying, receiving };
+
+  }
+
+  // 0 = sem corte; cada nível desce um degrau.
+  function sendLevel({ viewers, relaying, receiving }) {
+    const load = viewers + relaying + Math.floor(receiving / 2);
+    return load <= 2 ? 0 : load <= 4 ? 1 : load <= 6 ? 2 : 3;
+  }
+
+  const stepDown = (list, value, steps) =>
+    list[Math.min(list.length - 1, Math.max(0, list.indexOf(value)) + steps)];
+
+  function effectiveSend() {
+
+    const { height, fps } = screenQuality.send;
+    const { mode, auto } = screenQuality;
+    if (!auto) return { height, fps };
+
+    const level = sendLevel(balanceLoad());
+    const motion = mode === "motion";
+
+    return {
+      height: stepDown(SCREEN_HEIGHTS, height, motion ? level : Math.floor(level / 2)),
+      fps: stepDown(SCREEN_FPS, fps, motion ? Math.floor(level / 2) : level)
+    };
+
+  }
+
+  // O que peço aos outros: o que escolhi, e com muitas telas chegando, menos.
+  function effectiveReceive() {
+
+    const { height, fps } = screenQuality.receive;
+    if (!screenQuality.auto) return { height, fps };
+
+    const { receiving } = balanceLoad();
+    const cap = receiving >= 5 ? 480 : receiving >= 3 ? 720 : 0;
+
+    return { height: cap && (!height || height > cap) ? cap : height, fps };
+
+  }
+
+  let sentReceive = "";
+
+  function sendReceiveQuality(force = false) {
+
+    if (!session) return;
+
+    const wanted = effectiveReceive();
+    const key = wanted.height + "/" + wanted.fps;
+
+    if (!force && key === sentReceive) return;
+
+    sentReceive = key;
+    send({ type: "screen-quality", ...wanted });
+
+  }
+
+  let balancedSend = "";
+
+  // Confere a carga de tempos em tempos (gente entra e sai, telas começam e param).
+  function rebalance(force = false) {
+
+    if (!session) return;
+
+    sendReceiveQuality(force);
+
+    const mine = effectiveSend();
+    const key = mine.height + "/" + mine.fps;
+    const load = balanceLoad();
+
+    $("autoBalanceHint").textContent = !screenQuality.auto
+      ? "Desligado: as telas ficam na qualidade escolhida acima, com qualquer quantidade de gente."
+      : sendLevel(load) || effectiveReceive().height !== screenQuality.receive.height
+        ? `Ligado, agora baixando: envio até ${mine.height}p e ${mine.fps} fps` +
+          ` (${load.viewers} pessoa${load.viewers === 1 ? "" : "s"}, ${load.receiving} tela${load.receiving === 1 ? "" : "s"} chegando).`
+        : "Ligado: com muita gente ou muita coisa aberta, baixa sozinho a qualidade das telas (a que eu envio e a que eu recebo).";
+
+    if (!force && key === balancedSend) return;
+
+    balancedSend = key;
+    if (session.screenTrack) connectedPeers().forEach(applyScreenQuality);
+
+  }
+
+  setInterval(() => rebalance(), 3000);
+
+  // Tela: VP9 e AV1 deixam o texto bem mais nítido que o VP8 com a mesma
+  // internet. O resto fica na ordem do navegador (e de reserva).
+  const SCREEN_CODECS = ["video/VP9", "video/AV1", "video/H264"];
+
+  function preferScreenCodecs(transceiver) {
+
+    try {
+      const codecs = RTCRtpReceiver.getCapabilities?.("video")?.codecs;
+      if (!codecs?.length || !transceiver?.setCodecPreferences) return;
+      const rank = codec => {
+        const index = SCREEN_CODECS.indexOf(codec.mimeType);
+        return index < 0 ? SCREEN_CODECS.length : index;
+      };
+      transceiver.setCodecPreferences([...codecs].sort((a, b) => rank(a) - rank(b)));
+    } catch (error) {
+      log("Não foi possível escolher o codec da tela: " + error.message);
+    }
+
+  }
 
   // Taxa de bits para a resolução e os quadros (tela tem pouco movimento:
   // o codificador costuma usar menos que isso).
@@ -7172,8 +7542,9 @@
     if (!sender || !track) return;
 
     const limit = (mine, wanted) => wanted ? Math.min(mine, wanted) : mine;
-    const height = limit(screenQuality.send.height, peer.remote.want.height);
-    const fps = limit(screenQuality.send.fps, peer.remote.want.fps);
+    const mine = effectiveSend();
+    const height = limit(mine.height, peer.remote.want.height);
+    const fps = limit(mine.fps, peer.remote.want.fps);
     const captured = track.getSettings().height || height;
 
     try {
@@ -15437,7 +15808,11 @@
 
         bridge.out.set(target.id, BRIDGE_SLOTS
           .filter(slot => tracks[slot])
-          .map(slot => ({ slot, of: source.id, transceiver: target.pc.addTransceiver(tracks[slot], { direction: "sendonly" }) })));
+          .map(slot => {
+            const transceiver = target.pc.addTransceiver(tracks[slot], { direction: "sendonly" });
+            if (slot === "video") preferScreenCodecs(transceiver);
+            return { slot, of: source.id, transceiver };
+          }));
 
       }
 
