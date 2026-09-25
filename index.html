@@ -892,7 +892,9 @@
       display: none;
     }
 
-    .screen-tile {
+    /* Janela (quadro ou tela): barra de título + corpo. No celular ficam
+       uma embaixo da outra; no PC, flutuando na área de trabalho. */
+    .win {
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -901,11 +903,13 @@
       border: 1px solid var(--border);
     }
 
-    .screen-head {
+    .win-head {
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 5px 6px 5px 10px;
+      height: 34px;
+      box-sizing: border-box;
+      padding: 0 6px 0 10px;
       background: var(--surface);
       font-size: 13px;
       font-weight: 600;
@@ -913,7 +917,7 @@
       -webkit-user-select: none;
     }
 
-    .screen-head .dot {
+    .win-head .dot {
       flex: none;
       width: 9px;
       height: 9px;
@@ -921,45 +925,135 @@
       background: var(--person, var(--accent));
     }
 
-    .screen-head .label {
+    .board-win .win-head .dot {
+      display: none;
+    }
+
+    .win-head .label {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .screen-head .spacer {
+    .win-head .spacer {
       flex: 1;
     }
 
-    .screen-head button {
+    .win-head button {
       flex: none;
       padding: 4px 7px;
       font-size: 12px;
       line-height: 1;
     }
 
-    .screen-video {
+    .win-body {
       position: relative;
       aspect-ratio: var(--ar, 16 / 9);
-      max-height: 70dvh;
       background: #000;
     }
 
-    .screen-video video {
+    .board-win .win-body {
+      aspect-ratio: 1;
+      background: white;
+    }
+
+    .win-body video,
+    .win-body canvas {
       display: block;
       width: 100%;
       height: 100%;
+    }
+
+    .win-body video {
       object-fit: contain;
       background: #000;
     }
 
-    .screen-tile.minimized .screen-video {
+    .board-win canvas {
+      background: white;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    .board-pane[data-tool="eraser"] .board-win canvas {
+      cursor: cell;
+    }
+
+    .board-pane[data-tool="text"] .board-win canvas {
+      cursor: text;
+    }
+
+    /* Visualizando: o quadro não desenha e deixa rolar a página. */
+    .board-pane.viewing .board-win canvas {
+      touch-action: auto;
+      cursor: default;
+    }
+
+    .win.minimized .win-body {
       display: none;
     }
 
     .resize-handle {
       display: none;
+    }
+
+    /* Tela cheia de uma janela (a de verdade e a do iPhone, que ocupa a página). */
+    .win:fullscreen,
+    .win.win-full {
+      position: fixed !important;
+      inset: 0 !important;
+      width: auto !important;
+      z-index: 40 !important;
+      border-radius: 0;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    .win:fullscreen .win-body,
+    .win.win-full .win-body {
+      flex: 1;
+      min-height: 0;
+      aspect-ratio: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    .board-win:fullscreen canvas,
+    .board-win.win-full canvas {
+      width: min(100%, 100cqh);
+      height: auto;
+      aspect-ratio: 1;
+    }
+
+    .win:fullscreen .win-body,
+    .win.win-full .win-body {
+      container-type: size;
+    }
+
+    .win:fullscreen .resize-handle,
+    .win.win-full .resize-handle {
+      display: none !important;
+    }
+
+    /* Celular: os quadros um embaixo do outro, a aba rola. */
+    .stage-area {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0 12px 12px;
+    }
+
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .screen-tile .win-body {
+      max-height: 70dvh;
     }
 
     /* Configurações (painel sobre a sessão). */
@@ -1153,8 +1247,8 @@
     }
 
     .swatch {
-      width: 30px;
-      height: 30px;
+      width: 26px;
+      height: 26px;
       padding: 0;
       border-radius: 50%;
       border: 3px solid var(--bg);
@@ -1169,6 +1263,86 @@
       flex: 1;
     }
 
+    .tool-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .tool-group .tool {
+      min-width: 34px;
+      padding: 6px 8px;
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .tool-sep {
+      width: 1px;
+      height: 24px;
+      background: var(--border);
+    }
+
+    .color-pick {
+      position: relative;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .25);
+      cursor: pointer;
+    }
+
+    .color-pick.active {
+      box-shadow: 0 0 0 2px var(--text);
+    }
+
+    .color-pick input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .size-pick {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .size-pick input {
+      width: 90px;
+    }
+
+    .size-dot {
+      flex: none;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+    }
+
+    .size-dot::after {
+      content: "";
+      width: var(--size, 4px);
+      height: var(--size, 4px);
+      border-radius: 50%;
+      background: var(--dot, var(--text));
+    }
+
+    /* Texto no quadro: a caixa aparece onde tocou. */
+    .board-text-input {
+      position: fixed;
+      z-index: 45;
+      min-width: 140px;
+      padding: 4px 6px;
+      border: 2px dashed var(--accent);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .95);
+      font: 600 16px system-ui, sans-serif;
+      outline: none;
+    }
+
     .board-tools .tool {
       padding: 7px 11px;
       font-size: 13px;
@@ -1181,41 +1355,6 @@
     .remote-drawing {
       font-size: 13px;
       color: var(--warn);
-    }
-
-    .board-wrap {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 16px 12px;
-    }
-
-    #board {
-      display: block;
-      background: white;
-      border-radius: 14px;
-      touch-action: none;
-      cursor: crosshair;
-    }
-
-    /* Visualizando: o quadro não desenha e deixa rolar a página. */
-    .board-pane.viewing #board {
-      touch-action: auto;
-      cursor: default;
-    }
-
-    /* Tela cheia (a de verdade e a do iPhone, que ocupa a janela). */
-    .board-pane.board-full,
-    .board-pane:fullscreen {
-      display: flex !important;
-      position: fixed;
-      inset: 0;
-      z-index: 30;
-      background: var(--bg);
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
     }
 
     /* Chat */
@@ -1555,63 +1694,43 @@
         font-size: 12px;
       }
 
-      /* Camada das janelas de tela: cobre o quadro, só as janelas pegam o mouse. */
+      /* As telas vão para a área de trabalho (a aba Telas é só do celular). */
       .screen-pane {
-        display: block;
-        position: relative;
-        z-index: 3;
-        padding: 0;
-        overflow: hidden;
-        pointer-events: none;
-      }
-
-      .screen-pane .screens-empty {
         display: none;
       }
 
-      .screen-grid,
-      .screen-grid:empty {
-        display: block;
-        position: absolute;
-        inset: 0;
+      /* Área de trabalho: sempre 16:9, encaixada no palco (o JS calcula). */
+      .stage-area {
+        position: relative;
+        overflow: hidden;
+        padding: 0;
+        margin: 0 10px 10px;
       }
 
-      .screen-tile {
+      .workspace {
+        display: block;
         position: absolute;
-        left: var(--x, 16px);
-        top: var(--y, 16px);
-        width: var(--w, 360px);
-        pointer-events: auto;
+        border-radius: 12px;
+        background:
+          radial-gradient(circle, rgba(255, 255, 255, .07) 1px, transparent 1.5px) 0 0 / 22px 22px,
+          rgba(255, 255, 255, .02);
+        outline: 1px dashed var(--border);
+      }
+
+      .win {
+        position: absolute;
         box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
       }
 
-      .screen-head {
+      .win-head {
         cursor: grab;
       }
 
-      .screen-tile.dragging .screen-head {
+      .win.dragging .win-head {
         cursor: grabbing;
       }
 
-      .screen-video {
-        max-height: none;
-      }
-
-      /* Maximizada: ocupa o palco inteiro. */
-      .screen-tile.maximized {
-        left: 8px;
-        top: 8px;
-        right: 8px;
-        bottom: 8px;
-        width: auto;
-      }
-
-      .screen-tile.maximized .screen-video {
-        flex: 1;
-        aspect-ratio: auto;
-      }
-
-      .screen-tile.maximized .screen-head {
+      .win.maximized .win-head {
         cursor: default;
       }
 
@@ -1620,14 +1739,15 @@
         position: absolute;
         right: 0;
         bottom: 0;
+        z-index: 1;
         width: 18px;
         height: 18px;
         cursor: nwse-resize;
-        background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, .55) 50%);
+        background: linear-gradient(135deg, transparent 50%, rgba(120, 130, 150, .7) 50%);
         border-bottom-right-radius: 11px;
       }
 
-      .screen-tile.maximized .resize-handle {
+      .win.maximized .resize-handle {
         display: none;
       }
 
@@ -1658,10 +1778,6 @@
 
       .board-tools {
         padding: 8px 12px;
-      }
-
-      .board-wrap {
-        padding: 0 12px 10px;
       }
 
       .toast {
@@ -2219,27 +2335,36 @@
 
   <div class="s-body">
 
+    <!-- Quadros e telas: janelas numa área de trabalho comum (no PC,
+         flutuando; no celular, os quadros um embaixo do outro). -->
     <section id="boardPane" class="pane board-pane">
 
       <div class="board-tools">
-        <span id="swatches" style="display:flex; gap:6px"></span>
-        <button id="thinBtn" class="tool active">Fino</button>
-        <button id="thickBtn" class="tool">Grosso</button>
+        <!-- Ferramentas (atalho entre parênteses no title). -->
+        <span id="toolButtons" class="tool-group" role="toolbar" aria-label="Ferramentas de desenho"></span>
+        <button id="undoBtn" class="tool" title="Desfazer o meu último traço neste quadro (Ctrl+Z)">↶</button>
+        <span class="tool-sep"></span>
+        <span id="swatches" class="tool-group"></span>
+        <label class="color-pick" title="Outra cor">
+          <input id="customColor" type="color" value="#0ea5e9" aria-label="Outra cor">
+        </label>
+        <label class="size-pick" title="Espessura">
+          <span id="sizeDot" class="size-dot"></span>
+          <input id="sizeRange" type="range" min="1" max="10" value="2" aria-label="Espessura">
+        </label>
         <span id="remoteDrawing" class="remote-drawing hidden">✏️ O outro está desenhando…</span>
         <span class="spacer"></span>
+        <button id="addBoardBtn" class="tool" title="Novo quadro (aparece para todos)">➕ Quadro</button>
         <button id="boardModeBtn" class="tool active">✏️ Editando</button>
-        <button id="boardFullBtn" class="tool">⛶ Tela cheia</button>
-        <button id="clearBoardBtn" class="tool">🧹 Limpar</button>
       </div>
 
-      <div id="boardWrap" class="board-wrap">
-        <canvas id="board"></canvas>
+      <div id="stageArea" class="stage-area">
+        <div id="workspace" class="workspace"></div>
       </div>
 
     </section>
 
-    <!-- Telas: no computador, janelas flutuando por cima do quadro;
-         no celular, uma embaixo da outra nesta aba. -->
+    <!-- Telas no celular (uma embaixo da outra). No PC elas ficam na área de trabalho. -->
     <section id="screenPane" class="pane screen-pane">
 
       <div id="screensEmpty" class="screens-empty">
@@ -2979,7 +3104,6 @@
   const SPEAKING_LEVEL = 0.02;
 
   const BOARD_COLORS = ["#111827", "#2563eb", "#ea580c", "#16a34a", "#dc2626", "#9333ea"];
-  const BOARD_WIDTHS = { thin: 0.006, thick: 0.018 }; // fração do lado do quadro
 
   const DEVICE_NAMES = { computer: "💻 Computador", phone: "📱 Celular" };
 
@@ -3038,17 +3162,25 @@
       stage: "board",         // PC: o que aparece à esquerda (board | screen)
       unread: { chat: 0, board: 0, screen: 0 },
       screenTrack: null,
-      screenTiles: new Map(), // "me" ou id do aparelho -> { tile, video, name }
-      focusedScreen: null,    // tela destacada (mesma chave)
+      windows: new Map(),     // janelas na área de trabalho: "board:<id>" | "screen:<id>" -> view
+      layout: new Map(),      // posição combinada de cada janela (veja setLayout)
+      work: null,             // PC: { scale } da área de trabalho
       screenAutoFrom: null,   // a aba Telas abriu sozinha: de onde veio (para voltar)
       chatMin: storageGet("rtc.chatMin") === "1", // PC: chat minimizado
       shareAudioTrack: null,  // áudio que estou compartilhando (sem vídeo)
       color: room ? colorFor(me.id) : role === "host" ? BOARD_COLORS[1] : BOARD_COLORS[2],
-      width: BOARD_WIDTHS.thin,
+      size: 2,                // espessura no controle (1–10)
+      width: sizeToWidth(2),
+      tool: "pen",            // ferramenta de desenho (veja TOOLS)
+      activeBoard: MAIN_BOARD,// o quadro em que mexi por último (Desfazer)
+      mine: [],               // meus traços, em ordem (Desfazer)
+      erased: new Set(),      // traços desfeitos (não voltam por um histórico atrasado)
+      pendingEnd: null,       // fim da forma que estou arrastando (ainda não enviado)
       boardMode: "edit",      // "edit" (desenha) | "view" (só olha)
-      strokes: new Map(),     // "<autor>:<id>" -> { author, color, width, v, points }
-      boardVersion: 0,        // sobe a cada "Limpar" (veja handleRemoteDraw)
-      drawing: null,          // chave do traço que estou desenhando
+      boards: new Map([[MAIN_BOARD, { id: MAIN_BOARD, title: "Quadro", version: 0, by: "" }]]),
+      closedBoards: new Set(),// quadros fechados (não voltam por um histórico atrasado)
+      strokes: new Map(),     // "<autor>:<id>" -> { author, board, color, width, v, points }
+      drawing: null,          // { board, id } do traço que estou desenhando
       chat: new Map(),        // "<autor>:<id>" -> { id, author, name, text, time }
       syncFrom: null,         // de quem pedi o histórico da sala
       synced: false,          // já recebi o histórico completo
@@ -3066,6 +3198,10 @@
 
     // Interface zerada.
     $("chatList").replaceChildren();
+    $("workspace").replaceChildren();
+    $("screenGrid").replaceChildren();
+    topZ = 1;
+    ensureBoard(MAIN_BOARD, "Quadro");
     $("peerName").textContent = "direto com o outro aparelho";
     show("unlockAudioBtn", false);
     show("remoteDrawing", false);
@@ -3075,6 +3211,7 @@
     show("screenBtn", CAN_SHARE_SCREEN);
     show("shareAudioBtn", CAN_SHARE_SCREEN);
     renderSwatches();
+    renderTools();
     renderBoardMode();
     renderChatMin();
     show("screensEmptyHint", CAN_SHARE_SCREEN);
@@ -3091,7 +3228,7 @@
     show("sessionView");
     document.body.classList.add("in-session");
     keepScreenOn();
-    requestAnimationFrame(resizeBoard);
+    requestAnimationFrame(layoutWorkspace);
 
     session.statsTimer = setInterval(updateAudioLevels, 250);
 
@@ -3231,13 +3368,13 @@
     session.objectUrls.forEach(url => URL.revokeObjectURL(url));
 
     if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
-    session.screenTiles.forEach(({ video }) => { video.srcObject = null; });
+    [...session.windows.keys()].forEach(removeWindow);
+    $("workspace").replaceChildren();
     $("screenGrid").replaceChildren();
     $("sessionView").classList.remove("chat-min");
 
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    $("boardPane").classList.remove("board-full", "viewing");
-    $("boardFullBtn").textContent = "⛶ Tela cheia";
+    $("boardPane").classList.remove("viewing");
 
     session = null;
 
@@ -3495,6 +3632,24 @@
         receiveCursor(peer, message);
         break;
 
+      case "win":
+        applyLayout(message.id, message, peer.id);
+        break;
+
+      case "board-add":
+        if (ensureBoard(message.id, message.title, peer.id)) {
+          addNote(`🎨 ${peerLabel(peer)} criou o “${session.boards.get(message.id).title}”`);
+        }
+        break;
+
+      case "board-close":
+        closeBoard(message.id, peer);
+        break;
+
+      case "erase":
+        handleRemoteErase(peer, message);
+        break;
+
       case "screen-quality":
         // Ele quer receber as telas mais leves.
         // (0 = sem limite)
@@ -3684,7 +3839,7 @@
 
     const strokes = [...session.strokes]
       .filter(([, stroke]) => wanted(stroke))
-      .map(([key, { author, color, width, v, points }]) => ({ key, author, color, width, v, points }));
+      .map(([key, { author, board, tool, color, width, v, t, points, text }]) => ({ key, author, board, tool, color, width, v, t, points, text }));
 
     const batches = [];
     let current = { chat: [], strokes: [] };
@@ -3709,10 +3864,19 @@
     strokes.forEach(item => add("strokes", item));
     batches.push(current);
 
+    // Quadros (com a versão de cada um), os que foram fechados e a posição
+    // das janelas: é pouco, vai inteiro no primeiro pedaço.
+    const workspace = {
+      boards: [...session.boards.values()].map(({ id, title, version, by }) => ({ id, title, version, by })),
+      closed: [...session.closedBoards],
+      erased: [...session.erased],
+      layout: [...session.layout].map(([id, entry]) => ({ id, ...pickLayout(entry), rev: entry.rev, by: entry.by }))
+    };
+
     batches.forEach((batch, index) => sendTo(peer, {
       type: "sync-data",
       full,
-      v: session.boardVersion,
+      ...(index === 0 ? workspace : {}),
       ...batch,
       last: index === batches.length - 1
     }));
@@ -3729,9 +3893,37 @@
     const ownedKey = (key, author) =>
       typeof key === "string" && key.length < 64 && isDeviceId(author) && key.startsWith(author + ":");
 
-    // O quadro de lá já passou por um "Limpar" que não vi.
+    // Quadros fechados lá: fecham aqui (e não voltam).
+    for (const id of list(message.closed)) {
+      if (typeof id !== "string" || !BOARD_ID.test(id) || id === MAIN_BOARD) continue;
+      if (session.boards.has(id)) closeBoard(id, peer, true);
+      else session.closedBoards.add(id);
+    }
+
+    // Quadros de lá (e "Limpar" que não vi).
+    for (const item of list(message.boards)) {
+      if (typeof item?.id !== "string") continue;
+      const entry = ensureBoard(item.id, item.title, isDeviceId(item.by) ? item.by : "");
+      const version = cleanVersion(item.version);
+      if (entry && version !== null) applyClear(item.id, version);
+    }
+
+    // Traços desfeitos lá: somem aqui (e não voltam).
+    for (const key of list(message.erased)) {
+      if (typeof key !== "string" || key.length > 64) continue;
+      session.erased.add(key);
+      const stroke = session.strokes.get(key);
+      if (stroke) eraseStrokes(stroke.board, [key]);
+    }
+
+    // Versão antiga da página: só um quadro, com a versão solta.
     const v = cleanVersion(message.v);
-    if (v !== null) applyClear(v);
+    if (v !== null) applyClear(MAIN_BOARD, v);
+
+    // Posição das janelas (vale a mais nova de cada uma).
+    for (const item of list(message.layout)) {
+      if (item && typeof item === "object") applyLayout(item.id, item, item.by);
+    }
 
     let chatAdded = 0;
     let strokesAdded = 0;
@@ -3758,13 +3950,17 @@
 
     }
 
+    const redraw = new Set();
+
     for (const item of list(message.strokes)) {
 
-      if (!ownedKey(item?.key, item?.author)) continue;
+      if (!ownedKey(item?.key, item?.author) || session.erased.has(item.key)) continue;
 
+      const boardId = boardOf(item);
+      const boardEntry = ensureBoard(boardId, "", item.author);
       const strokeVersion = cleanVersion(item.v);
 
-      if (strokeVersion === null || strokeVersion < session.boardVersion) continue;
+      if (!boardEntry || strokeVersion === null || strokeVersion < boardEntry.version) continue;
 
       const points = list(item.points).filter(isPoint);
       const existing = session.strokes.get(item.key);
@@ -3772,19 +3968,14 @@
       // Já tenho esse traço (igual ou mais completo, se ainda está sendo desenhado).
       if (!points.length || existing?.points.length >= points.length) continue;
 
-      session.strokes.set(item.key, {
-        author: item.author,
-        color: String(item.color || BOARD_COLORS[0]).slice(0, 32),
-        width: Number(item.width) || BOARD_WIDTHS.thin,
-        v: strokeVersion,
-        points
-      });
+      session.strokes.set(item.key, { ...cleanStroke(item, item.author, boardId, strokeVersion), points });
 
       strokesAdded++;
+      redraw.add(boardId);
 
     }
 
-    if (strokesAdded) redrawBoard();
+    redraw.forEach(redrawBoard);
 
     if (message.full && session.syncFrom === peer) {
 
@@ -3842,7 +4033,7 @@
     session.unread[name] = 0;
     renderBadges();
 
-    if (session.stage === "board") requestAnimationFrame(resizeBoard);
+    requestAnimationFrame(layoutWorkspace);
     if (name === "chat") $("chatList").scrollTop = $("chatList").scrollHeight;
 
   }
@@ -3899,7 +4090,7 @@
 
     if (!min) $("chatList").scrollTop = $("chatList").scrollHeight;
 
-    requestAnimationFrame(resizeBoard);
+    requestAnimationFrame(layoutWorkspace);
 
   }
 
@@ -3909,7 +4100,7 @@
     setTab(session.tab);
     renderBadges();
     renderScreens();
-    requestAnimationFrame(resizeBoard);
+    requestAnimationFrame(layoutWorkspace);
   });
 
 
@@ -4507,6 +4698,7 @@
       track.onended = () => stopScreenShare();
 
       session.screenTrack = track;
+      announceMyScreenWindow();
       await replaceTrackEverywhere("video", track);
       connectedPeers().forEach(applyScreenQuality);
       renderScreens();
@@ -4669,22 +4861,1266 @@
   }
 
 
-  /* ---------------- telas compartilhadas ---------------- */
+  /* ---------------- área de trabalho (janelas compartilhadas) ---------------- */
 
-  // Várias pessoas podem compartilhar ao mesmo tempo. No PC cada tela é
-  // uma janela flutuando por cima do quadro: arrasta pela barra, muda o
-  // tamanho pelo canto, minimiza, maximiza (ocupa o palco), picture-in-
-  // picture e tela cheia. No celular ficam uma embaixo da outra na aba
-  // Telas. O <video> de cada um é mantido entre renderizações (não pisca
-  // e não derruba o picture-in-picture).
+  /*
+   * Quadros e telas compartilhadas são janelas numa área de trabalho
+   * comum. No PC ela tem sempre a mesma proporção (WORK_W × WORK_H
+   * unidades) e é encaixada no espaço de cada aparelho: assim uma janela
+   * que alguém move vai para o mesmo lugar na tela de todo mundo.
+   *
+   * Posição, tamanho, ordem (z), minimizada e maximizada de cada janela
+   * são de todos: quem mexe manda { type: "win", id, ..., rev }. Vale a
+   * mudança com rev maior (empate: o id do aparelho decide), então todos
+   * chegam no mesmo resultado mesmo mexendo ao mesmo tempo.
+   *
+   * Ids das janelas: "board:<id do quadro>" e "screen:<id de quem compartilha>".
+   *
+   * No celular não flutua: os quadros ficam um embaixo do outro na aba
+   * Quadro e as telas na aba Telas (a posição combinada só vale no PC).
+   */
+
+  const WORK_W = 1600;
+  const WORK_H = 900;
+  const WIN_HEAD_PX = 34;     // barra de título na tela (não muda com a escala)
+  // Nas contas de posição a barra vale sempre o mesmo em unidades: assim o
+  // limite de cada janela é igual em todas as telas (com qualquer escala).
+  const HEAD_UNITS = 70;
+  const WIN_MIN_W = 240;      // em unidades da área de trabalho
+  const LAYOUT_SEND_MS = 40;  // enquanto arrasta: no máximo um aviso a cada 40 ms
+  const MAIN_BOARD = "main";  // o quadro que sempre existe (não fecha)
+  const BOARD_ID = /^[a-z0-9-]{1,40}$/;
 
   const CAN_PIP = !!document.pictureInPictureEnabled ||
     typeof HTMLVideoElement.prototype.webkitSetPresentationMode === "function";
 
-  const TILE_MIN_WIDTH = 220;
+  let topZ = 1;
 
-  let tileZ = 1;
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, max));
 
+
+  /* ---- encaixe da área de trabalho ---- */
+
+  function layoutWorkspace() {
+
+    if (!session) return;
+
+    const workspace = $("workspace");
+
+    if (DESKTOP_LAYOUT.matches) {
+
+      const area = $("stageArea").getBoundingClientRect();
+      const scale = Math.min(area.width / WORK_W, area.height / WORK_H) || 0;
+
+      session.work = { scale };
+
+      workspace.style.width = WORK_W * scale + "px";
+      workspace.style.height = WORK_H * scale + "px";
+      workspace.style.left = (area.width - WORK_W * scale) / 2 + "px";
+      workspace.style.top = (area.height - WORK_H * scale) / 2 + "px";
+
+    } else {
+
+      session.work = null;
+      workspace.removeAttribute("style");
+
+    }
+
+    session.windows.forEach(view => {
+      placeWindow(view);
+      positionWindow(view);
+    });
+
+    renderCursors();
+
+  }
+
+  new ResizeObserver(() => layoutWorkspace()).observe($("stageArea"));
+
+
+  /* ---- posição combinada de cada janela ---- */
+
+  // Onde a janela fica quando ninguém mexeu nela ainda (igual para todos).
+  function defaultLayout(id) {
+
+    if (id === "board:" + MAIN_BOARD) return { x: 24, y: 24, w: 800, z: 1, min: false, max: false, rev: 0, by: "" };
+
+    if (id.startsWith("board:")) {
+      // À direita do principal, em cascata.
+      const index = Math.max(0, [...session.boards.keys()].indexOf(id.slice(6)) - 1);
+      return { x: clamp(850 + index * 40, 0, WORK_W - 560), y: 40 + index * 36, w: 560, z: 1, min: false, max: false, rev: 0, by: "" };
+    }
+
+    return { x: WORK_W - 660 - 24, y: WORK_H - 660 * 9 / 16 - 60, w: 660, z: 1, min: false, max: false, rev: 0, by: "" };
+
+  }
+
+  const layoutOf = id => session.layout.get(id) || defaultLayout(id);
+
+  const LAYOUT_KEYS = ["x", "y", "w", "z", "min", "max"];
+
+  // Mudança minha: vale aqui na hora e vai para todos.
+  function setLayout(id, patch, final = true) {
+
+    const current = layoutOf(id);
+    const next = { ...current, ...patch, rev: current.rev + 1, by: me.id };
+
+    session.layout.set(id, next);
+    topZ = Math.max(topZ, next.z);
+
+    const view = session.windows.get(id);
+    if (view) positionWindow(view);
+
+    renderCursors();
+    queueLayout(id, final);
+
+  }
+
+  const layoutQueue = new Set();
+  let layoutTimer = null;
+  let layoutLast = 0;
+
+  function queueLayout(id, final) {
+
+    layoutQueue.add(id);
+
+    const wait = LAYOUT_SEND_MS - (Date.now() - layoutLast);
+
+    if (final || wait <= 0) flushLayout();
+    else if (!layoutTimer) layoutTimer = setTimeout(flushLayout, wait);
+
+  }
+
+  function flushLayout() {
+
+    clearTimeout(layoutTimer);
+    layoutTimer = null;
+
+    if (!session) return;
+
+    for (const id of layoutQueue) {
+      const entry = session.layout.get(id);
+      if (entry) send({ type: "win", id, ...pickLayout(entry), rev: entry.rev });
+    }
+
+    layoutQueue.clear();
+    layoutLast = Date.now();
+
+  }
+
+  const pickLayout = entry => Object.fromEntries(LAYOUT_KEYS.map(key => [key, entry[key]]));
+
+  // Mudança de outra pessoa (ao vivo ou do histórico da sala).
+  function applyLayout(id, data, by) {
+
+    if (typeof id !== "string" || !/^(board|screen):[\w-]{1,64}$/.test(id)) return;
+    if (!isDeviceId(by) || !Number.isInteger(data.rev) || data.rev < 1) return;
+    if (!["x", "y", "w", "z"].every(key => Number.isFinite(data[key]))) return;
+
+    const current = session.layout.get(id);
+
+    if (current && (data.rev < current.rev || (data.rev === current.rev && by <= current.by))) return;
+
+    const entry = {
+      x: clamp(data.x, 0, WORK_W),
+      y: clamp(data.y, 0, WORK_H),
+      w: clamp(data.w, WIN_MIN_W, WORK_W),
+      z: Math.max(0, Math.floor(data.z)),
+      min: data.min === true,
+      max: data.max === true,
+      rev: data.rev,
+      by
+    };
+
+    session.layout.set(id, entry);
+    topZ = Math.max(topZ, entry.z);
+
+    const view = session.windows.get(id);
+    if (view) positionWindow(view);
+
+    renderCursors();
+
+  }
+
+  function bringToFront(id) {
+    if (layoutOf(id).z < topZ) setLayout(id, { z: ++topZ });
+  }
+
+
+  /* ---- janelas ---- */
+
+  // No PC tudo fica na área de trabalho; no celular as telas vão para a aba Telas.
+  function placeWindow(view) {
+
+    const parent = DESKTOP_LAYOUT.matches || view.kind === "board" ? $("workspace") : $("screenGrid");
+
+    if (view.el.parentNode !== parent) {
+      parent.appendChild(view.el);
+      view.video?.play().catch(() => {});
+    }
+
+  }
+
+  function positionWindow(view) {
+
+    const entry = layoutOf(view.id);
+    const el = view.el;
+
+    el.classList.toggle("maximized", entry.max);
+    el.classList.toggle("minimized", entry.min && !entry.max);
+
+    view.minBtn.textContent = entry.min && !entry.max ? "▢" : "–";
+    view.minBtn.title = entry.min && !entry.max ? "Mostrar (para todos)" : "Minimizar (para todos)";
+    view.maxBtn.textContent = entry.max ? "🗗" : "⤢";
+    view.maxBtn.title = entry.max ? "Voltar ao tamanho da janela (para todos)" : "Maximizar (para todos)";
+
+    if (!session.work) {
+      for (const property of ["left", "top", "width", "zIndex"]) el.style[property] = "";
+      if (view.kind === "board") requestAnimationFrame(() => resizeCanvas(view));
+      return;
+    }
+
+    const scale = session.work.scale;
+    const aspect = view.aspect || 1;
+
+    let { x, y, w } = entry;
+
+    // Maximizada: o maior tamanho que cabe, no meio.
+    if (entry.max) {
+      w = Math.min(WORK_W, (WORK_H - HEAD_UNITS) * aspect);
+      x = (WORK_W - w) / 2;
+      y = 0;
+    }
+
+    w = Math.min(w, WORK_W, (WORK_H - HEAD_UNITS) * aspect);
+
+    const height = HEAD_UNITS + (entry.min && !entry.max ? 0 : w / aspect);
+
+    x = clamp(x, 0, WORK_W - w);
+    y = clamp(y, 0, WORK_H - height);
+
+    el.style.left = x * scale + "px";
+    el.style.top = y * scale + "px";
+    el.style.width = w * scale + "px";
+    el.style.zIndex = entry.z;
+
+    if (view.kind === "board") requestAnimationFrame(() => resizeCanvas(view));
+
+  }
+
+  // Moldura comum de janela: barra (arrastar) + corpo + canto (tamanho).
+  function createWindow({ id, kind, extraButtons = [], closable = false, onClose = null }) {
+
+    const el = document.createElement("div");
+    el.className = "win " + (kind === "board" ? "board-win" : "screen-tile");
+    el.dataset.id = id;
+
+    const head = document.createElement("div");
+    head.className = "win-head screen-head";
+
+    const dot = document.createElement("span");
+    dot.className = "dot";
+
+    const label = document.createElement("span");
+    label.className = "label";
+
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+
+    const body = document.createElement("div");
+    body.className = "win-body";
+
+    const handle = document.createElement("div");
+    handle.className = "resize-handle";
+    handle.title = "Arraste para mudar o tamanho (para todos)";
+
+    const view = { id, kind, el, head, body, label, aspect: kind === "board" ? 1 : 16 / 9 };
+
+    view.minBtn = windowButton("–", "Minimizar", () => {
+      const entry = layoutOf(id);
+      setLayout(id, entry.max ? { max: false, min: true } : { min: !entry.min });
+    }, "desktop-only");
+
+    view.maxBtn = windowButton("⤢", "Maximizar", () => {
+      const entry = layoutOf(id);
+      setLayout(id, { max: !entry.max, min: false, z: ++topZ });
+    }, "desktop-only");
+
+    head.append(dot, label, spacer, ...extraButtons, view.minBtn, view.maxBtn);
+
+    if (closable) head.append(windowButton("✕", "Fechar (para todos)", onClose));
+
+    body.append(handle);
+    el.append(head, body);
+
+    // Clicar traz para a frente (para todos).
+    el.addEventListener("pointerdown", event => {
+      if (DESKTOP_LAYOUT.matches && !event.target.closest("button")) bringToFront(id);
+    });
+
+    enableWindowDrag(view);
+    enableWindowResize(view, handle);
+
+    session.windows.set(id, view);
+    placeWindow(view);
+    positionWindow(view);
+
+    return view;
+
+  }
+
+  function windowButton(text, title, onClick, extraClass = "") {
+    const element = document.createElement("button");
+    element.className = "tool " + extraClass;
+    element.textContent = text;
+    element.title = title;
+    element.onclick = event => {
+      event.stopPropagation();
+      onClick();
+    };
+    return element;
+  }
+
+  function removeWindow(id) {
+
+    const view = session.windows.get(id);
+
+    if (!view) return;
+
+    if (view.video) {
+      if (document.pictureInPictureElement === view.video) document.exitPictureInPicture().catch(() => {});
+      view.video.srcObject = null;
+    }
+
+    if (document.fullscreenElement === view.el) document.exitFullscreen().catch(() => {});
+
+    view.el.remove();
+    session.windows.delete(id);
+
+  }
+
+  function enableWindowDrag(view) {
+
+    view.head.addEventListener("pointerdown", event => {
+
+      if (!session.work || event.target.closest("button")) return;
+
+      const entry = layoutOf(view.id);
+
+      if (entry.max) return;
+
+      event.preventDefault();
+      view.head.setPointerCapture(event.pointerId);
+      view.el.classList.add("dragging");
+
+      const scale = session.work.scale;
+      const start = { x: event.clientX, y: event.clientY, ex: entry.x, ey: entry.y };
+
+      const move = moveEvent => {
+
+        const current = layoutOf(view.id);
+        const height = HEAD_UNITS + (current.min ? 0 : current.w / view.aspect);
+
+        setLayout(view.id, {
+          x: clamp(start.ex + (moveEvent.clientX - start.x) / scale, 0, WORK_W - current.w),
+          y: clamp(start.ey + (moveEvent.clientY - start.y) / scale, 0, WORK_H - height)
+        }, false);
+
+      };
+
+      const up = () => {
+        view.el.classList.remove("dragging");
+        view.head.removeEventListener("pointermove", move);
+        view.head.removeEventListener("pointerup", up);
+        view.head.removeEventListener("pointercancel", up);
+        flushLayout();
+      };
+
+      view.head.addEventListener("pointermove", move);
+      view.head.addEventListener("pointerup", up);
+      view.head.addEventListener("pointercancel", up);
+
+    });
+
+  }
+
+  function enableWindowResize(view, handle) {
+
+    handle.addEventListener("pointerdown", event => {
+
+      if (!session.work) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      handle.setPointerCapture(event.pointerId);
+
+      const scale = session.work.scale;
+      const start = { x: event.clientX, w: layoutOf(view.id).w };
+
+      const move = moveEvent => {
+
+        const current = layoutOf(view.id);
+        const maxW = Math.min(WORK_W - current.x, (WORK_H - current.y - HEAD_UNITS) * view.aspect);
+
+        setLayout(view.id, {
+          w: clamp(start.w + (moveEvent.clientX - start.x) / scale, WIN_MIN_W, maxW)
+        }, false);
+
+      };
+
+      const up = () => {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+        flushLayout();
+      };
+
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+
+    });
+
+  }
+
+  // Tela cheia de uma janela (só aqui). No iPhone, que só deixa vídeo em
+  // tela cheia, a janela ocupa a página toda.
+  function toggleWindowFull(view) {
+
+    if (document.fullscreenElement === view.el) {
+      document.exitFullscreen().catch(() => {});
+    } else if (view.el.classList.contains("win-full")) {
+      view.el.classList.remove("win-full");
+    } else if (document.fullscreenEnabled && view.el.requestFullscreen) {
+      view.el.requestFullscreen().catch(() => view.el.classList.add("win-full"));
+    } else {
+      view.el.classList.add("win-full");
+    }
+
+    setTimeout(() => resizeCanvas(view), 150);
+
+  }
+
+  document.addEventListener("fullscreenchange", () => {
+    session?.windows.forEach(view => { if (view.kind === "board") resizeCanvas(view); });
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") document.querySelectorAll(".win-full").forEach(el => el.classList.remove("win-full"));
+  });
+
+
+  /* ---- quadros ---- */
+
+  // Traços são guardados por "<autor>:<id>" (igual em todos os aparelhos),
+  // com o quadro e a versão dele em que começaram (v). "Limpar" sobe a
+  // versão daquele quadro e apaga o que é mais antigo: assim um traço
+  // atrasado, ou um histórico que chega depois, não ressuscita o que já
+  // foi limpo.
+
+  // Cria (se ainda não existe) o quadro e a janela dele.
+  function ensureBoard(id, title = "", by = "") {
+
+    if (!BOARD_ID.test(id) || session.closedBoards.has(id)) return null;
+
+    let entry = session.boards.get(id);
+
+    if (!entry) {
+      entry = { id, title: cleanName(title) || "Quadro", version: 0, by };
+      session.boards.set(id, entry);
+    } else if (cleanName(title) && entry.title !== cleanName(title)) {
+      entry.title = cleanName(title);
+    }
+
+    let view = session.windows.get("board:" + id);
+
+    if (!view) view = createBoardWindow(entry);
+
+    view.label.textContent = "🎨 " + entry.title;
+
+    return entry;
+
+  }
+
+  function createBoardWindow(entry) {
+
+    const id = entry.id;
+
+    const clearBtn = windowButton("🧹", "Limpar este quadro (para todos)", () => clearBoard(id));
+    clearBtn.classList.add("clear-btn");
+
+    const fullBtn = windowButton("⛶", "Tela cheia (só aqui)", () => toggleWindowFull(view));
+
+    const view = createWindow({
+      id: "board:" + id,
+      kind: "board",
+      extraButtons: [clearBtn, fullBtn],
+      closable: id !== MAIN_BOARD,
+      onClose: () => closeBoard(id)
+    });
+
+    const canvas = document.createElement("canvas");
+    if (id === MAIN_BOARD) canvas.id = "board"; // o quadro principal
+
+    view.body.prepend(canvas);
+    view.canvas = canvas;
+    view.ctx = canvas.getContext("2d");
+    view.board = id;
+
+    new ResizeObserver(() => resizeCanvas(view)).observe(view.body);
+
+    enableDrawing(view);
+    enableCursorSurface(canvas, () => "board:" + id, () => canvas.getBoundingClientRect());
+
+    return view;
+
+  }
+
+  $("addBoardBtn").onclick = () => {
+
+    if (!session) return;
+
+    const id = me.id.slice(0, 8) + "-" + randomId();
+    const title = "Quadro " + (session.boards.size + 1);
+
+    ensureBoard(id, title, me.id);
+    send({ type: "board-add", id, title });
+
+    // Novo quadro na frente, para todos.
+    const place = defaultLayout("board:" + id);
+    setLayout("board:" + id, { x: place.x, y: place.y, w: place.w, z: ++topZ });
+
+    if (!DESKTOP_LAYOUT.matches) session.windows.get("board:" + id)?.el.scrollIntoView({ behavior: "smooth" });
+
+  };
+
+  // fromPeer: quem fechou (null = fui eu, avisa os outros). silent: veio do histórico.
+  function closeBoard(id, fromPeer = null, silent = false) {
+
+    if (id === MAIN_BOARD || !session.boards.has(id)) return;
+
+    const title = session.boards.get(id).title;
+
+    session.closedBoards.add(id);
+    session.boards.delete(id);
+    session.layout.delete("board:" + id);
+
+    for (const [key, stroke] of session.strokes) {
+      if (stroke.board === id) session.strokes.delete(key);
+    }
+
+    if (session.drawing?.board === id) session.drawing = null;
+
+    removeWindow("board:" + id);
+
+    if (fromPeer) {
+      if (!silent) addNote(`🗑️ ${peerLabel(fromPeer)} fechou o “${title}”`);
+    } else {
+      send({ type: "board-close", id });
+    }
+
+  }
+
+  // Quadro quadrado; resolução acompanha o tamanho na tela.
+  function resizeCanvas(view) {
+
+    const canvas = view.canvas;
+
+    if (!canvas) return;
+
+    const side = Math.floor(canvas.getBoundingClientRect().width);
+
+    if (side <= 0) return;
+
+    const pixels = Math.round(side * (window.devicePixelRatio || 1));
+
+    if (canvas.width !== pixels) {
+      canvas.width = canvas.height = pixels;
+      redrawBoard(view.board);
+    }
+
+    renderCursors();
+
+  }
+
+  /*
+   * Ferramentas. Tudo vira um "traço" { author, board, tool, color,
+   * width, v, t, points, text } igual em todos os aparelhos:
+   *
+   *   pen, highlighter, eraser  vários pontos (a borracha apaga os pixels
+   *                             por onde passa: vale para o que veio antes)
+   *   line, arrow, rect, ellipse  dois pontos (começo e fim; enquanto
+   *                             arrasta, o fim muda e todos veem a prévia)
+   *   text                      um ponto e o texto
+   *
+   * O quadro é desenhado em ordem de hora (t) de quem desenhou, para a
+   * borracha dar o mesmo resultado em todos, inclusive em quem chega depois.
+   */
+
+  const TOOLS = {
+    pen:         { icon: "✏️", label: "Caneta", key: "p" },
+    highlighter: { icon: "🖍️", label: "Marca-texto", key: "h" },
+    eraser:      { icon: "🧽", label: "Borracha", key: "e" },
+    line:        { icon: "／", label: "Linha", key: "l" },
+    arrow:       { icon: "➚", label: "Seta", key: "a" },
+    rect:        { icon: "▭", label: "Retângulo", key: "r" },
+    ellipse:     { icon: "◯", label: "Elipse", key: "o" },
+    text:        { icon: "🅣", label: "Texto", key: "t" }
+  };
+
+  const SHAPES = new Set(["line", "arrow", "rect", "ellipse"]);
+  const FREEHAND = new Set(["pen", "highlighter", "eraser"]);
+  const TEXT_MAX = 200;
+
+  // Espessura do controle (1–10) em fração do lado do quadro.
+  const sizeToWidth = size => 0.002 + size * 0.003;
+
+  const strokeOrder = (a, b) => a[1].t - b[1].t || (a[0] < b[0] ? -1 : 1);
+
+  function redrawBoard(boardId) {
+
+    const view = session?.windows.get("board:" + boardId);
+
+    if (!view) return;
+
+    const size = view.canvas.width;
+
+    view.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    view.ctx.clearRect(0, 0, size, size);
+
+    const strokes = [...session.strokes].filter(([, stroke]) => stroke.board === boardId).sort(strokeOrder);
+
+    for (const [, stroke] of strokes) drawStroke(view.ctx, size, stroke);
+
+  }
+
+  function styleFor(ctx, size, stroke) {
+
+    ctx.globalCompositeOperation = stroke.tool === "eraser" ? "destination-out" : "source-over";
+    ctx.globalAlpha = stroke.tool === "highlighter" ? 0.35 : 1;
+    ctx.strokeStyle = ctx.fillStyle = stroke.color;
+    ctx.lineWidth = Math.max(1, stroke.width * size * (stroke.tool === "highlighter" ? 3 : stroke.tool === "eraser" ? 2.5 : 1));
+    ctx.lineCap = stroke.tool === "highlighter" ? "butt" : "round";
+    ctx.lineJoin = "round";
+
+  }
+
+  // O traço inteiro (para redesenhar o quadro).
+  function drawStroke(ctx, size, stroke) {
+
+    const points = stroke.points;
+
+    if (!points.length) return;
+
+    ctx.save();
+    styleFor(ctx, size, stroke);
+
+    const [x1, y1] = points[0].map(value => value * size);
+    const [x2, y2] = (points[points.length - 1]).map(value => value * size);
+
+    ctx.beginPath();
+
+    if (stroke.tool === "text") {
+
+      const fontSize = Math.max(10, stroke.width * size * 5);
+      ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
+      ctx.textBaseline = "top";
+      String(stroke.text || "").split("\n").forEach((line, index) => ctx.fillText(line, x1, y1 + index * fontSize * 1.2));
+
+    } else if (stroke.tool === "rect") {
+
+      ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
+
+    } else if (stroke.tool === "ellipse") {
+
+      ctx.ellipse((x1 + x2) / 2, (y1 + y2) / 2, Math.abs(x2 - x1) / 2, Math.abs(y2 - y1) / 2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+    } else if (stroke.tool === "line" || stroke.tool === "arrow") {
+
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      if (stroke.tool === "arrow" && Math.hypot(x2 - x1, y2 - y1) > 2) {
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const head = Math.max(10, ctx.lineWidth * 4);
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - head * Math.cos(angle - Math.PI / 7), y2 - head * Math.sin(angle - Math.PI / 7));
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - head * Math.cos(angle + Math.PI / 7), y2 - head * Math.sin(angle + Math.PI / 7));
+        ctx.stroke();
+      }
+
+    } else {
+
+      // À mão livre: um caminho só (o marca-texto não escurece onde se cruza).
+      ctx.moveTo(x1, y1);
+      for (let index = 1; index < points.length; index++) ctx.lineTo(points[index][0] * size, points[index][1] * size);
+      if (points.length === 1) ctx.lineTo(x1 + 0.01, y1);
+      ctx.stroke();
+
+    }
+
+    ctx.restore();
+
+  }
+
+  // Caneta e borracha: só o pedaço novo (rápido). O resto redesenha o quadro.
+  function drawSegment(stroke, index) {
+
+    const view = session.windows.get("board:" + stroke.board);
+
+    if (!view) return;
+
+    if (stroke.tool !== "pen" && stroke.tool !== "eraser" && stroke.tool) {
+      redrawBoard(stroke.board);
+      return;
+    }
+
+    const ctx = view.ctx;
+    const size = view.canvas.width;
+    const [x, y] = stroke.points[index];
+    const [px, py] = stroke.points[Math.max(0, index - 1)];
+
+    ctx.save();
+    styleFor(ctx, size, stroke);
+    ctx.beginPath();
+    ctx.moveTo(px * size, py * size);
+    ctx.lineTo(x * size + (index === 0 ? 0.01 : 0), y * size);
+    ctx.stroke();
+    ctx.restore();
+
+  }
+
+  function boardPoint(canvas, event) {
+
+    const rect = canvas.getBoundingClientRect();
+
+    return [
+      +clamp((event.clientX - rect.left) / rect.width, 0, 1).toFixed(4),
+      +clamp((event.clientY - rect.top) / rect.height, 0, 1).toFixed(4)
+    ];
+
+  }
+
+  function newStroke(boardId, tool, point, text = "") {
+    return {
+      author: me.id,
+      board: boardId,
+      tool,
+      color: session.color,
+      width: session.width,
+      v: session.boards.get(boardId).version,
+      t: Date.now(),
+      points: [point],
+      ...(text ? { text } : {})
+    };
+  }
+
+  function startStroke(boardId, stroke) {
+
+    const id = randomId();
+
+    session.strokes.set(me.id + ":" + id, stroke);
+    session.mine.push({ board: boardId, key: me.id + ":" + id });
+
+    const { tool, color, width, v, t, text } = stroke;
+
+    send({ type: "draw-start", board: boardId, id, tool, color, width, v, t, text, point: stroke.points[0] });
+
+    return id;
+
+  }
+
+  function enableDrawing(view) {
+
+    const canvas = view.canvas;
+    const boardId = view.board;
+
+    canvas.addEventListener("pointerdown", event => {
+
+      if (!session || session.boardMode !== "edit" || !session.boards.has(boardId)) return;
+
+      session.activeBoard = boardId;
+
+      const tool = session.tool;
+      const point = boardPoint(canvas, event);
+
+      if (tool === "text") {
+        event.preventDefault();
+        askText(view, event, point);
+        return;
+      }
+
+      event.preventDefault();
+      canvas.setPointerCapture(event.pointerId);
+
+      const stroke = newStroke(boardId, tool, point);
+
+      // Forma: começa com o fim no mesmo ponto; o fim muda enquanto arrasta.
+      if (SHAPES.has(tool)) stroke.points.push(point);
+
+      const id = startStroke(boardId, stroke);
+
+      session.drawing = { board: boardId, id };
+
+      if (SHAPES.has(tool)) redrawBoard(boardId);
+      else drawSegment(stroke, 0);
+
+    });
+
+    canvas.addEventListener("pointermove", event => {
+
+      if (session?.drawing?.board !== boardId) return;
+
+      const stroke = session.strokes.get(me.id + ":" + session.drawing.id);
+
+      // Alguém limpou o quadro (ou desfez) no meio do traço.
+      if (!stroke) return;
+
+      if (SHAPES.has(stroke.tool)) {
+
+        stroke.points[1] = boardPoint(canvas, event);
+        session.pendingEnd = stroke.points[1];
+        redrawBoard(boardId);
+
+      } else {
+
+        const events = event.getCoalescedEvents?.() || [event];
+
+        for (const item of events) {
+          const point = boardPoint(canvas, item);
+          stroke.points.push(point);
+          session.pendingPoints.push(point);
+          drawSegment(stroke, stroke.points.length - 1);
+        }
+
+      }
+
+      // Junta e manda no máximo um pacote por quadro de tela.
+      if (!session.flushScheduled) {
+        session.flushScheduled = true;
+        requestAnimationFrame(flushPoints);
+      }
+
+    });
+
+    canvas.addEventListener("pointerup", endStroke);
+    canvas.addEventListener("pointercancel", endStroke);
+
+  }
+
+  function flushPoints() {
+
+    if (!session) return;
+
+    session.flushScheduled = false;
+
+    if (session.drawing && session.pendingPoints.length) {
+      send({ type: "draw-move", id: session.drawing.id, points: session.pendingPoints });
+    }
+
+    if (session.drawing && session.pendingEnd) {
+      send({ type: "draw-move", id: session.drawing.id, end: session.pendingEnd });
+    }
+
+    session.pendingPoints = [];
+    session.pendingEnd = null;
+
+  }
+
+  function endStroke() {
+
+    if (!session?.drawing) return;
+
+    flushPoints();
+    send({ type: "draw-end", id: session.drawing.id });
+    session.drawing = null;
+
+  }
+
+  // Texto: uma caixa onde tocou; Enter (ou sair da caixa) coloca no quadro.
+  function askText(view, event, point) {
+
+    document.querySelector(".board-text-input")?.remove();
+
+    const input = document.createElement("input");
+    input.className = "board-text-input";
+    input.maxLength = TEXT_MAX;
+    input.placeholder = "Escreva e aperte Enter";
+    input.style.left = event.clientX + "px";
+    input.style.top = event.clientY - 14 + "px";
+    input.style.color = session.color;
+
+    let done = false;
+
+    const finish = commit => {
+
+      if (done) return;
+      done = true;
+
+      const text = input.value.trim().slice(0, TEXT_MAX);
+
+      input.remove();
+
+      if (!commit || !text || !session?.boards.has(view.board)) return;
+
+      const stroke = newStroke(view.board, "text", point, text);
+
+      startStroke(view.board, stroke);
+      redrawBoard(view.board);
+
+    };
+
+    input.onkeydown = keyEvent => {
+      if (keyEvent.key === "Enter") finish(true);
+      if (keyEvent.key === "Escape") finish(false);
+      keyEvent.stopPropagation();
+    };
+
+    document.body.appendChild(input);
+
+    // O clique que abriu a caixa ainda está terminando: só depois dele o
+    // "sair da caixa" passa a valer como confirmar.
+    setTimeout(() => {
+      input.focus();
+      input.onblur = () => finish(true);
+    }, 250);
+
+  }
+
+  // Desfazer: apaga o meu último traço do quadro em que eu estava mexendo.
+  function undoMine() {
+
+    if (!session) return;
+
+    const board = session.activeBoard;
+
+    for (let index = session.mine.length - 1; index >= 0; index--) {
+
+      const { board: boardId, key } = session.mine[index];
+
+      if (boardId !== board) continue;
+
+      session.mine.splice(index, 1);
+
+      if (!session.strokes.has(key)) continue; // já foi limpo
+
+      eraseStrokes(boardId, [key]);
+      send({ type: "erase", board: boardId, keys: [key] });
+
+      return;
+
+    }
+
+    toast("↶ Nada seu para desfazer neste quadro.");
+
+  }
+
+  $("undoBtn").onclick = undoMine;
+
+  // Apaga traços (e não deixa voltarem por um histórico atrasado).
+  function eraseStrokes(boardId, keys) {
+
+    for (const key of keys) {
+      session.erased.add(key);
+      session.strokes.delete(key);
+    }
+
+    if (session.drawing && keys.includes(me.id + ":" + session.drawing.id)) session.drawing = null;
+
+    redrawBoard(boardId);
+
+  }
+
+  function clearBoard(boardId) {
+
+    const entry = session?.boards.get(boardId);
+
+    if (!entry) return;
+
+    applyClear(boardId, entry.version + 1);
+    send({ type: "clear", board: boardId, v: entry.version });
+
+  }
+
+  // Quadro na versão v: some tudo o que começou antes dela.
+  function applyClear(boardId, v) {
+
+    const entry = session.boards.get(boardId);
+
+    if (!entry || v <= entry.version) return false;
+
+    entry.version = v;
+
+    for (const [key, stroke] of session.strokes) {
+      if (stroke.board === boardId && stroke.v < v) session.strokes.delete(key);
+    }
+
+    redrawBoard(boardId);
+
+    return true;
+
+  }
+
+  const isPoint = point =>
+    Array.isArray(point) && point.length === 2 && point.every(Number.isFinite);
+
+  const cleanVersion = v => Number.isInteger(v) && v >= 0 ? v : null;
+
+  // Quadro de uma mensagem (versões antigas da página não mandam: é o principal).
+  const boardOf = message => typeof message.board === "string" ? message.board : MAIN_BOARD;
+
+  // Campos de um traço vindo de outra pessoa (ao vivo ou do histórico).
+  function cleanStroke(item, author, boardId, v) {
+    const tool = TOOLS[item.tool] ? item.tool : "pen";
+    return {
+      author,
+      board: boardId,
+      tool,
+      color: String(item.color || BOARD_COLORS[0]).slice(0, 32),
+      width: clamp(Number(item.width) || sizeToWidth(2), 0.001, 0.05),
+      v,
+      t: Number.isFinite(item.t) ? item.t : Date.now(),
+      points: [],
+      ...(tool === "text" ? { text: String(item.text || "").slice(0, TEXT_MAX) } : {})
+    };
+  }
+
+  function handleRemoteDraw(peer, message) {
+
+    const who = peerLabel(peer);
+
+    // Cada um sorteia os ids dos próprios traços: separa por aparelho.
+    const key = peer.id + ":" + message.id;
+
+    if (message.type === "clear") {
+
+      const boardId = boardOf(message);
+      const entry = ensureBoard(boardId, "", peer.id);
+
+      if (!entry) return;
+
+      // Sem versão (versão antiga da página): limpa o que tem agora.
+      const v = cleanVersion(message.v) ?? entry.version + 1;
+
+      if (applyClear(boardId, v)) {
+        const text = session.boards.size > 1 ? `🧹 ${who} limpou o “${entry.title}”` : `🧹 ${who} limpou o quadro`;
+        addNote(text);
+        if (!isPaneVisible("chat")) toast(text);
+      }
+
+      return;
+
+    }
+
+    if (message.type === "draw-start") {
+
+      const boardId = boardOf(message);
+      const entry = ensureBoard(boardId, "", peer.id);
+
+      if (!entry || !isPoint(message.point) || session.erased.has(key)) return;
+
+      const v = cleanVersion(message.v) ?? entry.version;
+
+      // Começou antes de um "Limpar" que já aconteceu aqui: descarta.
+      if (v < entry.version) return;
+
+      // Ele já viu um "Limpar" que ainda não chegou aqui.
+      applyClear(boardId, v);
+
+      const stroke = cleanStroke(message, peer.id, boardId, v);
+
+      stroke.points.push(message.point);
+      if (SHAPES.has(stroke.tool)) stroke.points.push(message.point);
+
+      session.strokes.set(key, stroke);
+
+      if (FREEHAND.has(stroke.tool) && stroke.tool !== "highlighter") drawSegment(stroke, 0);
+      else redrawBoard(boardId);
+
+      bump("board");
+
+    } else if (message.type === "draw-move") {
+
+      const stroke = session.strokes.get(key);
+
+      if (!stroke) return;
+
+      if (SHAPES.has(stroke.tool) && isPoint(message.end)) {
+        stroke.points[1] = message.end;
+        redrawBoard(stroke.board);
+      } else if (Array.isArray(message.points)) {
+        for (const point of message.points) {
+          if (!isPoint(point)) continue;
+          stroke.points.push(point);
+          drawSegment(stroke, stroke.points.length - 1);
+        }
+      }
+
+    }
+
+    // "Fulano está desenhando…" some logo depois que ele para.
+    $("remoteDrawing").textContent = session.room
+      ? `✏️ ${who} está desenhando…`
+      : "✏️ O outro está desenhando…";
+    show("remoteDrawing");
+    clearTimeout(session.remoteDrawingTimer);
+    session.remoteDrawingTimer = setTimeout(() => show("remoteDrawing", false), 1200);
+
+  }
+
+  // Alguém desfez: apaga os traços DELE.
+  function handleRemoteErase(peer, message) {
+
+    const boardId = boardOf(message);
+
+    if (!session.boards.has(boardId) || !Array.isArray(message.keys)) return;
+
+    const keys = message.keys.filter(key => typeof key === "string" && key.startsWith(peer.id + ":")).slice(0, 100);
+
+    if (keys.length) eraseStrokes(boardId, keys);
+
+  }
+
+
+  /* ---- barra de ferramentas ---- */
+
+  function renderTools() {
+
+    const container = $("toolButtons");
+
+    container.replaceChildren(...Object.entries(TOOLS).map(([name, tool]) => {
+      const button = document.createElement("button");
+      button.className = "tool" + (session.tool === name ? " active" : "");
+      button.dataset.tool = name;
+      button.textContent = tool.icon;
+      button.title = `${tool.label} (${tool.key.toUpperCase()})`;
+      button.setAttribute("aria-pressed", session.tool === name);
+      button.onclick = () => setTool(name);
+      return button;
+    }));
+
+    $("boardPane").dataset.tool = session.tool;
+
+  }
+
+  function setTool(name) {
+
+    if (!session || !TOOLS[name]) return;
+
+    endStroke();
+    session.tool = name;
+
+    // Escolheu uma ferramenta: volta a editar.
+    if (session.boardMode !== "edit") {
+      session.boardMode = "edit";
+      renderBoardMode();
+    }
+
+    renderTools();
+
+  }
+
+  function renderSwatches() {
+
+    const container = $("swatches");
+    container.replaceChildren();
+
+    for (const color of BOARD_COLORS) {
+
+      const button = document.createElement("button");
+      button.className = "swatch" + (color === session.color ? " active" : "");
+      button.style.background = color;
+      button.title = "Cor";
+
+      button.onclick = () => {
+        session.color = color;
+        if (session.tool === "eraser") setTool("pen");
+        renderSwatches();
+      };
+
+      container.appendChild(button);
+
+    }
+
+    const custom = !BOARD_COLORS.includes(session.color);
+
+    document.querySelector(".color-pick").classList.toggle("active", custom);
+    if (custom) $("customColor").value = session.color;
+
+    $("sizeRange").value = session.size;
+    $("sizeDot").style.setProperty("--size", Math.round(3 + session.size * 1.8) + "px");
+    $("sizeDot").style.setProperty("--dot", session.color);
+
+  }
+
+  $("customColor").oninput = () => {
+    if (!session) return;
+    session.color = $("customColor").value;
+    if (session.tool === "eraser") setTool("pen");
+    renderSwatches();
+  };
+
+  $("sizeRange").oninput = () => {
+    if (!session) return;
+    session.size = Number($("sizeRange").value);
+    session.width = sizeToWidth(session.size);
+    renderSwatches();
+  };
+
+  // Atalhos: letra da ferramenta e Ctrl+Z (fora de campos de texto).
+  document.addEventListener("keydown", event => {
+
+    if (!session || event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !event.shiftKey) {
+      event.preventDefault();
+      undoMine();
+      return;
+    }
+
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    const name = Object.keys(TOOLS).find(key => TOOLS[key].key === event.key.toLowerCase());
+
+    if (name) setTool(name);
+
+  });
+
+  // "Visualizando": tocar no quadro não desenha (bom para só olhar,
+  // rolar a página no celular ou apresentar sem riscar sem querer).
+  $("boardModeBtn").onclick = () => {
+
+    if (!session) return;
+
+    endStroke();
+    session.boardMode = session.boardMode === "edit" ? "view" : "edit";
+    renderBoardMode();
+
+  };
+
+  function renderBoardMode() {
+
+    const editing = session.boardMode === "edit";
+
+    $("boardModeBtn").textContent = editing ? "✏️ Editando" : "👁️ Visualizando";
+    $("boardModeBtn").classList.toggle("active", editing);
+    $("boardModeBtn").title = editing
+      ? "Tocar no quadro desenha. Toque para só visualizar."
+      : "Tocar no quadro não desenha. Toque para editar.";
+
+    $("boardPane").classList.toggle("viewing", !editing);
+
+  }
+
+
+  /* ---- telas compartilhadas ---- */
+
+  // Uma janela por pessoa compartilhando (inclusive eu: a prévia do que
+  // os outros veem). O <video> é mantido (não pisca, não derruba o PiP).
   // started: quem acabou de começar a compartilhar.
   function renderScreens(started = null) {
 
@@ -4693,58 +6129,36 @@
     const sharers = [];
 
     if (session.screenTrack) {
-      sharers.push({ key: "me", id: me.id, name: "Você (o que os outros veem)", track: session.screenTrack, mine: true });
+      sharers.push({ id: me.id, name: "Você (o que os outros veem)", track: session.screenTrack, mine: true });
     }
 
     for (const peer of connectedPeers()) {
       const track = peer.videoStream?.getVideoTracks()[0];
-      if (peer.remote.screen && track) sharers.push({ key: peer.id, id: peer.id, name: peerLabel(peer), track, mine: false });
+      if (peer.remote.screen && track) sharers.push({ id: peer.id, name: peerLabel(peer), track, mine: false });
     }
 
-    const keys = new Set(sharers.map(sharer => sharer.key));
-    const hadRemote = [...session.screenTiles.keys()].some(key => key !== "me");
+    const ids = new Set(sharers.map(sharer => "screen:" + sharer.id));
+    const hadRemote = [...session.windows.values()].some(view => view.kind === "screen" && view.id !== "screen:" + me.id);
 
     // Quem parou: some.
-    for (const [key, entry] of session.screenTiles) {
-      if (keys.has(key)) continue;
-      if (document.pictureInPictureElement === entry.video) document.exitPictureInPicture().catch(() => {});
-      entry.video.srcObject = null;
-      entry.tile.remove();
-      session.screenTiles.delete(key);
+    for (const view of [...session.windows.values()]) {
+      if (view.kind === "screen" && !ids.has(view.id)) removeWindow(view.id);
     }
-
-    if (!keys.has(session.focusedScreen)) session.focusedScreen = null;
 
     for (const sharer of sharers) {
 
-      let entry = session.screenTiles.get(sharer.key);
+      const id = "screen:" + sharer.id;
+      let view = session.windows.get(id);
 
-      if (!entry) {
-        entry = createScreenTile(sharer.key);
-        session.screenTiles.set(sharer.key, entry);
-        $("screenGrid").appendChild(entry.tile);
-        placeTile(entry, session.screenTiles.size - 1);
+      if (!view) view = createScreenWindow(id);
+
+      if (view.video.srcObject?.getVideoTracks()[0] !== sharer.track) {
+        view.video.srcObject = new MediaStream([sharer.track]);
+        view.video.play().catch(() => {});
       }
 
-      if (entry.video.srcObject?.getVideoTracks()[0] !== sharer.track) {
-        entry.video.srcObject = new MediaStream([sharer.track]);
-        entry.video.play().catch(() => {});
-      }
-
-      entry.id = sharer.id;
-      entry.label.textContent = sharer.name;
-      entry.tile.style.setProperty("--person", personColor(sharer.id));
-
-      const maximized = session.focusedScreen === sharer.key;
-
-      entry.tile.classList.toggle("maximized", maximized);
-      entry.tile.classList.toggle("minimized", entry.minimized && !maximized);
-      entry.maxBtn.textContent = maximized ? "🗗" : "⤢";
-      entry.maxBtn.title = maximized ? "Voltar ao tamanho da janela" : "Maximizar (ocupa o quadro todo)";
-      entry.minBtn.textContent = entry.minimized ? "▢" : "–";
-      entry.minBtn.title = entry.minimized ? "Mostrar o vídeo" : "Minimizar (só a barra)";
-
-      if (maximized) entry.tile.style.zIndex = ++tileZ;
+      view.label.textContent = sharer.name;
+      view.el.style.setProperty("--person", personColor(sharer.id));
 
     }
 
@@ -4784,80 +6198,32 @@
 
   }
 
-  function createScreenTile(key) {
+  function createScreenWindow(id) {
 
-    const tile = document.createElement("div");
-    tile.className = "screen-tile";
+    const pipBtn = windowButton("📺", "Picture-in-picture: assistir numa janelinha por cima de tudo (só aqui)", () => togglePip(view.video));
+    const fullBtn = windowButton("⛶", "Tela cheia (só aqui)", () => {
+      if (view.video.requestFullscreen) view.video.requestFullscreen().catch(() => {});
+      else view.video.webkitEnterFullscreen?.(); // iPhone
+    });
 
-    const head = document.createElement("div");
-    head.className = "screen-head";
+    pipBtn.hidden = !CAN_PIP;
 
-    const dot = document.createElement("span");
-    dot.className = "dot";
-
-    const label = document.createElement("span");
-    label.className = "label";
-
-    const spacer = document.createElement("span");
-    spacer.className = "spacer";
-
-    const button = (text, title, onClick, desktopOnly = false) => {
-      const element = document.createElement("button");
-      element.className = "tool" + (desktopOnly ? " desktop-only" : "");
-      element.textContent = text;
-      element.title = title;
-      element.onclick = event => {
-        event.stopPropagation();
-        onClick();
-      };
-      return element;
-    };
-
-    const box = document.createElement("div");
-    box.className = "screen-video";
+    const view = createWindow({ id, kind: "screen", extraButtons: [pipBtn, fullBtn] });
 
     const video = document.createElement("video");
     video.autoplay = true;
     video.playsInline = true;
     video.muted = true;
 
-    const handle = document.createElement("div");
-    handle.className = "resize-handle";
-    handle.title = "Arraste para mudar o tamanho";
-
-    const entry = { key, id: null, tile, video, box, label, minimized: false, pos: null };
-
-    entry.minBtn = button("–", "Minimizar", () => {
-      entry.minimized = !entry.minimized;
-      if (session.focusedScreen === key) session.focusedScreen = null;
-      renderScreens();
-    }, true);
-
-    entry.maxBtn = button("⤢", "Maximizar", () => {
-      session.focusedScreen = session.focusedScreen === key ? null : key;
-      entry.minimized = false;
-      renderScreens();
-    }, true);
-
-    const pipBtn = button("📺", "Picture-in-picture: assistir numa janelinha por cima de tudo", () => togglePip(video));
-
-    const fullBtn = button("⛶", "Tela cheia", () => {
-      if (video.requestFullscreen) video.requestFullscreen().catch(() => {});
-      else video.webkitEnterFullscreen?.(); // iPhone
-    });
-
-    pipBtn.hidden = !CAN_PIP;
-
-    head.append(dot, label, spacer, entry.minBtn, entry.maxBtn, pipBtn, fullBtn);
-    box.append(video, handle);
-    tile.append(head, box);
+    view.body.prepend(video);
+    view.video = video;
 
     // Proporção real do vídeo (a janela acompanha).
     const fitRatio = () => {
-      if (video.videoWidth && video.videoHeight) {
-        box.style.setProperty("--ar", `${video.videoWidth} / ${video.videoHeight}`);
-        clampTile(entry);
-      }
+      if (!video.videoWidth || !video.videoHeight) return;
+      view.aspect = video.videoWidth / video.videoHeight;
+      view.body.style.setProperty("--ar", `${video.videoWidth} / ${video.videoHeight}`);
+      positionWindow(view);
     };
 
     video.addEventListener("loadedmetadata", fitRatio);
@@ -4866,135 +6232,11 @@
     // Toque duplo: tela cheia.
     video.ondblclick = () => fullBtn.click();
 
-    // Clicar traz para a frente.
-    tile.addEventListener("pointerdown", () => {
-      if (session.focusedScreen !== key) tile.style.zIndex = ++tileZ;
-    });
+    enableCursorSurface(view.body, () => id, () => videoContentRect(video));
 
-    enableTileDrag(entry, head);
-    enableTileResize(entry, handle);
-    enableCursorSurface(box, () => "screen:" + (key === "me" ? me.id : key), () => videoContentRect(video));
-
-    return entry;
+    return view;
 
   }
-
-  // Posição inicial: em cascata, a partir do canto de baixo à direita
-  // (em cima ficam as ferramentas do quadro).
-  function placeTile(entry, index) {
-
-    const stage = $("screenPane").getBoundingClientRect();
-    const width = Math.min(420, Math.max(TILE_MIN_WIDTH, stage.width * .42));
-    const height = width * 9 / 16 + 34; // vídeo 16:9 + barra
-
-    entry.pos = {
-      x: stage.width - width - 16 - index * 28,
-      y: stage.height - height - 16 - index * 28,
-      w: width
-    };
-
-    clampTile(entry);
-
-  }
-
-  // Mantém a janela inteira dentro do palco.
-  function clampTile(entry) {
-
-    if (!entry.pos) return;
-
-    const stage = $("screenPane").getBoundingClientRect();
-
-    if (!stage.width) return;
-
-    const pos = entry.pos;
-
-    pos.w = Math.max(TILE_MIN_WIDTH, Math.min(pos.w, stage.width - 16));
-
-    const height = entry.tile.offsetHeight || pos.w * 9 / 16;
-
-    pos.x = Math.max(8, Math.min(pos.x, stage.width - pos.w - 8));
-    pos.y = Math.max(8, Math.min(pos.y, stage.height - Math.min(height, stage.height - 16) - 8));
-
-    // A altura segue a largura (proporção do vídeo): não pode passar do palco.
-    const ratio = height / pos.w || 9 / 16;
-    if (pos.w * ratio > stage.height - 16) pos.w = Math.max(TILE_MIN_WIDTH, (stage.height - 16) / ratio);
-
-    entry.tile.style.setProperty("--x", pos.x + "px");
-    entry.tile.style.setProperty("--y", pos.y + "px");
-    entry.tile.style.setProperty("--w", pos.w + "px");
-
-  }
-
-  function enableTileDrag(entry, head) {
-
-    head.addEventListener("pointerdown", event => {
-
-      if (!DESKTOP_LAYOUT.matches || event.target.closest("button")) return;
-      if (session.focusedScreen === entry.key) return;
-
-      event.preventDefault();
-      head.setPointerCapture(event.pointerId);
-      entry.tile.classList.add("dragging");
-
-      const start = { x: event.clientX, y: event.clientY, px: entry.pos.x, py: entry.pos.y };
-
-      const move = moveEvent => {
-        entry.pos.x = start.px + moveEvent.clientX - start.x;
-        entry.pos.y = start.py + moveEvent.clientY - start.y;
-        clampTile(entry);
-        renderCursors();
-      };
-
-      const up = () => {
-        entry.tile.classList.remove("dragging");
-        head.removeEventListener("pointermove", move);
-        head.removeEventListener("pointerup", up);
-        head.removeEventListener("pointercancel", up);
-      };
-
-      head.addEventListener("pointermove", move);
-      head.addEventListener("pointerup", up);
-      head.addEventListener("pointercancel", up);
-
-    });
-
-  }
-
-  function enableTileResize(entry, handle) {
-
-    handle.addEventListener("pointerdown", event => {
-
-      event.preventDefault();
-      event.stopPropagation();
-      handle.setPointerCapture(event.pointerId);
-
-      const start = { x: event.clientX, w: entry.pos.w };
-
-      const move = moveEvent => {
-        entry.pos.w = start.w + moveEvent.clientX - start.x;
-        clampTile(entry);
-        renderCursors();
-      };
-
-      const up = () => {
-        handle.removeEventListener("pointermove", move);
-        handle.removeEventListener("pointerup", up);
-        handle.removeEventListener("pointercancel", up);
-      };
-
-      handle.addEventListener("pointermove", move);
-      handle.addEventListener("pointerup", up);
-      handle.addEventListener("pointercancel", up);
-
-    });
-
-  }
-
-  // O palco mudou de tamanho (janela, chat abriu/fechou): nenhuma tela fica para fora.
-  new ResizeObserver(() => {
-    session?.screenTiles.forEach(clampTile);
-    renderCursors();
-  }).observe($("screenPane"));
 
   async function togglePip(video) {
 
@@ -5017,6 +6259,30 @@
 
   }
 
+  // Comecei a compartilhar: se a minha janela ainda não tem posição,
+  // combino uma (na frente) para todos verem no mesmo lugar.
+  function announceMyScreenWindow() {
+
+    const id = "screen:" + me.id;
+
+    if (session.layout.has(id)) {
+      setLayout(id, { min: false, z: ++topZ });
+      return;
+    }
+
+    // Em cascata, para não nascer em cima das telas que já estão abertas.
+    const others = [...session.windows.values()].filter(view => view.kind === "screen" && view.id !== id).length;
+    const place = defaultLayout(id);
+
+    setLayout(id, {
+      x: clamp(place.x - others * 48, 0, WORK_W - place.w),
+      y: clamp(place.y - others * 40, 0, WORK_H),
+      w: place.w,
+      z: ++topZ
+    });
+
+  }
+
   // Configurações › Quem está aqui: cada um e o que está fazendo.
   function renderPeople() {
 
@@ -5025,10 +6291,10 @@
     const container = $("peopleList");
     container.replaceChildren();
 
-    const person = (id, name, tags, sharingKey) => {
+    const person = (id, name, tags, sharing) => {
 
       const element = document.createElement("div");
-      element.className = "person" + (sharingKey ? " sharing" : "");
+      element.className = "person" + (sharing ? " sharing" : "");
       element.style.setProperty("--person", personColor(id));
 
       const dot = document.createElement("span");
@@ -5044,9 +6310,9 @@
       element.append(dot, strong, small);
 
       // Clicar em quem compartilha mostra a tela dele.
-      if (sharingKey) {
+      if (sharing) {
         element.title = "Mostrar a tela";
-        element.onclick = () => showScreen(sharingKey);
+        element.onclick = () => showScreen("screen:" + id);
       }
 
       container.appendChild(element);
@@ -5065,46 +6331,44 @@
       screen: !!session.screenTrack,
       audioShare: !!session.shareAudioTrack,
       speaker: session.speakerOn
-    }), session.screenTrack ? "me" : null);
+    }), !!session.screenTrack);
 
     for (const peer of connectedPeers()) {
       const tags = tagsOf(peer.remote);
       if (peer.reconnect) tags.unshift("⚠️ reconectando");
-      person(peer.id, peerLabel(peer), tags, peer.remote.screen && peer.videoStream ? peer.id : null);
+      person(peer.id, peerLabel(peer), tags, peer.remote.screen && !!peer.videoStream);
     }
 
     for (const request of roomRequests.values()) {
       if (peers.get(request.peer.id)?.connected) continue;
-      person(request.peer.id, peerName(request.peer), ["⏳ conectando"], null);
+      person(request.peer.id, peerName(request.peer), ["⏳ conectando"], false);
     }
 
   }
 
-  // Traz a tela de alguém para a frente (e abre a aba no celular).
-  function showScreen(key) {
+  // Traz a tela de alguém para a frente, para todos (e abre a aba no celular).
+  function showScreen(id) {
 
-    const entry = session.screenTiles.get(key);
+    const view = session.windows.get(id);
 
-    if (!entry) return;
+    if (!view) return;
 
-    entry.minimized = false;
-    entry.tile.style.zIndex = ++tileZ;
+    if (layoutOf(id).min || layoutOf(id).z < topZ) setLayout(id, { min: false, z: ++topZ });
 
     if (!DESKTOP_LAYOUT.matches) {
       session.screenAutoFrom = null;
       setTab("screen");
     }
 
-    renderScreens();
-    entry.tile.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    view.el.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
   }
 
   $("remoteScreenPill").onclick = () => {
 
-    const first = [...session.screenTiles.keys()].find(key => key !== "me");
+    const first = [...session.windows.values()].find(view => view.kind === "screen" && view.id !== "screen:" + me.id);
 
-    if (first) showScreen(first);
+    if (first) showScreen(first.id);
 
   };
 
@@ -5152,7 +6416,7 @@
   // uma tela compartilhada, em coordenadas de 0 a 1 daquela superfície.
   // Quem recebe desenha uma setinha com a cor e o nome da pessoa.
   //
-  //   surface: "board" | "screen:<id de quem compartilha>"
+  //   surface: o id da janela ("board:<id do quadro>" | "screen:<id de quem compartilha>")
 
   const CURSOR_SEND_MS = 50;
   const CURSOR_IDLE_MS = 8000;
@@ -5258,8 +6522,9 @@
 
   function receiveCursor(peer, message) {
 
-    const surface = message.surface;
-    const valid = surface === "board" || (typeof surface === "string" && surface.startsWith("screen:"));
+    // Versão antiga da página: "board" era o único quadro.
+    const surface = message.surface === "board" ? "board:" + MAIN_BOARD : message.surface;
+    const valid = typeof surface === "string" && /^(board|screen):[\w-]{1,64}$/.test(surface);
 
     if (valid && Number.isFinite(message.x) && Number.isFinite(message.y)) {
       peer.cursor = {
@@ -5283,16 +6548,11 @@
   // Onde está a superfície na tela deste aparelho (null = não está à vista).
   function surfaceRect(surface) {
 
-    if (surface === "board") {
-      return board.offsetParent ? board.getBoundingClientRect() : null;
-    }
+    const view = session.windows.get(surface);
 
-    const owner = surface.slice("screen:".length);
-    const entry = session.screenTiles.get(owner === me.id ? "me" : owner);
+    if (!view || !view.el.offsetParent || view.el.classList.contains("minimized")) return null;
 
-    if (!entry || !entry.video.offsetParent || entry.minimized) return null;
-
-    return videoContentRect(entry.video);
+    return view.kind === "board" ? view.canvas.getBoundingClientRect() : videoContentRect(view.video);
 
   }
 
@@ -5351,379 +6611,6 @@
   }
 
   window.addEventListener("resize", () => renderCursors());
-
-
-  /* ---------------- quadro ---------------- */
-
-  const board = $("board");
-  const boardContext = board.getContext("2d");
-
-  new ResizeObserver(() => resizeBoard()).observe($("boardWrap"));
-
-  // Mouse em cima do quadro (desenhando ou não) vai para os outros.
-  enableCursorSurface(board, () => "board", () => board.getBoundingClientRect());
-
-  function renderSwatches() {
-
-    const container = $("swatches");
-    container.replaceChildren();
-
-    for (const color of BOARD_COLORS) {
-
-      const button = document.createElement("button");
-      button.className = "swatch" + (color === session.color ? " active" : "");
-      button.style.background = color;
-      button.title = "Cor";
-
-      button.onclick = () => {
-        session.color = color;
-        renderSwatches();
-      };
-
-      container.appendChild(button);
-
-    }
-
-    $("thinBtn").classList.toggle("active", session.width === BOARD_WIDTHS.thin);
-    $("thickBtn").classList.toggle("active", session.width === BOARD_WIDTHS.thick);
-
-  }
-
-  $("thinBtn").onclick = () => {
-    session.width = BOARD_WIDTHS.thin;
-    renderSwatches();
-  };
-
-  $("thickBtn").onclick = () => {
-    session.width = BOARD_WIDTHS.thick;
-    renderSwatches();
-  };
-
-  // Quadro quadrado, o maior que couber; coordenadas vão de 0 a 1.
-  function resizeBoard() {
-
-    const wrap = $("boardWrap");
-    const style = getComputedStyle(wrap);
-
-    const width = wrap.clientWidth -
-      parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-    const height = wrap.clientHeight -
-      parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-
-    const side = Math.floor(Math.min(width, height));
-
-    if (side <= 0) return;
-
-    const ratio = window.devicePixelRatio || 1;
-
-    board.style.width = board.style.height = side + "px";
-    board.width = board.height = Math.round(side * ratio);
-
-    redrawBoard();
-    renderCursors();
-
-  }
-
-  function redrawBoard() {
-
-    const size = board.width;
-
-    boardContext.setTransform(1, 0, 0, 1, 0, 0);
-    boardContext.clearRect(0, 0, size, size);
-
-    if (!session) return;
-
-    for (const stroke of session.strokes.values()) {
-      for (let index = 0; index < stroke.points.length; index++) {
-        drawSegment(stroke, index);
-      }
-    }
-
-  }
-
-  function drawSegment(stroke, index) {
-
-    const size = board.width;
-    const [x, y] = stroke.points[index];
-    const [px, py] = stroke.points[Math.max(0, index - 1)];
-
-    boardContext.strokeStyle = stroke.color;
-    boardContext.lineWidth = Math.max(1, stroke.width * size);
-    boardContext.lineCap = "round";
-    boardContext.lineJoin = "round";
-
-    boardContext.beginPath();
-    boardContext.moveTo(px * size, py * size);
-    boardContext.lineTo(x * size + (index === 0 ? 0.01 : 0), y * size);
-    boardContext.stroke();
-
-  }
-
-  function boardPoint(event) {
-
-    const rect = board.getBoundingClientRect();
-    const clamp = value => Math.min(1, Math.max(0, value));
-
-    return [
-      +clamp((event.clientX - rect.left) / rect.width).toFixed(4),
-      +clamp((event.clientY - rect.top) / rect.height).toFixed(4)
-    ];
-
-  }
-
-  // Traços são guardados por "<autor>:<id>" (igual em todos os aparelhos)
-  // e com a versão do quadro em que começaram (v). "Limpar" sobe a versão
-  // e apaga o que é mais antigo: assim um traço atrasado, ou um histórico
-  // que chega depois, não ressuscita o que já foi limpo.
-
-  board.addEventListener("pointerdown", event => {
-
-    if (!session || session.boardMode !== "edit") return;
-
-    event.preventDefault();
-    board.setPointerCapture(event.pointerId);
-
-    const id = randomId();
-    const point = boardPoint(event);
-    const stroke = {
-      author: me.id,
-      color: session.color,
-      width: session.width,
-      v: session.boardVersion,
-      points: [point]
-    };
-
-    session.strokes.set(me.id + ":" + id, stroke);
-    session.drawing = id;
-
-    drawSegment(stroke, 0);
-
-    send({ type: "draw-start", id, color: stroke.color, width: stroke.width, v: stroke.v, point });
-
-  });
-
-  board.addEventListener("pointermove", event => {
-
-    if (!session?.drawing) return;
-
-    const stroke = session.strokes.get(me.id + ":" + session.drawing);
-
-    // Alguém limpou o quadro no meio do traço.
-    if (!stroke) return;
-
-    const events = event.getCoalescedEvents?.() || [event];
-
-    for (const item of events) {
-      const point = boardPoint(item);
-      stroke.points.push(point);
-      session.pendingPoints.push(point);
-      drawSegment(stroke, stroke.points.length - 1);
-    }
-
-    // Junta os pontos e manda no máximo um pacote por quadro.
-    if (!session.flushScheduled) {
-      session.flushScheduled = true;
-      requestAnimationFrame(flushPoints);
-    }
-
-  });
-
-  function flushPoints() {
-
-    if (!session) return;
-
-    session.flushScheduled = false;
-
-    if (session.drawing && session.pendingPoints.length) {
-      send({ type: "draw-move", id: session.drawing, points: session.pendingPoints });
-    }
-
-    session.pendingPoints = [];
-
-  }
-
-  function endStroke() {
-
-    if (!session?.drawing) return;
-
-    flushPoints();
-    send({ type: "draw-end", id: session.drawing });
-    session.drawing = null;
-
-  }
-
-  board.addEventListener("pointerup", endStroke);
-  board.addEventListener("pointercancel", endStroke);
-
-  $("clearBoardBtn").onclick = () => {
-
-    if (!session) return;
-
-    applyClear(session.boardVersion + 1);
-    send({ type: "clear", v: session.boardVersion });
-
-  };
-
-  // Quadro na versão v: some tudo o que começou antes dela.
-  function applyClear(v) {
-
-    if (v <= session.boardVersion) return false;
-
-    session.boardVersion = v;
-
-    for (const [key, stroke] of session.strokes) {
-      if (stroke.v < v) session.strokes.delete(key);
-    }
-
-    redrawBoard();
-
-    return true;
-
-  }
-
-  const isPoint = point =>
-    Array.isArray(point) && point.length === 2 && point.every(Number.isFinite);
-
-  const cleanVersion = v => Number.isInteger(v) && v >= 0 ? v : null;
-
-  function handleRemoteDraw(peer, message) {
-
-    const who = peerLabel(peer);
-
-    // Cada um sorteia os ids dos próprios traços: separa por aparelho.
-    const key = peer.id + ":" + message.id;
-
-    if (message.type === "clear") {
-
-      // Sem versão (versão antiga da página): limpa o que tem agora.
-      const v = cleanVersion(message.v) ?? session.boardVersion + 1;
-
-      if (applyClear(v)) {
-        addNote(`🧹 ${who} limpou o quadro`);
-        if (!isPaneVisible("chat")) toast(`🧹 ${who} limpou o quadro`);
-      }
-
-      return;
-
-    }
-
-    if (message.type === "draw-start") {
-
-      const v = cleanVersion(message.v) ?? session.boardVersion;
-
-      if (!isPoint(message.point)) return;
-
-      // Começou antes de um "Limpar" que já aconteceu aqui: descarta.
-      if (v < session.boardVersion) return;
-
-      // Ele já viu um "Limpar" que ainda não chegou aqui.
-      applyClear(v);
-
-      const stroke = {
-        author: peer.id,
-        color: String(message.color || BOARD_COLORS[0]).slice(0, 32),
-        width: Number(message.width) || BOARD_WIDTHS.thin,
-        v,
-        points: [message.point]
-      };
-
-      session.strokes.set(key, stroke);
-      drawSegment(stroke, 0);
-      bump("board");
-
-    } else if (message.type === "draw-move") {
-
-      const stroke = session.strokes.get(key);
-
-      if (!stroke || !Array.isArray(message.points)) return;
-
-      for (const point of message.points) {
-        if (!isPoint(point)) continue;
-        stroke.points.push(point);
-        drawSegment(stroke, stroke.points.length - 1);
-      }
-
-    }
-
-    // "Fulano está desenhando…" some logo depois que ele para.
-    $("remoteDrawing").textContent = session.room
-      ? `✏️ ${who} está desenhando…`
-      : "✏️ O outro está desenhando…";
-    show("remoteDrawing");
-    clearTimeout(session.remoteDrawingTimer);
-    session.remoteDrawingTimer = setTimeout(() => show("remoteDrawing", false), 1200);
-
-  }
-
-
-  /* ---------------- quadro: editar / só ver, tela cheia ---------------- */
-
-  // "Visualizando": tocar no quadro não desenha (bom para só olhar,
-  // rolar a página no celular ou apresentar sem riscar sem querer).
-  $("boardModeBtn").onclick = () => {
-
-    if (!session) return;
-
-    endStroke();
-    session.boardMode = session.boardMode === "edit" ? "view" : "edit";
-    renderBoardMode();
-
-  };
-
-  function renderBoardMode() {
-
-    const editing = session.boardMode === "edit";
-
-    $("boardModeBtn").textContent = editing ? "✏️ Editando" : "👁️ Visualizando";
-    $("boardModeBtn").classList.toggle("active", editing);
-    $("boardModeBtn").title = editing
-      ? "Tocar no quadro desenha. Toque para só visualizar."
-      : "Tocar no quadro não desenha. Toque para editar.";
-
-    $("boardPane").classList.toggle("viewing", !editing);
-
-  }
-
-  // Tela cheia de verdade quando o navegador deixa; no iPhone (que só
-  // deixa vídeo em tela cheia), o quadro ocupa a janela toda.
-  $("boardFullBtn").onclick = () => {
-
-    const pane = $("boardPane");
-
-    if (document.fullscreenElement === pane) {
-      document.exitFullscreen().catch(() => {});
-    } else if (pane.classList.contains("board-full")) {
-      setBoardFull(false);
-    } else if (document.fullscreenEnabled && pane.requestFullscreen) {
-      pane.requestFullscreen().catch(() => setBoardFull(true));
-    } else {
-      setBoardFull(true);
-    }
-
-  };
-
-  function setBoardFull(on) {
-    $("boardPane").classList.toggle("board-full", on);
-    renderBoardFull();
-  }
-
-  function renderBoardFull() {
-
-    const full = document.fullscreenElement === $("boardPane") ||
-      $("boardPane").classList.contains("board-full");
-
-    $("boardFullBtn").textContent = full ? "✕ Sair da tela cheia" : "⛶ Tela cheia";
-    requestAnimationFrame(resizeBoard);
-
-  }
-
-  document.addEventListener("fullscreenchange", renderBoardFull);
-
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && $("boardPane").classList.contains("board-full")) {
-      setBoardFull(false);
-    }
-  });
 
 
   /* ---------------- arquivos ---------------- */
