@@ -1778,6 +1778,33 @@
       color: #fca5a5;
     }
 
+    /* Janela de código: um textarea que ocupa o corpo. */
+    .code-win .win-body {
+      display: flex;
+      background: #0b1220;
+    }
+
+    .code-area {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 10px 12px;
+      border: 0;
+      outline: none;
+      resize: none;
+      background: #0b1220;
+      color: #e2e8f0;
+      font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      tab-size: 2;
+      white-space: pre;
+      overflow: auto;
+    }
+
+    .code-area::placeholder {
+      color: #64748b;
+    }
+
     /* Janelas de site e de vídeo: o conteúdo ocupa o corpo; o dono do site
        tem a barra de endereço em cima. */
     .site-win .win-body,
@@ -2987,10 +3014,11 @@
           <button id="addDisplayBtn" class="tool" title="Mostrar uma imagem para todos (dá para trocar quando quiser)">🖼️ Imagem</button>
           <button id="addSiteBtn" class="tool" title="Abrir um site: todos veem ao vivo, só você mexe">🌐 Site</button>
           <button id="addVideoBtn" class="tool" title="Mostrar um vídeo do YouTube para todos, com som (só você controla)">▶️ YouTube</button>
+          <button id="addCodeBtn" class="tool" title="Editor de código: todos veem e todos podem escrever">💻 Código</button>
         </div>
         <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
         <button id="boardModeBtn" class="tool active">✏️<span class="btn-label"> Editando</span></button>
-        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site e vídeo" aria-expanded="false">⋯</button>
+        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo e código" aria-expanded="false">⋯</button>
       </div>
 
       <!-- Espaço infinito: arrastar o fundo move, pinça / Ctrl+roda dá zoom. -->
@@ -6022,6 +6050,9 @@
 
     if (!session || event.target.closest(".stage-ui")) return;
 
+    // Rolar dentro do editor de código rola o texto (Ctrl+roda ainda dá zoom).
+    if (event.target.closest(".code-area") && !event.ctrlKey && !event.metaKey) return;
+
     event.preventDefault();
 
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1;
@@ -6284,6 +6315,7 @@
       : kind === "display" ? "display-win"
       : kind === "site" ? "display-win site-win"
       : kind === "youtube" ? "display-win yt-win"
+      : kind === "code" ? "display-win code-win"
       : "screen-tile");
     el.dataset.id = id;
 
@@ -6308,7 +6340,7 @@
 
     const bubble = document.createElement("span");
     bubble.className = "bubble";
-    bubble.textContent = kind === "board" ? "🎨" : kind === "display" ? "🖼️" : kind === "site" ? "🌐" : kind === "youtube" ? "▶️" : "🖥️";
+    bubble.textContent = kind === "board" ? "🎨" : kind === "display" ? "🖼️" : kind === "site" ? "🌐" : kind === "youtube" ? "▶️" : kind === "code" ? "💻" : "🖥️";
 
     const view = { id, kind, el, head, body, label, aspect: kind === "board" ? 1 : 16 / 9 };
 
@@ -7689,8 +7721,8 @@
 
   const isMine = entry => entry.owner === me.id;
 
-  // kind: "image" | "site" | "youtube" (veja "janelas de site e de vídeo").
-  const DISPLAY_KINDS = ["image", "site", "youtube"];
+  // kind: "image" | "site" | "youtube" (veja "janelas de site e de vídeo") | "code".
+  const DISPLAY_KINDS = ["image", "site", "youtube", "code"];
 
   function ensureDisplay(id, owner, kind = "image") {
 
@@ -7699,7 +7731,7 @@
     let entry = session.displays.get(id);
 
     if (!entry) {
-      entry = { id, owner, kind, current: null, url: null, video: null, play: null, rev: 0 };
+      entry = { id, owner, kind, current: null, url: null, video: null, play: null, code: "", by: owner, rev: 0 };
       session.displays.set(id, entry);
     }
 
@@ -7707,6 +7739,7 @@
 
     if (!session.windows.has("display:" + id)) {
       if (kind === "image") createDisplayWindow(entry);
+      else if (kind === "code") createCodeWindow(entry);
       else createSiteWindow(entry);
     }
 
@@ -7828,6 +7861,7 @@
 
     if (!entry || !view) return;
 
+    if (entry.kind === "code") return renderCode(entry, view);
     if (entry.kind !== "image") return renderSite(entry, view);
 
     const mine = isMine(entry);
@@ -8076,7 +8110,8 @@
   }
 
   // O que todos precisam saber de uma janela (vai no "display-set" e no histórico).
-  const displayData = ({ id, owner, kind, current, url, video, rev }) => ({ id, owner, kind, current, url, video, rev });
+  const displayData = ({ id, owner, kind, current, url, video, code, by, rev }) =>
+    ({ id, owner, kind, current, url, video, ...(kind === "code" ? { code, by } : {}), rev });
 
   // "display-set": ao vivo vem do dono; do histórico, de quem estava lá.
   function applyDisplay(data, from) {
@@ -8085,15 +8120,29 @@
 
     const owner = data.owner;
 
-    // Ao vivo, só o dono muda a janela dele.
-    if (from && owner !== from.id) return;
-
     // Versão antiga da página: só havia imagem.
     const kind = DISPLAY_KINDS.includes(data.kind) ? data.kind : "image";
+
+    // Ao vivo, só o dono muda a janela dele (o código, qualquer um).
+    if (from && owner !== from.id && kind !== "code") return;
 
     const entry = ensureDisplay(data.id, owner, kind);
 
     if (!entry || data.rev < entry.rev) return;
+
+    if (kind === "code") {
+      // Vale o texto com rev maior (empate: o id do aparelho decide).
+      const by = from ? from.id : isDeviceId(data.by) ? data.by : owner;
+      if (typeof data.code !== "string" || data.code.length > CODE_MAX) return;
+      if (data.rev === entry.rev && entry.rev > 0 && by <= entry.by) return;
+      const isNewCode = entry.rev === 0 && !entry.code && from && data.rev === 0;
+      entry.rev = data.rev;
+      entry.code = data.code;
+      entry.by = by;
+      renderDisplay(entry.id);
+      if (isNewCode) addNote(`💻 ${peerLabel(from)} abriu um editor de código`);
+      return;
+    }
 
     const current = typeof data.current === "string" && BOARD_ID.test(data.current) ? data.current : null;
 
@@ -8166,7 +8215,7 @@
    * { kind: "youtube", video, play }.
    */
 
-  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️" };
+  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻" };
 
   const CAN_SITE = CAN_SHARE_SCREEN && ("RestrictionTarget" in window || "CropTarget" in window);
   const YT_ID = /^[\w-]{11}$/;
@@ -8976,6 +9025,160 @@
   }
 
 
+  /* ---- janela de código ---- */
+
+  /*
+   * 💻 Código: um editor simples (um <textarea>) que todos veem e em que
+   * todos podem escrever. Quem digita manda o texto inteiro
+   * ("display-set" com code, rev e by), no máximo um a cada CODE_SEND_MS;
+   * vale o de rev maior (empate: o id do aparelho decide). Só quem abriu
+   * fecha para todos, como as outras janelas.
+   */
+
+  const CODE_MAX = 100000;
+  const CODE_SEND_MS = 150;
+  const CODE_TAB = "  ";
+
+  $("addCodeBtn").onclick = () => {
+
+    if (!session) return;
+
+    setTray(null);
+
+    const id = me.id.slice(0, 8) + "-" + randomId();
+    const winId = "display:" + id;
+    const entry = ensureDisplay(id, me.id, "code");
+
+    publishDisplay(entry);
+
+    const place = freeSpot({ ...defaultLayout(winId), w: 720 }, winId, 4 / 3);
+    setLayout(winId, { x: place.x, y: place.y, w: place.w, z: ++topZ });
+
+    renderDisplay(id);
+    revealWindow(winId);
+    setTimeout(() => session?.windows.get(winId)?.area?.focus(), 50);
+
+  };
+
+  function createCodeWindow(entry) {
+
+    const id = entry.id;
+    const winId = "display:" + id;
+    let view = null;
+
+    const copyBtn = windowButton("📋", "Copiar o código", () => {
+      navigator.clipboard?.writeText(entry.code).then(() => toast("💻 Código copiado"), () => {});
+    });
+
+    view = createWindow({
+      id: winId,
+      kind: "code",
+      extraButtons: [copyBtn],
+      closable: true,
+      onClose: () => closeDisplay(id)
+    });
+
+    view.displayId = id;
+    view.aspect = 4 / 3;
+    view.body.style.setProperty("--ar", "4 / 3");
+
+    const area = document.createElement("textarea");
+    area.className = "code-area";
+    area.spellcheck = false;
+    area.autocomplete = "off";
+    area.autocapitalize = "off";
+    area.maxLength = CODE_MAX;
+    area.placeholder = "// Escreva código aqui: todos veem e todos podem editar";
+    area.setAttribute("aria-label", "Editor de código");
+
+    view.body.prepend(area);
+    view.area = area;
+
+    let timer = null;
+
+    const flush = () => {
+      timer = null;
+      if (!session?.displays.has(id) || area.value === entry.code) return;
+      entry.code = area.value;
+      entry.by = me.id;
+      entry.rev++;
+      publishDisplay(entry);
+    };
+
+    area.addEventListener("input", () => {
+      if (!timer) timer = setTimeout(flush, CODE_SEND_MS);
+    });
+
+    area.addEventListener("blur", () => {
+      if (timer) { clearTimeout(timer); flush(); }
+    });
+
+    // Tab indenta (Shift+Tab tira), Enter mantém a indentação da linha.
+    area.addEventListener("keydown", event => {
+
+      event.stopPropagation();
+
+      const { selectionStart: start, selectionEnd: end, value } = area;
+      const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+
+      if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        if (event.shiftKey) {
+          const remove = value.slice(lineStart, lineStart + CODE_TAB.length).match(/^ */)[0].length;
+          if (!remove) return;
+          area.setSelectionRange(lineStart, lineStart + remove);
+          document.execCommand("delete") || area.setRangeText("");
+          area.setSelectionRange(Math.max(lineStart, start - remove), Math.max(lineStart, end - remove));
+        } else {
+          document.execCommand("insertText", false, CODE_TAB) || area.setRangeText(CODE_TAB, start, end, "end");
+        }
+        area.dispatchEvent(new Event("input"));
+      } else if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        const indent = value.slice(lineStart, start).match(/^[ \t]*/)[0];
+        if (!indent) return;
+        event.preventDefault();
+        document.execCommand("insertText", false, "\n" + indent) || area.setRangeText("\n" + indent, start, end, "end");
+        area.dispatchEvent(new Event("input"));
+      }
+
+    });
+
+    // Escrever aqui não arrasta a vista nem desenha.
+    area.addEventListener("pointerdown", event => {
+      event.stopPropagation();
+      if (DESKTOP_LAYOUT.matches) bringToFront(winId);
+    });
+
+    view.cleanup = () => clearTimeout(timer);
+
+    enableCursorSurface(view.body, () => winId, () => view.body.getBoundingClientRect());
+
+    return view;
+
+  }
+
+  function renderCode(entry, view) {
+
+    view.label.textContent = isMine(entry) ? "💻 Seu código" : `💻 Código de ${ownerNameOf(entry)}`;
+    renderWinSwitcher();
+    view.el.style.setProperty("--person", personColor(entry.owner));
+
+    const area = view.area;
+
+    if (area.value === entry.code) return;
+
+    // Texto de outra pessoa: troca, mantendo o cursor (mais ou menos) no lugar.
+    const focused = document.activeElement === area;
+    const { selectionStart, selectionEnd, scrollTop } = area;
+
+    area.value = entry.code;
+    area.scrollTop = scrollTop;
+
+    if (focused) area.setSelectionRange(Math.min(selectionStart, area.value.length), Math.min(selectionEnd, area.value.length));
+
+  }
+
+
   /* ---- telas compartilhadas ---- */
 
   // Uma janela por pessoa compartilhando (inclusive eu: a prévia do que
@@ -9557,6 +9760,7 @@
     if (view.kind === "board") return view.canvas.getBoundingClientRect();
     if (view.kind === "display") return imageContentRect(view);
     if (view.kind === "site" || view.kind === "youtube") return siteContentRect(view);
+    if (view.kind === "code") return view.body.getBoundingClientRect();
     return videoContentRect(view.video);
 
   }
