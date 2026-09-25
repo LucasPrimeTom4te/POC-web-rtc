@@ -2699,45 +2699,90 @@
       .muted-alert, .ctl.muted-talking { animation: none; }
     }
 
-    /* Alguém me chamou (👋): em cima, no meio. */
-    .ping-alert {
+    /* 📍 Ping: onda no ponto do mundo (não cresce com o zoom). */
+    .ping-mark {
       position: absolute;
-      top: calc(64px + env(safe-area-inset-top));
-      left: 50%;
-      z-index: 9;
-      transform: translateX(-50%);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: max-content;
-      max-width: calc(100% - 32px);
-      padding: 10px 12px 10px 16px;
-      border-radius: 14px;
-      background: var(--surface-2);
-      border: 2px solid var(--person, var(--accent));
-      box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
-      font-size: 15px;
-      font-weight: 600;
-      animation: ping-shake .5s ease-in-out 2;
+      z-index: 2147483000;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      color: var(--person);
+      transform: scale(var(--iz));
     }
 
-    .ping-alert button {
-      padding: 7px 11px;
-      border-radius: 10px;
+    .ping-mark i {
+      position: absolute;
+      left: -22px;
+      top: -22px;
+      width: 44px;
+      height: 44px;
+      border: 3px solid currentColor;
+      border-radius: 50%;
+      animation: ping-wave 1.2s ease-out 3 both;
     }
 
-    #pingAlertClose {
-      background: transparent;
-      padding: 7px;
+    .ping-mark i:nth-child(2) {
+      animation-delay: .4s;
     }
 
-    @keyframes ping-shake {
-      25% { transform: translateX(calc(-50% - 6px)); }
-      75% { transform: translateX(calc(-50% + 6px)); }
+    .ping-mark::before {
+      content: "";
+      position: absolute;
+      left: -7px;
+      top: -7px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 3px #fff, 0 2px 8px rgba(0, 0, 0, .5);
+    }
+
+    .ping-mark span {
+      position: absolute;
+      left: 14px;
+      top: 10px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: var(--person);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    @keyframes ping-wave {
+      from { transform: scale(.3); opacity: 1; }
+      to { transform: scale(2.2); opacity: 0; }
+    }
+
+    /* Ping fora da vista: seta na borda (clicar leva até lá). */
+    .ping-arrow {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      margin: -17px 0 0 -17px;
+      padding: 0;
+      border-radius: 50%;
+      background: var(--person);
+      border: 2px solid #fff;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, .5);
+      color: #fff;
+      font-size: 16px;
+      animation: ping-bob 1s ease-in-out infinite;
+    }
+
+    .ping-arrow b {
+      display: block;
+      transform: rotate(var(--angle));
+    }
+
+    @keyframes ping-bob {
+      50% { box-shadow: 0 0 0 8px transparent, 0 4px 14px rgba(0, 0, 0, .5); scale: 1.1; }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .ping-alert { animation: none; }
+      .ping-mark i, .ping-arrow { animation: none; }
     }
 
     /* Aviso rápido: fica logo acima da caixa de mensagem. */
@@ -4861,12 +4906,6 @@
     <span>🎙️ Você está falando com o microfone desligado</span>
     <button id="mutedAlertOn">Ligar microfone</button>
     <button id="mutedAlertClose" aria-label="Fechar o aviso" title="Fechar">✕</button>
-  </div>
-
-  <div id="pingAlert" class="ping-alert hidden" role="alert">
-    <span id="pingAlertText"></span>
-    <button id="pingAlertGo" title="Levar a minha vista até onde a pessoa está olhando">📍 Ir até lá</button>
-    <button id="pingAlertClose" aria-label="Fechar o aviso" title="Fechar">✕</button>
   </div>
 
   <!-- Um <audio> por pessoa conectada (criados pelo JS). -->
@@ -7702,7 +7741,7 @@
     open:  { wave: "triangle", notes: [[620, 940, 0, .09]] },
     close: { wave: "triangle", notes: [[900, 520, 0, .09]] },
     message: { wave: "sine",   notes: [[988, 988, 0, .08], [1319, 1319, .07, .14]] },
-    ping:  { wave: "sine",     notes: [[880, 880, 0, .1], [1175, 1175, .12, .1], [1568, 1568, .24, .22]] }
+    ping:  { wave: "sine",     notes: [[1175, 1175, 0, .08], [1568, 1568, .08, .16]] }
   };
 
   const SFX_VOLUME = 0.08;
@@ -7759,7 +7798,7 @@
     const sound = SFX[name];
     const now = Date.now();
 
-    // Chamar (👋) toca mesmo com os efeitos desligados: é de propósito.
+    // Ping (📍) toca mesmo com os efeitos desligados: é de propósito.
     if (!sound || (!sfxState.enabled && name !== "ping") || !session?.speakerOn) return;
     if ((name === "open" || name === "close") && now < sfxState.quietUntil) return;
     // Várias de uma vez (fechou três janelas juntas): um som só.
@@ -8523,6 +8562,7 @@
     $("zoomLabel").textContent = Math.round(z * 100) + "%";
 
     renderCursors();
+    placePingArrows();
 
     // Resolução dos quadros acompanha o zoom (depois que para de mexer).
     clearTimeout(session.camTimer);
@@ -15317,6 +15357,8 @@
       }));
 
     return [
+      { icon: "📍", label: "Pingar aqui", hint: "Alt+clique", action: () => pingAt(point) },
+      "-",
       ...create,
       "-",
       { icon: "⤢", label: "Ver tudo", hint: "Shift 1", action: () => fitAll() },
@@ -15332,6 +15374,8 @@
     const editing = session.boardMode === "edit";
 
     return [
+      { icon: "📍", label: "Pingar aqui", hint: "Alt+clique", action: () => pingAt(point) },
+      "-",
       ...Object.entries(TOOLS).map(([name, tool]) => ({
         svg: tool.icon,
         label: tool.label,
@@ -15747,32 +15791,31 @@
 
   }
 
-  /* ---- 👋 chamar a atenção ----
+  /* ---- 📍 ping no quadro ----
    *
-   * { type: "ping", x, y, z }: quem chama manda o centro da vista dele
-   * (no mundo). Quem recebe ouve um som, vê o aviso e pode ir até lá.
+   * Alt+clique (ou "📍 Pingar aqui" no botão direito) marca um ponto do
+   * mundo para todos: { type: "ping", x, y }. Aparece uma onda com a cor e
+   * o nome de quem pingou; quem está com o ponto fora da vista vê uma seta
+   * na borda da área (clicar leva até lá).
    */
-  const PING_EVERY_MS = 3000;
-  const PING_SHOW_MS = 12000;
+  const PING_SHOW_MS = 4000;
+  const PING_EVERY_MS = 500;
 
-  const pingState = { sent: new Map(), got: new Map(), timer: 0, target: null, title: null };
+  const pingState = { last: 0, got: new Map(), list: new Set() };
 
-  function sendPing(peer) {
+  function pingAt(point) {
 
     const now = Date.now();
 
-    if (now - (pingState.sent.get(peer.id) || 0) < PING_EVERY_MS) {
-      toast("👋 Espere um pouquinho para chamar de novo.");
-      return;
-    }
+    if (now - pingState.last < PING_EVERY_MS) return;
 
-    pingState.sent.set(peer.id, now);
+    pingState.last = now;
 
-    const box = stageBox();
-    const { x, y, z } = session.cam;
+    const x = Math.round(point.x);
+    const y = Math.round(point.y);
 
-    sendTo(peer, { type: "ping", x: x + box.width / 2 / z, y: y + box.height / 2 / z, z });
-    toast(`👋 Você chamou ${peerLabel(peer)}.`);
+    send({ type: "ping", x, y });
+    showPing(me.id, me.name, { x, y });
 
   }
 
@@ -15780,52 +15823,90 @@
 
     const now = Date.now();
 
-    if (now - (pingState.got.get(peer.id) || 0) < PING_EVERY_MS - 500) return;
+    if (now - (pingState.got.get(peer.id) || 0) < PING_EVERY_MS - 100) return;
+    if (![message.x, message.y].every(value => Number.isFinite(value) && Math.abs(value) <= WORLD_MAX)) return;
 
     pingState.got.set(peer.id, now);
-
-    const valid = [message.x, message.y, message.z].every(Number.isFinite);
-    pingState.target = valid ? { x: message.x, y: message.y, z: clamp(message.z, ZOOM_MIN, ZOOM_MAX) } : null;
-
-    const alert = $("pingAlert");
-    $("pingAlertText").textContent = `👋 ${peerLabel(peer)} está chamando você`;
-    alert.style.setProperty("--person", personColor(peer.id));
-    show("pingAlertGo", !!pingState.target && DESKTOP_LAYOUT.matches);
-
-    // Mostra de novo (e a animação recomeça).
-    show("pingAlert", false);
-    void alert.offsetWidth;
-    show("pingAlert");
-
-    sfx("ping");
-    log(`${peerLabel(peer)} chamou você.`);
-
-    // Em outra aba: o título avisa até voltar.
-    if (document.hidden) {
-      pingState.title ??= document.title;
-      document.title = `👋 ${peerLabel(peer)} está chamando`;
-    }
-
-    clearTimeout(pingState.timer);
-    pingState.timer = setTimeout(() => show("pingAlert", false), PING_SHOW_MS);
+    showPing(peer.id, peerLabel(peer), { x: message.x, y: message.y });
 
   }
 
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden || pingState.title === null) return;
-    document.title = pingState.title;
-    pingState.title = null;
-  });
+  function showPing(id, name, point) {
 
-  $("pingAlertClose").onclick = () => show("pingAlert", false);
+    if (!session) return;
 
-  $("pingAlertGo").onclick = () => {
-    const target = pingState.target;
-    show("pingAlert", false);
-    if (!session || !target) return;
+    const color = personColor(id);
+
+    const mark = document.createElement("div");
+    mark.className = "ping-mark";
+    mark.style.setProperty("--person", color);
+    mark.style.left = point.x + "px";
+    mark.style.top = point.y + "px";
+    mark.append(document.createElement("i"), document.createElement("i"), document.createElement("span"));
+    mark.lastChild.textContent = name;
+    $("workspace").append(mark);
+
+    const arrow = document.createElement("button");
+    arrow.className = "ping-arrow stage-ui";
+    arrow.style.setProperty("--person", color);
+    arrow.title = `Ir até o ping de ${name}`;
+    arrow.append(document.createElement("b"));
+    arrow.firstChild.textContent = "➜";
+    arrow.onclick = () => {
+      const box = stageBox();
+      const { z } = session.cam;
+      animateCamera({ x: point.x - box.width / 2 / z, y: point.y - box.height / 2 / z, z });
+    };
+    $("stageArea").append(arrow);
+
+    const ping = { point, mark, arrow };
+    pingState.list.add(ping);
+    placePingArrow(ping);
+
+    sfx("ping");
+
+    setTimeout(() => {
+      mark.remove();
+      arrow.remove();
+      pingState.list.delete(ping);
+    }, PING_SHOW_MS);
+
+  }
+
+  // Seta na borda quando o ponto está fora da vista (some quando está à vista).
+  function placePingArrow({ point, arrow }) {
+
     const box = stageBox();
-    animateCamera({ x: target.x - box.width / 2 / target.z, y: target.y - box.height / 2 / target.z, z: target.z });
-  };
+    const { x, y, z } = session.cam;
+    const sx = (point.x - x) * z;
+    const sy = (point.y - y) * z;
+    const pad = 26;
+    const visible = sx >= 0 && sy >= 0 && sx <= box.width && sy <= box.height;
+
+    arrow.hidden = visible || !box.width;
+
+    if (arrow.hidden) return;
+
+    const ax = clamp(sx, pad, box.width - pad);
+    const ay = clamp(sy, pad, box.height - pad);
+
+    arrow.style.left = ax + "px";
+    arrow.style.top = ay + "px";
+    arrow.style.setProperty("--angle", Math.atan2(sy - ay, sx - ax) + "rad");
+
+  }
+
+  function placePingArrows() {
+    pingState.list.forEach(placePingArrow);
+  }
+
+  // Alt+clique em qualquer lugar da área (antes de desenhar ou arrastar).
+  $("stageArea").addEventListener("pointerdown", event => {
+    if (!session || !event.altKey || event.button !== 0 || event.target.closest(".stage-ui, input, textarea, select, [contenteditable]")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    pingAt(worldPoint(event));
+  }, true);
 
   /* ---- volume de cada um (só aqui) ---- */
 
@@ -15938,13 +16019,7 @@
 
     };
 
-    const ping = document.createElement("button");
-    ping.className = "tool";
-    ping.textContent = "👋 Chamar";
-    ping.title = `Chamar a atenção de ${peerLabel(peer)} (toca um som e mostra onde você está olhando)`;
-    ping.onclick = () => sendPing(peer);
-
-    box.append(ping, mute, slider("🔊", "voice", "Volume da voz"));
+    box.append(mute, slider("🔊", "voice", "Volume da voz"));
 
     if (peer.remote.audioShare) box.append(slider("🎵", "share", "Volume do áudio compartilhado"));
 
