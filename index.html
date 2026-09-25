@@ -1523,9 +1523,13 @@
               <div class="qr-box small-qr">
                 <canvas id="roomQr"></canvas>
               </div>
-              <p class="muted small" style="margin:0">
-                O outro pode digitar o nome da sala ou ler este código.
-              </p>
+              <div>
+                <p class="muted small" style="margin:0 0 6px">
+                  O outro pode digitar o nome da sala, ler este código ou abrir
+                  <strong id="roomLink"></strong>
+                </p>
+                <button id="copyRoomLinkBtn">🔗 Copiar link</button>
+              </div>
             </div>
           </div>
 
@@ -2203,8 +2207,8 @@
 
   async function openSiteQr() {
 
-    // Sem o hash: o QR abre a página do zero, não um offer antigo.
-    const url = location.href.split("#")[0];
+    // O início do site, sem sala nem parâmetros.
+    const url = location.origin + BASE_PATH;
 
     $("siteUrl").textContent = url;
     show("siteQrWarning", !CAN_LINK);
@@ -3974,8 +3978,20 @@
 
   const peerName = peer => cleanName(peer?.name) || "O outro aparelho";
 
+  // Pasta da página: "/" na Vercel, mesmo abrindo por /<sala>.
+  const BASE_PATH = location.pathname.replace(/[^/]*$/, "");
+
   function pageLink(params) {
-    return location.origin + location.pathname + "?" + new URLSearchParams(params);
+    return location.origin + BASE_PATH + "?" + new URLSearchParams(params);
+  }
+
+  // Link bonito da sala: /<nome> (o vercel.json entrega esta página).
+  const roomPath = name => BASE_PATH + name;
+  const roomLink = name => location.origin + roomPath(name);
+
+  // Mostra na barra de endereço onde a pessoa está (recarregar volta para lá).
+  function setAddress(path) {
+    if (location.pathname + location.search !== path) history.replaceState(null, "", path);
   }
 
 
@@ -4682,6 +4698,8 @@
 
     room = { name, channel, joinedAt: Date.now(), requestedTo: null };
 
+    setAddress(roomPath(name));
+
     channel.on("presence", { event: "sync" }, () => {
       if (room?.channel === channel) onRoomSync();
     });
@@ -4756,10 +4774,12 @@
 
     if (!room) return;
 
-    const { channel } = room;
+    const { channel, name } = room;
 
     room = null;
     renderRoom();
+
+    if (location.pathname === roomPath(name)) setAddress(BASE_PATH);
 
     try { await channel.untrack(); } catch {}
 
@@ -4775,11 +4795,29 @@
     if (!room) return;
 
     $("roomName").textContent = room.name;
+    $("roomLink").textContent = roomLink(room.name).replace(/^https?:\/\//, "");
 
-    QRCode.toCanvas($("roomQr"), pageLink({ room: room.name }), { width: 480, margin: 1 })
+    QRCode.toCanvas($("roomQr"), roomLink(room.name), { width: 480, margin: 1 })
       .catch(() => {});
 
   }
+
+  $("copyRoomLinkBtn").onclick = async () => {
+
+    if (!room) return;
+
+    const link = roomLink(room.name);
+
+    try {
+      await navigator.clipboard.writeText(link);
+      $("copyRoomLinkBtn").textContent = "✓ Link copiado";
+    } catch {
+      prompt("Copie o link da sala:", link);
+    }
+
+    setTimeout(() => { $("copyRoomLinkBtn").textContent = "🔗 Copiar link"; }, 2000);
+
+  };
 
   function roomError(text) {
     setStatus("roomError", text, "error");
@@ -4975,7 +5013,8 @@
    * INÍCIO
    *
    * ?device=<id>  link do QR de um aparelho: pede para conectar
-   * ?room=<nome>  link do QR de uma sala: entra na sala
+   * /<nome>       link de uma sala: entra na sala
+   * ?room=<nome>  idem (formato antigo, continua funcionando)
    * ============================================================
    */
 
@@ -4983,11 +5022,17 @@
 
     const params = new URLSearchParams(location.search);
     const targetDevice = params.get("device");
-    const targetRoom = params.get("room");
+
+    // O último pedaço do caminho é a sala (/casa), menos o próprio arquivo.
+    const lastSegment = decodeURIComponent(location.pathname.slice(BASE_PATH.length));
+    const pathRoom = /\.html?$/i.test(lastSegment) ? "" : lastSegment;
+
+    const targetRoom = params.get("room") || pathRoom;
 
     // Tira os parâmetros do endereço (recarregar não repete o pedido).
+    // A sala volta para o endereço, já no formato /<nome>, ao entrar nela.
     if (targetDevice || targetRoom) {
-      history.replaceState(null, "", location.pathname);
+      history.replaceState(null, "", BASE_PATH);
     }
 
     if (!await initSignaling()) return;
