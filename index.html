@@ -980,18 +980,53 @@
       cursor: cell;
     }
 
-    .board-pane[data-tool="text"] .board-win canvas {
+    .board-pane[data-tool="text"] .board-win canvas,
+    .board-pane[data-tool="textbox"] .board-win canvas {
       cursor: text;
     }
 
-    /* Visualizando: o quadro não desenha e deixa rolar a página. */
+    /* Visualizando: o quadro não desenha; arrastar nele move a vista. */
     .board-pane.viewing .board-win canvas {
-      touch-action: auto;
-      cursor: default;
+      cursor: grab;
     }
 
     .win.minimized .win-body {
       display: none;
+    }
+
+    /* Minimizada: vira uma bolinha (tocar mostra de novo, arrastar move). */
+    .win.minimized {
+      box-sizing: border-box;
+      width: calc(48px * var(--iz, 1)) !important;
+      height: calc(48px * var(--iz, 1));
+      border-width: calc(3px * var(--iz, 1)) !important;
+      align-self: flex-start;
+      border-radius: 50%;
+      border: 3px solid var(--person, var(--accent));
+      z-index: 35 !important; /* bolinha sempre por cima das janelas */
+    }
+
+    .win.minimized .win-head {
+      zoom: 1 !important;
+      height: 100%;
+      padding: 0;
+      justify-content: center;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .win.minimized .win-head > * {
+      display: none;
+    }
+
+    .win-head .bubble {
+      display: none;
+      font-size: calc(20px * var(--iz, 1));
+      line-height: 1;
+    }
+
+    .win.minimized .win-head > .bubble {
+      display: block;
     }
 
     .resize-handle {
@@ -1001,6 +1036,7 @@
     /* Tela cheia de uma janela (a de verdade e a do iPhone, que ocupa a página). */
     .win:fullscreen,
     .win.win-full {
+      --iz: 1;
       position: fixed !important;
       inset: 0 !important;
       width: auto !important;
@@ -1038,21 +1074,130 @@
       display: none !important;
     }
 
-    /* Celular: os quadros um embaixo do outro, a aba rola. */
+    /*
+     * Espaço infinito (PC e celular): as janelas ficam num "mundo" sem
+     * borda; cada um tem a sua vista (zoom e posição, só aqui). O
+     * #workspace é a origem do mundo, com transform de escala e posição.
+     */
     .stage-area {
+      position: relative;
       flex: 1;
       min-height: 0;
-      overflow-y: auto;
-      padding: 0 12px 12px;
+      overflow: hidden;
+      margin: 0 10px 10px;
+      border-radius: 12px;
+      touch-action: none;
+      cursor: grab;
+      background-color: rgba(255, 255, 255, .02);
+      background-image: radial-gradient(circle, rgba(255, 255, 255, .08) 1px, transparent 1.5px);
+      background-size: var(--grid, 22px) var(--grid, 22px);
+      background-position: var(--grid-x, 0) var(--grid-y, 0);
+      outline: 1px solid var(--border);
+    }
+
+    .stage-area.panning,
+    .stage-area.panning * {
+      cursor: grabbing !important;
+    }
+
+    .stage-area.space-pan,
+    .stage-area.space-pan * {
+      cursor: grab !important;
     }
 
     .workspace {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+      --iz: 1;
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      transform-origin: 0 0;
     }
 
-    .screen-tile .win-body {
+    .workspace > .win {
+      position: absolute;
+      cursor: auto;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+    }
+
+    /* Barra de título e canto de tamanho: sempre do mesmo tamanho na tela. */
+    .workspace > .win > .win-head,
+    .workspace > .win .resize-handle {
+      zoom: var(--hz, 1);
+    }
+
+    .workspace > .win > .win-head {
+      cursor: grab;
+    }
+
+    .workspace > .win.dragging > .win-head {
+      cursor: grabbing;
+    }
+
+    .workspace > .win .resize-handle {
+      display: block;
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+      width: 20px;
+      height: 20px;
+      cursor: nwse-resize;
+      background: linear-gradient(135deg, transparent 50%, rgba(120, 130, 150, .7) 50%);
+      border-bottom-right-radius: 11px;
+    }
+
+    /* Maximizada (PC): fora do mundo, ocupa a vista de cada um. */
+    .max-layer {
+      --iz: 1;
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .max-layer > .win {
+      position: absolute;
+      pointer-events: auto;
+      cursor: auto;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+    }
+
+    /* Por cima da vista: abas dos quadros (ir para) e zoom. */
+    .stage-ui {
+      position: absolute;
+      z-index: 20;
+      cursor: auto;
+    }
+
+    .zoom-bar {
+      right: 10px;
+      bottom: 10px;
+      display: flex;
+      gap: 2px;
+      padding: 3px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
+    }
+
+    .zoom-bar button {
+      min-width: 36px;
+      min-height: 36px;
+      padding: 4px 8px;
+      font-size: 15px;
+      background: transparent;
+    }
+
+    .zoom-bar #zoomResetBtn {
+      min-width: 56px;
+      font-size: 12.5px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .screen-grid .screen-tile .win-body {
       max-height: 70dvh;
     }
 
@@ -1189,6 +1334,65 @@
       text-align: right;
     }
 
+    .person {
+      flex-wrap: wrap;
+      transition: box-shadow .3s;
+    }
+
+    .person.flash {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    .person-audio {
+      flex-basis: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 12px;
+      padding-top: 4px;
+      cursor: default;
+    }
+
+    .person-audio .tool {
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+
+    .person-audio .tool.warn {
+      background: rgba(245, 158, 11, .15);
+      color: var(--warn);
+    }
+
+    .volume {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .volume input {
+      width: 110px;
+    }
+
+    .volume output {
+      min-width: 36px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .volume.off {
+      opacity: .45;
+    }
+
+    .avatar[role="button"] {
+      cursor: pointer;
+    }
+
+    .avatar.muted-by-me {
+      border-color: rgba(245, 158, 11, .5);
+    }
+
     /* Mouse dos outros. */
     .cursor-layer {
       position: absolute;
@@ -1237,13 +1441,175 @@
       display: none;
     }
 
-    /* Quadro */
+    /* Celular: abas dos quadros e imagens (só um aparece por vez). */
+    .win-switcher {
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      display: flex;
+      gap: 6px;
+      width: max-content;
+      max-width: calc(100% - 16px);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .win-switcher button {
+      flex: none;
+      max-width: 60vw;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Quadro. Celular: uma linha só; as bandejas abrem por cima do quadro. */
     .board-tools {
+      position: relative;
+      z-index: 20;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      padding: 6px 10px;
+    }
+
+    .tray {
+      display: none;
+    }
+
+    .tray.open {
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 8px;
+      right: 8px;
+      display: flex;
       flex-wrap: wrap;
-      padding: 10px 16px;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+    }
+
+    .tray[data-tray="more"].open {
+      left: auto;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .tray.open .tool-group {
+      gap: 8px;
+    }
+
+    /* Dedo: alvos de pelo menos 44px. */
+    .tray.open .tool-group .tool {
+      min-width: 44px;
+      min-height: 44px;
+      font-size: 18px;
+    }
+
+    .tray.open .swatch {
+      width: 36px;
+      height: 36px;
+    }
+
+    .tray.open .color-pick {
+      width: 38px;
+      height: 38px;
+    }
+
+    .tray.open .size-pick {
+      flex-basis: 100%;
+    }
+
+    .tray.open .size-pick input {
+      flex: 1;
+      width: auto;
+    }
+
+    .tray.open .tool {
+      min-height: 44px;
+      font-size: 15px;
+    }
+
+    @media (max-width: 899px) {
+      #boardTools > .tool {
+        flex: none;
+        min-width: 44px;
+        min-height: 40px;
+        padding: 6px 10px;
+        font-size: 16px;
+      }
+    }
+
+    .tray-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .tray-btn[aria-expanded="true"] {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    .tray-btn .caret {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .color-now {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--now, #0ea5e9);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, .25);
+    }
+
+    .board-tools .btn-label,
+    .desktop-flex {
+      display: none;
+    }
+
+    .board-tools .remote-drawing {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    @media (min-width: 900px) {
+      .board-tools {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 16px;
+      }
+
+      .tray,
+      .tray.open {
+        display: contents;
+      }
+
+      .mobile-only {
+        display: none !important;
+      }
+
+      .board-tools .btn-label {
+        display: inline;
+      }
+
+      .desktop-flex {
+        display: block;
+      }
     }
 
     .swatch {
@@ -1419,6 +1785,19 @@
       background: rgba(255, 255, 255, .95);
       font: 600 16px system-ui, sans-serif;
       outline: none;
+    }
+
+    /* Caixa de texto: fica em cima da caixa desenhada, com o mesmo tamanho. */
+    .board-textbox-input {
+      box-sizing: border-box;
+      min-width: 0;
+      resize: none;
+      overflow: hidden;
+      border-radius: 0;
+      font-weight: 500;
+      line-height: 1.25;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
     .board-tools .tool {
@@ -1673,29 +2052,78 @@
         padding-right: 8px;
       }
 
+      /* Uma linha baixa: ícone e texto lado a lado (sobra altura para o quadro). */
+      .s-controls {
+        padding-top: 6px;
+        padding-bottom: max(6px, env(safe-area-inset-bottom));
+      }
+
       .ctl {
         flex: 1;
+        flex-direction: row;
+        justify-content: center;
+        gap: 6px;
         min-width: 0;
-        padding: 8px 4px;
-        font-size: 11px;
-        line-height: 1.2;
+        min-height: 44px;
+        padding: 4px 6px;
+        font-size: 11.5px;
+        line-height: 1.15;
+        text-align: left;
       }
 
       .ctl .ic {
-        font-size: 20px;
+        flex: none;
+        font-size: 19px;
       }
 
-      /* Estreito: tela, áudio e configurações só com o ícone (a dica diz o que é). */
+      /* Estreito: tela, áudio, configurações e sair só com o ícone (a dica diz o que é). */
       #screenBtn,
       #shareAudioBtn,
-      #settingsBtn {
+      #settingsBtn,
+      #leaveBtn {
         flex: 0 0 48px;
       }
 
       #screenBtn > span:last-child,
       #shareAudioBtn > span:last-child,
-      #settingsBtn > span:last-child {
+      #settingsBtn > span:last-child,
+      #leaveBtn > span:last-child {
         display: none;
+      }
+
+      /* Topo numa linha: título à esquerda, quem está aqui rola para o lado. */
+      .s-top {
+        flex-wrap: nowrap;
+        gap: 8px;
+        padding: 6px 10px;
+      }
+
+      .s-peer {
+        flex: 0 1 auto;
+        max-width: 42%;
+      }
+
+      .s-title-note,
+      .s-actions .btn-text {
+        display: none;
+      }
+
+      .s-remote {
+        order: 0;
+        flex: 1 1 0;
+        flex-basis: 0;
+      }
+
+      .s-actions {
+        gap: 4px;
+      }
+
+      .s-tabs {
+        padding-top: 2px;
+      }
+
+      .s-tabs button {
+        padding: 6px;
       }
     }
 
@@ -1778,56 +2206,6 @@
       }
 
       /* Área de trabalho: sempre 16:9, encaixada no palco (o JS calcula). */
-      .stage-area {
-        position: relative;
-        overflow: hidden;
-        padding: 0;
-        margin: 0 10px 10px;
-      }
-
-      .workspace {
-        display: block;
-        position: absolute;
-        border-radius: 12px;
-        background:
-          radial-gradient(circle, rgba(255, 255, 255, .07) 1px, transparent 1.5px) 0 0 / 22px 22px,
-          rgba(255, 255, 255, .02);
-        outline: 1px dashed var(--border);
-      }
-
-      .win {
-        position: absolute;
-        box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
-      }
-
-      .win-head {
-        cursor: grab;
-      }
-
-      .win.dragging .win-head {
-        cursor: grabbing;
-      }
-
-      .win.maximized .win-head {
-        cursor: default;
-      }
-
-      .resize-handle {
-        display: block;
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        z-index: 1;
-        width: 18px;
-        height: 18px;
-        cursor: nwse-resize;
-        background: linear-gradient(135deg, transparent 50%, rgba(120, 130, 150, .7) 50%);
-        border-bottom-right-radius: 11px;
-      }
-
-      .win.maximized .resize-handle {
-        display: none;
-      }
 
       /* Configurações: painel à direita, acima dos controles. */
       .settings-panel {
@@ -2417,29 +2795,50 @@
          flutuando; no celular, os quadros um embaixo do outro). -->
     <section id="boardPane" class="pane board-pane">
 
-      <div class="board-tools">
+      <!-- No PC tudo numa linha. No celular: uma linha com a ferramenta,
+           a cor e o ⋯; cada um abre a sua bandeja por cima do quadro. -->
+      <div id="boardTools" class="board-tools">
+        <button id="toolTrayBtn" class="tool tray-btn mobile-only" data-tray="tools" title="Ferramentas" aria-expanded="false"><span id="toolTrayIcon">✏️</span><span class="caret">▾</span></button>
+        <button id="colorTrayBtn" class="tool tray-btn mobile-only" data-tray="colors" title="Cor e espessura" aria-expanded="false"><span id="colorTrayDot" class="color-now"></span><span class="caret">▾</span></button>
         <!-- Ferramentas (atalho entre parênteses no title). -->
-        <span id="toolButtons" class="tool-group" role="toolbar" aria-label="Ferramentas de desenho"></span>
+        <div class="tray" data-tray="tools">
+          <span id="toolButtons" class="tool-group" role="toolbar" aria-label="Ferramentas de desenho"></span>
+        </div>
         <button id="undoBtn" class="tool" title="Desfazer o meu último traço neste quadro (Ctrl+Z)">↶</button>
-        <span class="tool-sep"></span>
-        <span id="swatches" class="tool-group"></span>
-        <label class="color-pick" title="Outra cor">
-          <input id="customColor" type="color" value="#0ea5e9" aria-label="Outra cor">
-        </label>
-        <label class="size-pick" title="Espessura">
-          <span id="sizeDot" class="size-dot"></span>
-          <input id="sizeRange" type="range" min="1" max="10" value="2" aria-label="Espessura">
-        </label>
+        <span class="tool-sep desktop-flex"></span>
+        <div class="tray" data-tray="colors">
+          <span id="swatches" class="tool-group"></span>
+          <label class="color-pick" title="Outra cor">
+            <input id="customColor" type="color" value="#0ea5e9" aria-label="Outra cor">
+          </label>
+          <label class="size-pick" title="Espessura">
+            <span id="sizeDot" class="size-dot"></span>
+            <input id="sizeRange" type="range" min="1" max="10" value="2" aria-label="Espessura">
+          </label>
+        </div>
         <span id="remoteDrawing" class="remote-drawing hidden">✏️ O outro está desenhando…</span>
         <span class="spacer"></span>
-        <button id="addBoardBtn" class="tool" title="Novo quadro (aparece para todos)">➕ Quadro</button>
-        <button id="addDisplayBtn" class="tool" title="Mostrar uma imagem para todos (dá para trocar quando quiser)">🖼️ Imagem</button>
+        <div class="tray" data-tray="more">
+          <button id="addBoardBtn" class="tool" title="Novo quadro (aparece para todos)">➕ Quadro</button>
+          <button id="addDisplayBtn" class="tool" title="Mostrar uma imagem para todos (dá para trocar quando quiser)">🖼️ Imagem</button>
+        </div>
         <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
-        <button id="boardModeBtn" class="tool active">✏️ Editando</button>
+        <button id="boardModeBtn" class="tool active">✏️<span class="btn-label"> Editando</span></button>
+        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro e imagem" aria-expanded="false">⋯</button>
       </div>
 
+      <!-- Espaço infinito: arrastar o fundo move, pinça / Ctrl+roda dá zoom. -->
       <div id="stageArea" class="stage-area">
         <div id="workspace" class="workspace"></div>
+        <div id="maxLayer" class="max-layer"></div>
+        <!-- Ir para um quadro, imagem ou tela. -->
+        <div id="winSwitcher" class="win-switcher stage-ui hidden" aria-label="Ir para"></div>
+        <div class="zoom-bar stage-ui" role="group" aria-label="Zoom (só aqui)">
+          <button id="zoomOutBtn" title="Diminuir o zoom (Ctrl −)">−</button>
+          <button id="zoomResetBtn" title="Voltar a 100% (Ctrl 0)"><span id="zoomLabel">100%</span></button>
+          <button id="zoomInBtn" title="Aumentar o zoom (Ctrl +)">+</button>
+          <button id="zoomFitBtn" title="Ver tudo (Shift 1)">⤢</button>
+        </div>
       </div>
 
     </section>
@@ -3245,7 +3644,10 @@
       screenTrack: null,
       windows: new Map(),     // janelas na área de trabalho: "board:<id>" | "screen:<id>" -> view
       layout: new Map(),      // posição combinada de cada janela (veja setLayout)
-      work: null,             // PC: { scale } da área de trabalho
+      cam: { x: 0, y: 0, z: 1 }, // minha vista do mundo (só aqui): canto de cima e zoom
+      camTouched: false,      // mexi na vista (a vista inicial para de se ajustar)
+      camTimer: null,
+      camAnim: 0,
       screenAutoFrom: null,   // a aba Telas abriu sozinha: de onde veio (para voltar)
       chatMin: storageGet("rtc.chatMin") === "1", // PC: chat minimizado
       shareAudioTrack: null,  // áudio que estou compartilhando (sem vídeo)
@@ -3356,7 +3758,7 @@
       }
 
       peer[slot].srcObject = new MediaStream([event.track]);
-      peer[slot].muted = !session.speakerOn;
+      applyPeerVolume(peer);
       playRemoteAudio();
 
     };
@@ -3525,6 +3927,7 @@
     show("rememberBtn", list.length === 1);
 
     $("leaveBtn").lastElementChild.textContent = session.room ? "Sair da sala" : "Desconectar";
+    $("leaveBtn").title = $("leaveBtn").lastElementChild.textContent;
 
     renderConnectionState();
     renderRemoteState();
@@ -4042,6 +4445,9 @@
       if (item && typeof item === "object") applyLayout(item.id, item, item.by);
     }
 
+    // Ainda não mexi na vista: acompanha onde as janelas estão.
+    initialCamera();
+
     let chatAdded = 0;
     let strokesAdded = 0;
 
@@ -4440,7 +4846,7 @@
     if (!session) return;
 
     session.speakerOn = !session.speakerOn;
-    remoteAudios(true).forEach(audio => { audio.muted = !session.speakerOn; });
+    peers.forEach(applyPeerVolume);
 
     if (session.speakerOn) playRemoteAudio();
 
@@ -4634,10 +5040,21 @@
     }, "me");
 
     for (const peer of connectedPeers()) {
+
+      const muted = volumeOf(peer.id).muted;
+
       peer.micPill = avatar(peer.id, peerLabel(peer), {
         ...peer.remote,
-        text: peer.reconnect ? " ⚠️" : ""
-      });
+        text: (muted ? "🔕" : "") + (peer.reconnect ? " ⚠️" : "")
+      }, muted ? "muted-by-me" : "");
+
+      if (muted) peer.micPill.title += " · você mutou (só para você)";
+
+      // Tocar na bolinha: volume e mudo dessa pessoa (nas configurações).
+      peer.micPill.role = "button";
+      peer.micPill.tabIndex = 0;
+      peer.micPill.onclick = () => openPersonSettings(peer.id);
+
     }
 
     // Sala: quem ainda está conectando.
@@ -4981,10 +5398,10 @@
   /* ---------------- área de trabalho (janelas compartilhadas) ---------------- */
 
   /*
-   * Quadros e telas compartilhadas são janelas numa área de trabalho
-   * comum. No PC ela tem sempre a mesma proporção (WORK_W × WORK_H
-   * unidades) e é encaixada no espaço de cada aparelho: assim uma janela
-   * que alguém move vai para o mesmo lugar na tela de todo mundo.
+   * Quadros, imagens e telas compartilhadas são janelas num espaço
+   * infinito comum (o "mundo", em unidades). Cada um olha com a sua vista
+   * (session.cam: canto de cima em x, y e o zoom z, só neste aparelho):
+   * arrastar o fundo move, pinça / Ctrl+roda dá zoom.
    *
    * Posição, tamanho, ordem (z), minimizada e maximizada de cada janela
    * são de todos: quem mexe manda { type: "win", id, ..., rev }. Vale a
@@ -4993,17 +5410,20 @@
    *
    * Ids das janelas: "board:<id do quadro>" e "screen:<id de quem compartilha>".
    *
-   * No celular não flutua: os quadros ficam um embaixo do outro na aba
-   * Quadro e as telas na aba Telas (a posição combinada só vale no PC).
+   * A barra de título e a bolinha (minimizada) têm sempre o mesmo tamanho
+   * na tela; o resto acompanha o zoom. Maximizada (no PC) sai do mundo e
+   * ocupa a vista de cada um. No celular as telas ficam na aba Telas.
    */
 
-  const WORK_W = 1600;
+  const WORK_W = 1600;        // área que aparece ao entrar, no PC
   const WORK_H = 900;
-  const WIN_HEAD_PX = 34;     // barra de título na tela (não muda com a escala)
-  // Nas contas de posição a barra vale sempre o mesmo em unidades: assim o
-  // limite de cada janela é igual em todas as telas (com qualquer escala).
-  const HEAD_UNITS = 70;
-  const WIN_MIN_W = 240;      // em unidades da área de trabalho
+  const WIN_HEAD_PX = 34;     // barra de título na tela (não muda com o zoom)
+  const WIN_MIN_W = 240;      // em unidades do mundo
+  const WIN_MAX_W = 8000;
+  const WORLD_MAX = 100000;   // até onde dá para levar uma janela
+  const ZOOM_MIN = 0.1;
+  const ZOOM_MAX = 4;
+  const BOARD_MAX_PX = 3072;  // resolução máxima do quadro (zoom grande)
   const LAYOUT_SEND_MS = 40;  // enquanto arrasta: no máximo um aviso a cada 40 ms
   const MAIN_BOARD = "main";  // o quadro que sempre existe (não fecha)
   const BOARD_ID = /^[a-z0-9-]{1,40}$/;
@@ -5016,43 +5436,436 @@
   const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, max));
 
 
-  /* ---- encaixe da área de trabalho ---- */
+  /* ---- a vista de cada um (zoom e posição, só aqui) ---- */
+
+  // A barra de título fica do mesmo tamanho na tela até HEAD_FULL_ZOOM;
+  // com menos zoom que isso, diminui junto (senão fica maior que a janela).
+  const HEAD_FULL_ZOOM = 0.6;
+  const headZoom = z => Math.min(1, z / HEAD_FULL_ZOOM) / z;
+  const headUnits = () => WIN_HEAD_PX * headZoom(session.cam.z);
+
+  function stageBox() {
+    return $("stageArea").getBoundingClientRect();
+  }
+
+  function applyCamera() {
+
+    const { x, y, z } = session.cam;
+    const workspace = $("workspace");
+    const stage = $("stageArea");
+
+    workspace.style.transform = `scale(${z}) translate(${-x}px, ${-y}px)`;
+    workspace.style.setProperty("--iz", 1 / z);
+    workspace.style.setProperty("--hz", headZoom(z));
+
+    // Pontinhos do fundo andam junto (e somem de tão juntos no zoom pequeno).
+    const grid = 22 * z * (z < 0.35 ? 4 : 1);
+    stage.style.setProperty("--grid", grid + "px");
+    stage.style.setProperty("--grid-x", -x * z % grid + "px");
+    stage.style.setProperty("--grid-y", -y * z % grid + "px");
+
+    $("zoomLabel").textContent = Math.round(z * 100) + "%";
+
+    renderCursors();
+
+    // Resolução dos quadros acompanha o zoom (depois que para de mexer).
+    clearTimeout(session.camTimer);
+    session.camTimer = setTimeout(() => {
+      session?.windows.forEach(view => { if (view.kind === "board") resizeCanvas(view); });
+    }, 150);
+
+  }
+
+  function setCamera(x, y, z, touched = true) {
+    z = clamp(z, ZOOM_MIN, ZOOM_MAX);
+    session.cam = { x: clamp(x, -WORLD_MAX, WORLD_MAX), y: clamp(y, -WORLD_MAX, WORLD_MAX), z };
+    if (touched) session.camTouched = true;
+    applyCamera();
+  }
+
+  // Zoom mantendo parado o ponto (sx, sy) da tela.
+  function zoomAt(clientX, clientY, factor) {
+    const box = stageBox();
+    const { x, y, z } = session.cam;
+    const next = clamp(z * factor, ZOOM_MIN, ZOOM_MAX);
+    const px = clientX - box.left;
+    const py = clientY - box.top;
+    setCamera(x + px / z - px / next, y + py / z - py / next, next);
+  }
+
+  function zoomCenter(factor) {
+    const box = stageBox();
+    zoomAt(box.left + box.width / 2, box.top + box.height / 2, factor);
+  }
+
+  // Vai (deslizando) até a vista target { x, y, z }.
+  function animateCamera(target, touched = true) {
+
+    cancelAnimationFrame(session.camAnim);
+
+    const from = { ...session.cam };
+    const start = performance.now();
+    const duration = 260;
+
+    const step = now => {
+      const t = Math.min(1, (now - start) / duration);
+      const k = 1 - (1 - t) ** 3;
+      setCamera(
+        from.x + (target.x - from.x) * k,
+        from.y + (target.y - from.y) * k,
+        from.z + (target.z - from.z) * k,
+        touched
+      );
+      if (t < 1) session.camAnim = requestAnimationFrame(step);
+    };
+
+    session.camAnim = requestAnimationFrame(step);
+
+  }
+
+  // A vista que mostra o retângulo inteiro (do mundo), no meio.
+  function cameraFor(rect, maxZoom = 1, pad = 24) {
+
+    const box = stageBox();
+
+    if (!box.width || !box.height) return null;
+
+    const width = Math.max(1, box.width - pad * 2);
+    const height = Math.max(1, box.height - pad * 2);
+    // A barra de título não cresce com o zoom: conta ela à parte.
+    const z = clamp(Math.min(width / rect.w, (height - WIN_HEAD_PX) / Math.max(1, rect.h - headUnits()), maxZoom), ZOOM_MIN, ZOOM_MAX);
+
+    return {
+      x: rect.x + rect.w / 2 - box.width / 2 / z,
+      y: rect.y + rect.h / 2 - box.height / 2 / z,
+      z
+    };
+
+  }
+
+  // Onde a janela está no mundo (com a barra no zoom de agora).
+  function windowRect(view) {
+    const entry = layoutOf(view.id);
+    if (entry.min) return { x: entry.x, y: entry.y, w: 48 / session.cam.z, h: 48 / session.cam.z };
+    return { x: entry.x, y: entry.y, w: entry.w, h: headUnits() + entry.w / (view.aspect || 1) };
+  }
+
+  const floatingViews = () =>
+    [...session.windows.values()].filter(view => view.el.parentNode === $("workspace"));
+
+  function worldBounds(skipId = null) {
+
+    const rects = floatingViews().filter(view => view.id !== skipId).map(windowRect);
+
+    if (!rects.length) return null;
+
+    const x = Math.min(...rects.map(r => r.x));
+    const y = Math.min(...rects.map(r => r.y));
+
+    return {
+      x,
+      y,
+      w: Math.max(...rects.map(r => r.x + r.w)) - x,
+      h: Math.max(...rects.map(r => r.y + r.h)) - y
+    };
+
+  }
+
+  function fitAll(animate = true) {
+    const target = cameraFor(worldBounds() || { x: 0, y: 0, w: WORK_W, h: WORK_H }, 1.5);
+    if (!target) return;
+    if (animate) animateCamera(target);
+    else setCamera(target.x, target.y, target.z);
+  }
+
+  // Leva a vista até a janela (ela inteira, no meio).
+  function focusWindow(id) {
+    const view = session.windows.get(id);
+    if (!view || view.el.parentNode !== $("workspace")) return;
+    const target = cameraFor(windowRect(view), DESKTOP_LAYOUT.matches ? 1 : 2, 12);
+    if (target) animateCamera(target);
+  }
+
+  // Só vai até a janela se ela não estiver inteira à vista.
+  function revealWindow(id) {
+
+    const view = session.windows.get(id);
+
+    if (!view || view.el.parentNode !== $("workspace")) return;
+
+    const box = stageBox();
+    const { x, y, z } = session.cam;
+    const r = windowRect(view);
+
+    if (r.x < x || r.y < y || r.x + r.w > x + box.width / z || r.y + r.h > y + box.height / z) focusWindow(id);
+
+  }
+
+  // Vista inicial: no PC a área de sempre; no celular, o quadro principal.
+  // Vale até a pessoa mexer na vista (e volta a valer se a tela mudar antes).
+  function initialCamera() {
+
+    if (!session || session.camTouched) return;
+
+    const main = session.windows.get("board:" + MAIN_BOARD);
+    const target = DESKTOP_LAYOUT.matches || !main
+      ? cameraFor({ x: 0, y: 0, w: WORK_W, h: WORK_H }, 1.5, 0)
+      : cameraFor(windowRect(main), 2, 8);
+
+    if (target) setCamera(target.x, target.y, target.z, false);
+
+  }
 
   function layoutWorkspace() {
 
     if (!session) return;
 
-    const workspace = $("workspace");
+    initialCamera();
 
-    if (DESKTOP_LAYOUT.matches) {
+    session.windows.forEach(view => positionWindow(view));
 
-      const area = $("stageArea").getBoundingClientRect();
-      const scale = Math.min(area.width / WORK_W, area.height / WORK_H) || 0;
-
-      session.work = { scale };
-
-      workspace.style.width = WORK_W * scale + "px";
-      workspace.style.height = WORK_H * scale + "px";
-      workspace.style.left = (area.width - WORK_W * scale) / 2 + "px";
-      workspace.style.top = (area.height - WORK_H * scale) / 2 + "px";
-
-    } else {
-
-      session.work = null;
-      workspace.removeAttribute("style");
-
-    }
-
-    session.windows.forEach(view => {
-      placeWindow(view);
-      positionWindow(view);
-    });
-
-    renderCursors();
+    applyCamera();
 
   }
 
   new ResizeObserver(() => layoutWorkspace()).observe($("stageArea"));
+
+  $("zoomInBtn").onclick = () => zoomCenter(1.25);
+  $("zoomOutBtn").onclick = () => zoomCenter(0.8);
+  $("zoomFitBtn").onclick = () => fitAll();
+
+  $("zoomResetBtn").onclick = () => {
+    const box = stageBox();
+    const { x, y, z } = session.cam;
+    animateCamera({ x: x + box.width / 2 / z - box.width / 2, y: y + box.height / 2 / z - box.height / 2, z: 1 });
+  };
+
+
+  /* ---- mexer na vista: arrastar, pinça, roda ---- */
+
+  /*
+   * Arrastar o fundo (ou com o botão do meio, ou segurando Espaço) move a
+   * vista; no modo Visualizando, arrastar o quadro também. Dois dedos em
+   * qualquer lugar: pinça (zoom) e move; se o primeiro dedo já estava
+   * desenhando, esse traço é desfeito. Ctrl+roda (ou pinça no trackpad)
+   * dá zoom; a roda sozinha move.
+   */
+  const gesture = {
+    touches: new Map(),   // dedos na área: id -> { x, y }
+    blocked: new Set(),   // dedos que fizeram pinça (não desenham nem arrastam janela)
+    pinch: null,
+    pan: null,
+    space: false,
+    lastScale: 1
+  };
+
+  const isGesturing = pointerId => !!gesture.pinch || gesture.blocked.has(pointerId) || gesture.pan?.id === pointerId;
+
+  // O dedo que estava desenhando virou pinça: desfaz o traço (e a caixa de texto).
+  function cancelMyStroke() {
+
+    if (session.textboxDraft) {
+      const board = session.textboxDraft.board;
+      session.textboxDraft = null;
+      redrawBoard(board);
+    }
+
+    if (!session.drawing) return;
+
+    const { board, id } = session.drawing;
+    const key = me.id + ":" + id;
+
+    session.drawing = null;
+    session.pendingPoints = [];
+    session.pendingEnd = null;
+    session.mine = session.mine.filter(item => item.key !== key);
+
+    eraseStrokes(board, [key]);
+    send({ type: "erase", board, keys: [key] });
+
+  }
+
+  function startPinch() {
+
+    const [a, b] = [...gesture.touches.values()];
+
+    gesture.pinch = {
+      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      cam: { ...session.cam }
+    };
+
+    gesture.pan = null;
+    gesture.touches.forEach((_, id) => gesture.blocked.add(id));
+    $("stageArea").classList.remove("panning");
+
+    cancelMyStroke();
+
+  }
+
+  function movePinch() {
+
+    const [a, b] = [...gesture.touches.values()];
+    const box = stageBox();
+    const start = gesture.pinch;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const z = clamp(start.cam.z * Math.hypot(a.x - b.x, a.y - b.y) / start.dist, ZOOM_MIN, ZOOM_MAX);
+
+    // O ponto do mundo que estava entre os dedos continua entre os dedos.
+    const wx = start.cam.x + (start.mid.x - box.left) / start.cam.z;
+    const wy = start.cam.y + (start.mid.y - box.top) / start.cam.z;
+
+    setCamera(wx - (mid.x - box.left) / z, wy - (mid.y - box.top) / z, z);
+
+  }
+
+  $("stageArea").addEventListener("pointerdown", event => {
+
+    if (!session || event.target.closest(".stage-ui")) return;
+
+    if (event.pointerType === "touch") {
+
+      gesture.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+      if (gesture.touches.size >= 2) {
+        if (gesture.touches.size === 2) startPinch();
+        else gesture.blocked.add(event.pointerId);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+    }
+
+    const onBackground = !event.target.closest(".win");
+    const viewingBoard = session.boardMode !== "edit" && event.target.closest(".board-win canvas");
+    const wantsPan = event.button === 1 || (event.button === 0 && (onBackground || gesture.space || viewingBoard));
+
+    if (!wantsPan) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    gesture.pan = { id: event.pointerId, x: event.clientX, y: event.clientY, cam: { ...session.cam } };
+    $("stageArea").setPointerCapture(event.pointerId);
+    $("stageArea").classList.add("panning");
+
+  }, true);
+
+  // Antes de todo mundo: durante a pinça ninguém mais vê esses dedos.
+  window.addEventListener("pointermove", event => {
+
+    if (!session) return;
+
+    if (gesture.touches.has(event.pointerId)) gesture.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (gesture.pinch && gesture.touches.size >= 2) {
+      movePinch();
+      event.stopPropagation();
+      return;
+    }
+
+    if (gesture.pan?.id === event.pointerId) {
+      const { x, y, cam } = gesture.pan;
+      setCamera(cam.x - (event.clientX - x) / cam.z, cam.y - (event.clientY - y) / cam.z, cam.z);
+      event.stopPropagation();
+      return;
+    }
+
+    if (gesture.blocked.has(event.pointerId)) event.stopPropagation();
+
+  }, true);
+
+  function endPointer(event) {
+
+    gesture.touches.delete(event.pointerId);
+
+    if (gesture.pinch && gesture.touches.size < 2) gesture.pinch = null;
+
+    if (gesture.pan?.id === event.pointerId) {
+      gesture.pan = null;
+      $("stageArea").classList.remove("panning");
+    }
+
+    // Dedo da pinça saindo: não vira clique nem fim de traço.
+    if (gesture.blocked.delete(event.pointerId)) event.stopPropagation();
+
+  }
+
+  window.addEventListener("pointerup", endPointer, true);
+  window.addEventListener("pointercancel", endPointer, true);
+
+  $("stageArea").addEventListener("wheel", event => {
+
+    if (!session || event.target.closest(".stage-ui")) return;
+
+    event.preventDefault();
+
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1;
+
+    // Ctrl+roda, ⌘+roda ou pinça no trackpad (chega como Ctrl+roda).
+    if (event.ctrlKey || event.metaKey) {
+      // Roda do mouse: passos grandes; pinça no trackpad: passos pequenos.
+      const delta = clamp(event.deltaY * unit, -100, 100);
+      zoomAt(event.clientX, event.clientY, Math.exp(-delta * (Math.abs(delta) >= 40 ? 0.002 : 0.01)));
+      return;
+    }
+
+    const { x, y, z } = session.cam;
+    const dx = (event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX) * unit;
+    const dy = (event.shiftKey && !event.deltaX ? 0 : event.deltaY) * unit;
+
+    setCamera(x + dx / z, y + dy / z, z);
+
+  }, { passive: false });
+
+  // Safari no Mac: pinça no trackpad vem como "gesture" (sem Ctrl+roda).
+  $("stageArea").addEventListener("gesturestart", event => {
+    if (!session || gesture.touches.size) return;
+    event.preventDefault();
+    gesture.lastScale = 1;
+  });
+
+  $("stageArea").addEventListener("gesturechange", event => {
+    if (!session || gesture.touches.size) return;
+    event.preventDefault();
+    zoomAt(event.clientX, event.clientY, event.scale / gesture.lastScale);
+    gesture.lastScale = event.scale;
+  });
+
+  // Espaço segurado: arrastar em qualquer lugar move a vista. Ctrl +/−/0 e Shift+1.
+  const typingIn = target => target.closest?.("input, textarea, select, [contenteditable]");
+
+  document.addEventListener("keydown", event => {
+
+    if (!session || !isPaneVisible("board") || typingIn(event.target)) return;
+
+    if (event.code === "Space" && !event.target.closest?.("button")) {
+      event.preventDefault();
+      gesture.space = true;
+      $("stageArea").classList.add("space-pan");
+      return;
+    }
+
+    const mod = event.ctrlKey || event.metaKey;
+
+    if (mod && (event.key === "=" || event.key === "+")) { event.preventDefault(); zoomCenter(1.25); }
+    else if (mod && event.key === "-") { event.preventDefault(); zoomCenter(0.8); }
+    else if (mod && event.key === "0") { event.preventDefault(); $("zoomResetBtn").click(); }
+    else if (event.shiftKey && event.code === "Digit1") { event.preventDefault(); fitAll(); }
+
+  });
+
+  document.addEventListener("keyup", event => {
+    if (event.code !== "Space") return;
+    gesture.space = false;
+    $("stageArea").classList.remove("space-pan");
+  });
+
+  window.addEventListener("blur", () => {
+    gesture.space = false;
+    $("stageArea").classList.remove("space-pan");
+  });
 
 
   /* ---- posição combinada de cada janela ---- */
@@ -5144,9 +5957,9 @@
     if (current && (data.rev < current.rev || (data.rev === current.rev && by <= current.by))) return;
 
     const entry = {
-      x: clamp(data.x, 0, WORK_W),
-      y: clamp(data.y, 0, WORK_H),
-      w: clamp(data.w, WIN_MIN_W, WORK_W),
+      x: clamp(data.x, -WORLD_MAX, WORLD_MAX),
+      y: clamp(data.y, -WORLD_MAX, WORLD_MAX),
+      w: clamp(data.w, WIN_MIN_W, WIN_MAX_W),
       z: Math.max(0, Math.floor(data.z)),
       min: data.min === true,
       max: data.max === true,
@@ -5172,9 +5985,15 @@
   /* ---- janelas ---- */
 
   // No PC tudo fica na área de trabalho; no celular as telas vão para a aba Telas.
+  // No mundo; maximizada no PC: por cima da vista; no celular as telas vão para a aba Telas.
   function placeWindow(view) {
 
-    const parent = DESKTOP_LAYOUT.matches || view.kind !== "screen" ? $("workspace") : $("screenGrid");
+    // Tela cheia do iPhone: fica na página até sair.
+    if (view.el.classList.contains("win-full")) return;
+
+    const parent = !DESKTOP_LAYOUT.matches && view.kind === "screen" ? $("screenGrid")
+      : DESKTOP_LAYOUT.matches && layoutOf(view.id).max ? $("maxLayer")
+      : $("workspace");
 
     if (view.el.parentNode !== parent) {
       parent.appendChild(view.el);
@@ -5188,42 +6007,46 @@
     const entry = layoutOf(view.id);
     const el = view.el;
 
-    el.classList.toggle("maximized", entry.max);
-    el.classList.toggle("minimized", entry.min && !entry.max);
+    placeWindow(view);
+
+    const floating = el.parentNode === $("workspace");
+    const maxed = el.parentNode === $("maxLayer");
+    const bubble = entry.min && !entry.max;
+
+    el.classList.toggle("maximized", maxed);
+    // Na aba Telas (celular) a janela aparece sempre inteira.
+    el.classList.toggle("minimized", bubble && floating);
 
     view.minBtn.textContent = entry.min && !entry.max ? "▢" : "–";
     view.minBtn.title = entry.min && !entry.max ? "Mostrar (para todos)" : "Minimizar (para todos)";
     view.maxBtn.textContent = entry.max ? "🗗" : "⤢";
     view.maxBtn.title = entry.max ? "Voltar ao tamanho da janela (para todos)" : "Maximizar (para todos)";
 
-    if (!session.work) {
+    if (!floating && !maxed) {
       for (const property of ["left", "top", "width", "zIndex"]) el.style[property] = "";
       if (view.kind === "board") requestAnimationFrame(() => resizeCanvas(view));
       return;
     }
 
-    const scale = session.work.scale;
-    const aspect = view.aspect || 1;
+    if (maxed) {
 
-    let { x, y, w } = entry;
+      // O maior tamanho que cabe na vista, no meio.
+      const box = stageBox();
+      const w = Math.max(0, Math.min(box.width, (box.height - WIN_HEAD_PX) * (view.aspect || 1)));
 
-    // Maximizada: o maior tamanho que cabe, no meio.
-    if (entry.max) {
-      w = Math.min(WORK_W, (WORK_H - HEAD_UNITS) * aspect);
-      x = (WORK_W - w) / 2;
-      y = 0;
+      el.style.left = (box.width - w) / 2 + "px";
+      el.style.top = "0px";
+      el.style.width = w + "px";
+
+    } else {
+
+      // No mundo: a vista (transform do #workspace) faz o resto.
+      el.style.left = entry.x + "px";
+      el.style.top = entry.y + "px";
+      el.style.width = entry.w + "px";
+
     }
 
-    w = Math.min(w, WORK_W, (WORK_H - HEAD_UNITS) * aspect);
-
-    const height = HEAD_UNITS + (entry.min && !entry.max ? 0 : w / aspect);
-
-    x = clamp(x, 0, WORK_W - w);
-    y = clamp(y, 0, WORK_H - height);
-
-    el.style.left = x * scale + "px";
-    el.style.top = y * scale + "px";
-    el.style.width = w * scale + "px";
     el.style.zIndex = entry.z;
 
     if (view.kind === "board") requestAnimationFrame(() => resizeCanvas(view));
@@ -5256,6 +6079,10 @@
     handle.className = "resize-handle";
     handle.title = "Arraste para mudar o tamanho (para todos)";
 
+    const bubble = document.createElement("span");
+    bubble.className = "bubble";
+    bubble.textContent = kind === "board" ? "🎨" : kind === "display" ? "🖼️" : "🖥️";
+
     const view = { id, kind, el, head, body, label, aspect: kind === "board" ? 1 : 16 / 9 };
 
     view.minBtn = windowButton("–", "Minimizar", () => {
@@ -5268,12 +6095,22 @@
       setLayout(id, { max: !entry.max, min: false, z: ++topZ });
     }, "desktop-only");
 
-    head.append(dot, label, spacer, ...extraButtons, view.minBtn, view.maxBtn);
+    head.append(bubble, dot, label, spacer, ...extraButtons, view.minBtn, view.maxBtn);
 
     if (closable) head.append(windowButton("✕", "Fechar (para todos)", onClose));
 
     body.append(handle);
     el.append(head, body);
+
+    // Bolinha: tocar mostra a janela de novo (arrastar só move).
+    head.addEventListener("click", event => {
+      if (!el.classList.contains("minimized") || view.dragMoved || event.target.closest("button")) return;
+      setLayout(id, { min: false, z: ++topZ });
+    });
+
+    head.addEventListener("mouseenter", () => {
+      head.title = el.classList.contains("minimized") ? label.textContent + " · clique para mostrar (para todos)" : "";
+    });
 
     // Clicar traz para a frente (para todos).
     el.addEventListener("pointerdown", event => {
@@ -5303,6 +6140,31 @@
     return element;
   }
 
+  /* ---- ir para: uma aba por janela no mundo ---- */
+
+  function renderWinSwitcher() {
+
+    if (!session) return;
+
+    const views = [...$("workspace").children, ...$("maxLayer").children]
+      .map(el => session.windows.get(el.dataset.id))
+      .filter(Boolean);
+
+    $("winSwitcher").replaceChildren(...views.map(view => {
+      const button = document.createElement("button");
+      button.textContent = view.label.textContent || "Quadro";
+      button.title = "Ir para " + button.textContent;
+      button.onclick = () => focusWindow(view.id);
+      return button;
+    }));
+
+    show("winSwitcher", views.length > 1);
+
+  }
+
+  new MutationObserver(() => renderWinSwitcher()).observe($("workspace"), { childList: true });
+  new MutationObserver(() => renderWinSwitcher()).observe($("maxLayer"), { childList: true });
+
   function removeWindow(id) {
 
     const view = session.windows.get(id);
@@ -5325,27 +6187,32 @@
 
     view.head.addEventListener("pointerdown", event => {
 
-      if (!session.work || event.target.closest("button")) return;
+      view.dragMoved = false;
+
+      // Só no mundo (maximizada e na aba Telas não arrasta).
+      if (event.button !== 0 || event.target.closest("button") || view.el.parentNode !== $("workspace")) return;
 
       const entry = layoutOf(view.id);
-
-      if (entry.max) return;
 
       event.preventDefault();
       view.head.setPointerCapture(event.pointerId);
       view.el.classList.add("dragging");
 
-      const scale = session.work.scale;
       const start = { x: event.clientX, y: event.clientY, ex: entry.x, ey: entry.y };
 
       const move = moveEvent => {
 
-        const current = layoutOf(view.id);
-        const height = HEAD_UNITS + (current.min ? 0 : current.w / view.aspect);
+        if (isGesturing(moveEvent.pointerId)) return;
+
+        // Mexeu só um pouquinho: ainda vale como toque (na bolinha).
+        if (!view.dragMoved && Math.hypot(moveEvent.clientX - start.x, moveEvent.clientY - start.y) < 4) return;
+        view.dragMoved = true;
+
+        const z = session.cam.z;
 
         setLayout(view.id, {
-          x: clamp(start.ex + (moveEvent.clientX - start.x) / scale, 0, WORK_W - current.w),
-          y: clamp(start.ey + (moveEvent.clientY - start.y) / scale, 0, WORK_H - height)
+          x: clamp(start.ex + (moveEvent.clientX - start.x) / z, -WORLD_MAX, WORLD_MAX),
+          y: clamp(start.ey + (moveEvent.clientY - start.y) / z, -WORLD_MAX, WORLD_MAX)
         }, false);
 
       };
@@ -5370,22 +6237,20 @@
 
     handle.addEventListener("pointerdown", event => {
 
-      if (!session.work) return;
+      if (view.el.parentNode !== $("workspace")) return;
 
       event.preventDefault();
       event.stopPropagation();
       handle.setPointerCapture(event.pointerId);
 
-      const scale = session.work.scale;
       const start = { x: event.clientX, w: layoutOf(view.id).w };
 
       const move = moveEvent => {
 
-        const current = layoutOf(view.id);
-        const maxW = Math.min(WORK_W - current.x, (WORK_H - current.y - HEAD_UNITS) * view.aspect);
+        if (isGesturing(moveEvent.pointerId)) return;
 
         setLayout(view.id, {
-          w: clamp(start.w + (moveEvent.clientX - start.x) / scale, WIN_MIN_W, maxW)
+          w: clamp(start.w + (moveEvent.clientX - start.x) / session.cam.z, WIN_MIN_W, WIN_MAX_W)
         }, false);
 
       };
@@ -5412,15 +6277,27 @@
     if (document.fullscreenElement === view.el) {
       document.exitFullscreen().catch(() => {});
     } else if (view.el.classList.contains("win-full")) {
-      view.el.classList.remove("win-full");
+      exitWindowFull(view);
     } else if (document.fullscreenEnabled && view.el.requestFullscreen) {
-      view.el.requestFullscreen().catch(() => view.el.classList.add("win-full"));
+      view.el.requestFullscreen().catch(() => enterWindowFull(view));
     } else {
-      view.el.classList.add("win-full");
+      enterWindowFull(view);
     }
 
     setTimeout(() => resizeCanvas(view), 150);
 
+  }
+
+  // Sem tela cheia de verdade: a janela vai para a página (fora do zoom do mundo).
+  function enterWindowFull(view) {
+    view.el.classList.add("win-full");
+    document.querySelector(".session").appendChild(view.el);
+  }
+
+  function exitWindowFull(view) {
+    view.el.classList.remove("win-full");
+    positionWindow(view);
+    setTimeout(() => resizeCanvas(view), 150);
   }
 
   document.addEventListener("fullscreenchange", () => {
@@ -5428,7 +6305,11 @@
   });
 
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape") document.querySelectorAll(".win-full").forEach(el => el.classList.remove("win-full"));
+    if (event.key !== "Escape" || !session) return;
+    document.querySelectorAll(".win-full").forEach(el => {
+      const view = session.windows.get(el.dataset.id);
+      if (view) exitWindowFull(view);
+    });
   });
 
 
@@ -5459,6 +6340,7 @@
     if (!view) view = createBoardWindow(entry);
 
     view.label.textContent = "🎨 " + entry.title;
+    renderWinSwitcher();
 
     return entry;
 
@@ -5502,19 +6384,68 @@
 
     if (!session) return;
 
+    setTray(null);
+
     const id = me.id.slice(0, 8) + "-" + randomId();
     const title = "Quadro " + (session.boards.size + 1);
 
     ensureBoard(id, title, me.id);
     send({ type: "board-add", id, title });
 
-    // Novo quadro na frente, para todos.
-    const place = defaultLayout("board:" + id);
+    // Novo quadro na frente, para todos, no lugar mais livre da minha vista.
+    const place = freeSpot(defaultLayout("board:" + id), "board:" + id, 1);
     setLayout("board:" + id, { x: place.x, y: place.y, w: place.w, z: ++topZ });
 
-    if (!DESKTOP_LAYOUT.matches) session.windows.get("board:" + id)?.el.scrollIntoView({ behavior: "smooth" });
+    revealWindow("board:" + id);
 
   };
+
+  // Onde uma janela nova (w / aspect) cobre menos as outras, dentro do que
+  // eu estou vendo agora. Sem lugar livre (ou só apertada): do lado das
+  // que já existem, no tamanho normal (depois a vista vai até ela).
+  function freeSpot(place, skipId, aspect = 1) {
+
+    const box = stageBox();
+    const { x: vx, y: vy, z } = session.cam;
+    const vw = box.width / z;
+    const vh = box.height / z;
+    const head = headUnits();
+
+    const rects = floatingViews()
+      .filter(view => view.id !== skipId && !layoutOf(view.id).min)
+      .map(windowRect);
+
+    const covered = (x, y, w, h) => rects.reduce((sum, r) =>
+      sum + Math.max(0, Math.min(x + w, r.x + r.w) - Math.max(x, r.x)) * Math.max(0, Math.min(y + h, r.y + r.h) - Math.max(y, r.y)), 0);
+
+    const size = Math.min(place.w, Math.max(WIN_MIN_W, vw - 24 / z));
+    const center = { x: vx + (vw - size) / 2, y: vy + Math.max(0, (vh - head - size / aspect) / 2), w: size };
+
+    let best = { ...center, score: covered(center.x, center.y, size, head + size / aspect) };
+
+    const step = Math.max(20, Math.min(vw, vh) / 24);
+
+    for (const w of [size, 440, WIN_MIN_W + 60]) {
+      const h = head + w / aspect;
+      if (w > vw || h > vh) continue;
+      for (let y = vy; y <= vy + vh - h; y += step) {
+        for (let x = vx; x <= vx + vw - w; x += step) {
+          // Cobrir menos vale mais que ser maior.
+          const score = covered(x, y, w, h) + (size - w) * 2;
+          if (score < best.score) best = { x, y, w, score };
+        }
+      }
+    }
+
+    const bounds = worldBounds(skipId);
+
+    if (bounds && (best.score > 0 || best.w < place.w * 0.6)) {
+      return { x: bounds.x + bounds.w + 40, y: bounds.y, w: place.w };
+    }
+
+    return best;
+
+  }
 
   // fromPeer: quem fechou (null = fui eu, avisa os outros). silent: veio do histórico.
   function closeBoard(id, fromPeer = null, silent = false) {
@@ -5554,7 +6485,7 @@
 
     if (side <= 0) return;
 
-    const pixels = Math.round(side * (window.devicePixelRatio || 1));
+    const pixels = Math.min(BOARD_MAX_PX, Math.round(side * (window.devicePixelRatio || 1)));
 
     if (canvas.width !== pixels) {
       canvas.width = canvas.height = pixels;
@@ -5574,6 +6505,8 @@
    *   line, arrow, rect, ellipse  dois pontos (começo e fim; enquanto
    *                             arrasta, o fim muda e todos veem a prévia)
    *   text                      um ponto e o texto
+   *   textbox                   dois pontos (cantos da caixa) e o texto,
+   *                             que quebra na largura da caixa
    *
    * O quadro é desenhado em ordem de hora (t) de quem desenhou, para a
    * borracha dar o mesmo resultado em todos, inclusive em quem chega depois.
@@ -5587,12 +6520,16 @@
     arrow:       { icon: "➚", label: "Seta", key: "a" },
     rect:        { icon: "▭", label: "Retângulo", key: "r" },
     ellipse:     { icon: "◯", label: "Elipse", key: "o" },
-    text:        { icon: "🅣", label: "Texto", key: "t" }
+    text:        { icon: "🅣", label: "Texto", key: "t" },
+    textbox:     { icon: "🗨️", label: "Caixa de texto", key: "x" }
   };
 
   const SHAPES = new Set(["line", "arrow", "rect", "ellipse"]);
   const FREEHAND = new Set(["pen", "highlighter", "eraser"]);
   const TEXT_MAX = 200;
+  const TEXTBOX_MAX = 2000;
+  const TEXTBOX_MIN = 0.04;              // arrastou menos que isso: é um toque
+  const TEXTBOX_DEFAULT = [0.36, 0.14];  // tamanho da caixa num toque
 
   // Espessura do controle (1–10) em fração do lado do quadro.
   const sizeToWidth = size => 0.002 + size * 0.003;
@@ -5642,7 +6579,11 @@
 
     ctx.beginPath();
 
-    if (stroke.tool === "text") {
+    if (stroke.tool === "textbox") {
+
+      drawTextbox(ctx, size, stroke, x1, y1, x2, y2);
+
+    } else if (stroke.tool === "text") {
 
       const fontSize = Math.max(10, stroke.width * size * 5);
       ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
@@ -5686,6 +6627,75 @@
     }
 
     ctx.restore();
+
+  }
+
+  // Tamanho da letra da caixa de texto (em pixels do quadro).
+  const textboxFont = (stroke, size) => Math.max(10, stroke.width * size * 5);
+
+  // Quebra o texto em linhas que cabem na largura (palavra grande quebra no meio).
+  function wrapText(ctx, text, maxWidth) {
+
+    const lines = [];
+
+    for (const paragraph of String(text).split("\n")) {
+
+      let line = "";
+
+      for (const word of paragraph.split(/(\s+)/)) {
+
+        const next = line + word;
+
+        if (ctx.measureText(next).width <= maxWidth || !line.trim()) {
+          line = next;
+        } else {
+          lines.push(line.trimEnd());
+          line = word.trimStart();
+        }
+
+        // Uma palavra sozinha maior que a caixa: corta em pedaços.
+        while (ctx.measureText(line).width > maxWidth && line.length > 1) {
+          let cut = line.length - 1;
+          while (cut > 1 && ctx.measureText(line.slice(0, cut)).width > maxWidth) cut--;
+          lines.push(line.slice(0, cut));
+          line = line.slice(cut);
+        }
+
+      }
+
+      lines.push(line.trimEnd());
+
+    }
+
+    return lines;
+
+  }
+
+  // Caixa com fundo claro, borda na cor e o texto dentro (cresce para baixo se não couber).
+  function drawTextbox(ctx, size, stroke, x1, y1, x2, y2) {
+
+    const left = Math.min(x1, x2);
+    const top = Math.min(y1, y2);
+    const width = Math.max(Math.abs(x2 - x1), 20);
+    const fontSize = textboxFont(stroke, size);
+    const pad = fontSize * 0.5;
+
+    ctx.font = `500 ${fontSize}px system-ui, sans-serif`;
+    ctx.textBaseline = "top";
+
+    const lines = stroke.text ? wrapText(ctx, stroke.text, width - pad * 2) : [];
+    const height = Math.max(Math.abs(y2 - y1), lines.length * fontSize * 1.25 + pad * 2);
+
+    ctx.fillStyle = "rgba(255, 255, 255, .92)";
+    ctx.fillRect(left, top, width, height);
+
+    ctx.lineWidth = Math.max(1, size * 0.002);
+    if (!stroke.text) ctx.setLineDash([6, 4]);
+    ctx.strokeRect(left, top, width, height);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = stroke.color;
+    lines.forEach((line, index) => ctx.fillText(line, left + pad, top + pad + index * fontSize * 1.25));
 
   }
 
@@ -5749,8 +6759,9 @@
     session.mine.push({ board: boardId, key: me.id + ":" + id });
 
     const { tool, color, width, v, t, text } = stroke;
+    const end = tool === "textbox" ? stroke.points[1] : undefined;
 
-    send({ type: "draw-start", board: boardId, id, tool, color, width, v, t, text, point: stroke.points[0] });
+    send({ type: "draw-start", board: boardId, id, tool, color, width, v, t, text, point: stroke.points[0], end });
 
     return id;
 
@@ -5776,6 +6787,15 @@
         return;
       }
 
+      // Caixa de texto: arrasta o tamanho (só aqui), depois escreve dentro.
+      if (tool === "textbox") {
+        event.preventDefault();
+        canvas.setPointerCapture(event.pointerId);
+        session.textboxDraft = { board: boardId, stroke: { ...newStroke(boardId, "textbox", point), points: [point, point] } };
+        drawTextboxDraft(view);
+        return;
+      }
+
       event.preventDefault();
       canvas.setPointerCapture(event.pointerId);
 
@@ -5795,6 +6815,12 @@
 
     canvas.addEventListener("pointermove", event => {
 
+      if (session?.textboxDraft?.board === boardId) {
+        session.textboxDraft.stroke.points[1] = boardPoint(canvas, event);
+        drawTextboxDraft(view);
+        return;
+      }
+
       if (session?.drawing?.board !== boardId) return;
 
       const stroke = session.strokes.get(me.id + ":" + session.drawing.id);
@@ -5810,7 +6836,8 @@
 
       } else {
 
-        const events = event.getCoalescedEvents?.() || [event];
+        const coalesced = event.getCoalescedEvents?.();
+        const events = coalesced?.length ? coalesced : [event];
 
         for (const item of events) {
           const point = boardPoint(canvas, item);
@@ -5829,8 +6856,128 @@
 
     });
 
-    canvas.addEventListener("pointerup", endStroke);
-    canvas.addEventListener("pointercancel", endStroke);
+    canvas.addEventListener("pointerup", event => {
+
+      const draft = session?.textboxDraft;
+
+      if (draft?.board === boardId) {
+
+        session.textboxDraft = null;
+
+        let [[x1, y1], [x2, y2]] = draft.stroke.points;
+
+        // Só tocou: caixa de tamanho padrão a partir do toque.
+        if (Math.abs(x2 - x1) < TEXTBOX_MIN || Math.abs(y2 - y1) < TEXTBOX_MIN) {
+          x2 = clamp(x1 + TEXTBOX_DEFAULT[0], 0, 1);
+          y2 = clamp(y1 + TEXTBOX_DEFAULT[1], 0, 1);
+          x1 = Math.min(x1, x2 - TEXTBOX_DEFAULT[0]);
+          y1 = Math.min(y1, y2 - TEXTBOX_DEFAULT[1]);
+        }
+
+        draft.stroke.points = [
+          [Math.min(x1, x2), Math.min(y1, y2)],
+          [Math.max(x1, x2), Math.max(y1, y2)]
+        ];
+
+        askTextbox(view, draft.stroke);
+        return;
+
+      }
+
+      endStroke();
+
+    });
+
+    canvas.addEventListener("pointercancel", () => {
+      if (session?.textboxDraft?.board === boardId) {
+        session.textboxDraft = null;
+        redrawBoard(boardId);
+      }
+      endStroke();
+    });
+
+  }
+
+  // Prévia da caixa enquanto arrasta (só na minha tela).
+  function drawTextboxDraft(view) {
+
+    redrawBoard(view.board);
+
+    const stroke = session.textboxDraft?.stroke;
+
+    if (!stroke) return;
+
+    drawStroke(view.ctx, view.canvas.width, stroke);
+
+  }
+
+  // Escreve dentro da caixa: Enter pula linha; Ctrl+Enter (ou sair) coloca no quadro.
+  function askTextbox(view, stroke) {
+
+    closeTextInput();
+
+    const rect = view.canvas.getBoundingClientRect();
+    const [[x1, y1], [x2, y2]] = stroke.points;
+    const fontSize = textboxFont(stroke, rect.width);
+
+    const input = document.createElement("textarea");
+    input.className = "board-text-input board-textbox-input";
+    input.maxLength = TEXTBOX_MAX;
+    input.placeholder = "Escreva aqui… (Ctrl+Enter coloca no quadro)";
+    input.style.left = rect.left + x1 * rect.width + "px";
+    input.style.top = rect.top + y1 * rect.height + "px";
+    input.style.width = (x2 - x1) * rect.width + "px";
+    input.style.height = (y2 - y1) * rect.height + "px";
+    input.style.fontSize = fontSize + "px";
+    input.style.padding = fontSize * 0.5 + "px";
+    input.style.color = stroke.color;
+
+    // Cresce para baixo enquanto escreve (igual à caixa no quadro).
+    const grow = () => {
+      input.style.height = "auto";
+      input.style.height = Math.max((y2 - y1) * rect.height, input.scrollHeight) + "px";
+    };
+
+    input.oninput = grow;
+
+    let done = false;
+
+    const finish = commit => {
+
+      if (done) return;
+      done = true;
+
+      const text = input.value.replace(/\s+$/, "").slice(0, TEXTBOX_MAX);
+
+      input.remove();
+
+      if (!commit || !text.trim() || !session?.boards.has(view.board)) {
+        redrawBoard(view.board);
+        return;
+      }
+
+      stroke.text = text;
+      stroke.t = Date.now();
+      stroke.v = session.boards.get(view.board).version;
+
+      startStroke(view.board, stroke);
+      redrawBoard(view.board);
+
+    };
+
+    input.onkeydown = keyEvent => {
+      if (keyEvent.key === "Enter" && (keyEvent.ctrlKey || keyEvent.metaKey)) finish(true);
+      if (keyEvent.key === "Escape") finish(false);
+      keyEvent.stopPropagation();
+    };
+
+    document.body.appendChild(input);
+    redrawBoard(view.board);
+
+    setTimeout(() => {
+      input.focus();
+      input.onblur = () => finish(true);
+    }, 250);
 
   }
 
@@ -5863,10 +7010,18 @@
 
   }
 
+  // Fecha a caixa de texto aberta (sair dela confirma o que foi escrito).
+  function closeTextInput() {
+    const open = document.querySelector(".board-text-input");
+    if (!open) return;
+    open.blur();
+    if (open.isConnected) open.remove();
+  }
+
   // Texto: uma caixa onde tocou; Enter (ou sair da caixa) coloca no quadro.
   function askText(view, event, point) {
 
-    document.querySelector(".board-text-input")?.remove();
+    closeTextInput();
 
     const input = document.createElement("input");
     input.className = "board-text-input";
@@ -6007,7 +7162,9 @@
       v,
       t: Number.isFinite(item.t) ? item.t : Date.now(),
       points: [],
-      ...(tool === "text" ? { text: String(item.text || "").slice(0, TEXT_MAX) } : {})
+      ...(tool === "text" || tool === "textbox"
+        ? { text: String(item.text || "").slice(0, tool === "text" ? TEXT_MAX : TEXTBOX_MAX) }
+        : {})
     };
   }
 
@@ -6057,6 +7214,7 @@
 
       stroke.points.push(message.point);
       if (SHAPES.has(stroke.tool)) stroke.points.push(message.point);
+      if (stroke.tool === "textbox") stroke.points.push(isPoint(message.end) ? message.end : message.point);
 
       session.strokes.set(key, stroke);
 
@@ -6121,13 +7279,33 @@
       button.textContent = tool.icon;
       button.title = `${tool.label} (${tool.key.toUpperCase()})`;
       button.setAttribute("aria-pressed", session.tool === name);
-      button.onclick = () => setTool(name);
+      button.onclick = () => {
+        setTool(name);
+        setTray(null);
+      };
       return button;
     }));
 
     $("boardPane").dataset.tool = session.tool;
+    $("toolTrayIcon").textContent = TOOLS[session.tool].icon;
+    $("toolTrayBtn").title = "Ferramenta: " + TOOLS[session.tool].label;
 
   }
+
+  // Celular: cada botão da barra abre a sua bandeja (uma de cada vez).
+  function setTray(name = null) {
+    document.querySelectorAll("#boardTools .tray").forEach(tray => tray.classList.toggle("open", tray.dataset.tray === name));
+    document.querySelectorAll("#boardTools .tray-btn").forEach(button => button.setAttribute("aria-expanded", button.dataset.tray === name));
+  }
+
+  document.querySelectorAll("#boardTools .tray-btn").forEach(button => {
+    button.onclick = () => setTray(button.getAttribute("aria-expanded") === "true" ? null : button.dataset.tray);
+  });
+
+  // Tocar fora da bandeja fecha.
+  document.addEventListener("pointerdown", event => {
+    if (!event.target.closest("#boardTools")) setTray(null);
+  });
 
   function setTool(name) {
 
@@ -6162,6 +7340,7 @@
         session.color = color;
         if (session.tool === "eraser") setTool("pen");
         renderSwatches();
+        setTray(null);
       };
 
       container.appendChild(button);
@@ -6176,6 +7355,7 @@
     $("sizeRange").value = session.size;
     $("sizeDot").style.setProperty("--size", Math.round(3 + session.size * 1.8) + "px");
     $("sizeDot").style.setProperty("--dot", session.color);
+    $("colorTrayDot").style.setProperty("--now", session.color);
 
   }
 
@@ -6228,7 +7408,8 @@
 
     const editing = session.boardMode === "edit";
 
-    $("boardModeBtn").textContent = editing ? "✏️ Editando" : "👁️ Visualizando";
+    $("boardModeBtn").firstChild.textContent = editing ? "✏️" : "👁️";
+    $("boardModeBtn").lastChild.textContent = editing ? " Editando" : " Visualizando";
     $("boardModeBtn").classList.toggle("active", editing);
     $("boardModeBtn").title = editing
       ? "Tocar no quadro desenha. Toque para só visualizar."
@@ -6282,6 +7463,8 @@
 
     if (!session) return;
 
+    setTray(null);
+
     const id = me.id.slice(0, 8) + "-" + randomId();
     const entry = ensureDisplay(id, me.id);
 
@@ -6289,11 +7472,12 @@
 
     publishDisplay(entry);
 
-    // Na frente, perto do meio, para todos.
-    const place = defaultLayout("display:" + id);
+    // Na frente, no lugar mais livre da minha vista, para todos.
+    const place = freeSpot(defaultLayout("display:" + id), "display:" + id, 16 / 9);
     setLayout("display:" + id, { x: place.x, y: place.y, w: place.w, z: ++topZ });
 
     renderDisplay(id);
+    revealWindow("display:" + id);
     pickImages(id);
 
   };
@@ -6388,6 +7572,7 @@
     const image = entry.current && session.images.get(entry.current);
 
     view.label.textContent = mine ? "🖼️ Sua imagem" : `🖼️ Imagem de ${ownerName}`;
+    renderWinSwitcher();
     view.el.style.setProperty("--person", personColor(entry.owner));
 
     if (image) {
@@ -6835,16 +8020,10 @@
       return;
     }
 
-    // Em cascata, para não nascer em cima das telas que já estão abertas.
-    const others = [...session.windows.values()].filter(view => view.kind === "screen" && view.id !== id).length;
-    const place = defaultLayout(id);
+    // No lugar mais livre da minha vista (no celular ela fica na aba Telas).
+    const place = DESKTOP_LAYOUT.matches ? freeSpot(defaultLayout(id), id, 16 / 9) : defaultLayout(id);
 
-    setLayout(id, {
-      x: clamp(place.x - others * 48, 0, WORK_W - place.w),
-      y: clamp(place.y - others * 40, 0, WORK_H),
-      w: place.w,
-      z: ++topZ
-    });
+    setLayout(id, { x: place.x, y: place.y, w: place.w, z: ++topZ });
 
   }
 
@@ -6854,12 +8033,21 @@
     if (!session) return;
 
     const container = $("peopleList");
+
+    // Mexendo num volume agora: não refaz a lista embaixo do dedo.
+    if (container.contains(document.activeElement) && document.activeElement.type === "range") {
+      session.peopleDirty = true;
+      return;
+    }
+
+    session.peopleDirty = false;
     container.replaceChildren();
 
-    const person = (id, name, tags, sharing) => {
+    const person = (id, name, tags, sharing, peer = null) => {
 
       const element = document.createElement("div");
       element.className = "person" + (sharing ? " sharing" : "");
+      element.dataset.id = id;
       element.style.setProperty("--person", personColor(id));
 
       const dot = document.createElement("span");
@@ -6873,6 +8061,8 @@
       small.textContent = tags.join(" · ");
 
       element.append(dot, strong, small);
+
+      if (peer) element.append(audioControls(peer));
 
       // Clicar em quem compartilha mostra a tela dele.
       if (sharing) {
@@ -6901,13 +8091,131 @@
     for (const peer of connectedPeers()) {
       const tags = tagsOf(peer.remote);
       if (peer.reconnect) tags.unshift("⚠️ reconectando");
-      person(peer.id, peerLabel(peer), tags, peer.remote.screen && !!peer.videoStream);
+      person(peer.id, peerLabel(peer), tags, peer.remote.screen && !!peer.videoStream, peer);
     }
 
     for (const request of roomRequests.values()) {
       if (peers.get(request.peer.id)?.connected) continue;
       person(request.peer.id, peerName(request.peer), ["⏳ conectando"], false);
     }
+
+  }
+
+  /* ---- volume de cada um (só aqui) ---- */
+
+  // Por pessoa (id do aparelho): { voice: 0–1, share: 0–1, muted }.
+  // Só neste navegador: os outros não ficam sabendo.
+  const VOLUME_KEY = "rtc.volumes";
+
+  function loadVolumes() {
+    try {
+      const data = JSON.parse(storageGet(VOLUME_KEY));
+      return data && typeof data === "object" ? data : {};
+    } catch {
+      return {};
+    }
+  }
+
+  const volumes = loadVolumes();
+
+  const volumeOf = id => ({ voice: 1, share: 1, muted: false, ...volumes[id] });
+
+  function setVolume(peer, patch) {
+
+    volumes[peer.id] = { ...volumeOf(peer.id), ...patch };
+
+    // Só guarda quem foi mexido (e no máximo 200 pessoas).
+    const ids = Object.keys(volumes);
+    if (ids.length > 200) delete volumes[ids[0]];
+
+    storageSet(VOLUME_KEY, JSON.stringify(volumes));
+
+    applyPeerVolume(peer);
+
+  }
+
+  // Volume e mudo de uma pessoa nos <audio> dela (voz e áudio compartilhado).
+  function applyPeerVolume(peer) {
+
+    const pref = volumeOf(peer.id);
+    const silent = !session?.speakerOn || pref.muted;
+
+    if (peer.audio) {
+      peer.audio.volume = clamp(pref.voice, 0, 1);
+      peer.audio.muted = silent;
+    }
+
+    if (peer.shareAudio) {
+      peer.shareAudio.volume = clamp(pref.share, 0, 1);
+      peer.shareAudio.muted = silent;
+    }
+
+  }
+
+  function audioControls(peer) {
+
+    const pref = volumeOf(peer.id);
+    const box = document.createElement("div");
+    box.className = "person-audio";
+
+    // Mexer aqui não abre a tela da pessoa.
+    box.onclick = event => event.stopPropagation();
+
+    const mute = document.createElement("button");
+    mute.className = "tool" + (pref.muted ? " warn" : "");
+    mute.textContent = pref.muted ? "🔕 Mutado" : "🔇 Mutar";
+    mute.title = pref.muted
+      ? `Voltar a ouvir ${peerLabel(peer)}`
+      : `Parar de ouvir ${peerLabel(peer)} (só para você: ${peerLabel(peer)} não fica sabendo)`;
+    mute.setAttribute("aria-pressed", pref.muted);
+    mute.dataset.role = "mute";
+    mute.onclick = () => {
+      setVolume(peer, { muted: !volumeOf(peer.id).muted });
+      renderRemoteState();
+    };
+
+    const slider = (label, key, title) => {
+
+      const wrap = document.createElement("label");
+      wrap.className = "volume" + (pref.muted ? " off" : "");
+      wrap.title = title;
+
+      const text = document.createElement("span");
+      text.textContent = label;
+
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = "0";
+      input.max = "100";
+      input.value = Math.round(pref[key] * 100);
+      input.dataset.role = key;
+      input.setAttribute("aria-label", `${title} de ${peerLabel(peer)}`);
+
+      const value = document.createElement("output");
+      value.textContent = input.value + "%";
+
+      input.oninput = () => {
+        value.textContent = input.value + "%";
+        setVolume(peer, { [key]: Number(input.value) / 100 });
+      };
+
+      // Soltou o controle: se a lista mudou nesse meio-tempo, atualiza.
+      input.onchange = () => {
+        input.blur();
+        if (session?.peopleDirty) renderPeople();
+      };
+
+      wrap.append(text, input, value);
+
+      return wrap;
+
+    };
+
+    box.append(mute, slider("🔊", "voice", "Volume da voz"));
+
+    if (peer.remote.audioShare) box.append(slider("🎵", "share", "Volume do áudio compartilhado"));
+
+    return box;
 
   }
 
@@ -6923,9 +8231,12 @@
     if (!DESKTOP_LAYOUT.matches) {
       session.screenAutoFrom = null;
       setTab("screen");
+      view.el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
     }
 
-    view.el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    // Na hora de mostrar, a janela pode ainda estar indo para o lugar novo.
+    requestAnimationFrame(() => revealWindow(id));
 
   }
 
@@ -6973,6 +8284,21 @@
   });
 
   $("myNameInput").onchange = () => setMyName($("myNameInput").value);
+
+  // Abre as configurações já na pessoa (volume e mudo dela).
+  function openPersonSettings(id) {
+
+    setSettingsOpen(true);
+
+    const row = [...$("peopleList").children].find(element => element.dataset.id === id);
+
+    if (!row) return;
+
+    row.scrollIntoView({ block: "nearest" });
+    row.classList.add("flash");
+    setTimeout(() => row.classList.remove("flash"), 1200);
+
+  }
 
 
   /* ---------------- mouse de cada um ---------------- */
