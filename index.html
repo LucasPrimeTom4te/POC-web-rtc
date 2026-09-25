@@ -6388,6 +6388,8 @@
     quietWindowSounds();
     saveRoomMemory();
     bridges.clear();
+    liveStrokes.clear();
+    redrawQueue.clear();
     clearInterval(session.roomSaveTimer);
     clearInterval(session.statsTimer);
     clearTimeout(session.paletteTimer);
@@ -6946,7 +6948,7 @@
 
     const strokes = [...session.strokes]
       .filter(([, stroke]) => wanted(stroke))
-      .map(([key, { author, board, tool, color, width, v, t, points, text }]) => ({ key, author, board, tool, color, width, v, t, points, text }));
+      .map(([key, stroke]) => { const { author, board, tool, color, width, v, t, text } = stroke; return { key, author, board, tool, color, width, v, t, points: pointList(stroke), text }; });
 
     const batches = [];
     let current = { chat: [], strokes: [] };
@@ -7033,7 +7035,7 @@
     workspace.layout = workspace.layout.filter(item => !hidden.has(item.id));
 
     const chat = [...session.chat.values()];
-    const strokes = [...session.strokes].map(([key, { author, board, tool, color, width, v, t, points, text }]) => ({ key, author, board, tool, color, width, v, t, points, text }));
+    const strokes = [...session.strokes].map(([key, stroke]) => { const { author, board, tool, color, width, v, t, text } = stroke; return { key, author, board, tool, color, width, v, t, points: pointList(stroke), text }; });
 
     const text = JSON.stringify({ saved: Date.now(), ...workspace, chat, strokes });
 
@@ -7173,9 +7175,11 @@
       const existing = session.strokes.get(item.key);
 
       // Já tenho esse traço (igual ou mais completo, se ainda está sendo desenhado).
-      if (!points.length || existing?.points.length >= points.length) continue;
+      if (!points.length || (existing && pointCount(existing) >= points.length)) continue;
 
-      session.strokes.set(item.key, { ...cleanStroke(item, item.author, boardId, strokeVersion), points });
+      const stroke = { ...cleanStroke(item, item.author, boardId, strokeVersion), points };
+      session.strokes.set(item.key, stroke);
+      packStroke(stroke);
 
       strokesAdded++;
       redraw.add(boardId);
@@ -10034,6 +10038,29 @@
 
   const SHAPES = new Set(["line", "arrow", "rect", "ellipse"]);
   const FREEHAND = new Set(["pen", "highlighter", "eraser"]);
+
+  // Traço à mão livre terminado: os pontos viram um Float32Array
+  // [x0, y0, x1, y1, …] (8 bytes por ponto em vez de ~60 de cada [x, y]).
+  // Na rede e no que fica salvo continuam sendo [[x, y], …] (pointList).
+  function packStroke(stroke) {
+    if (!stroke || !FREEHAND.has(stroke.tool) || ArrayBuffer.isView(stroke.points) || stroke.points.length < 3) return;
+    const flat = new Float32Array(stroke.points.length * 2);
+    stroke.points.forEach(([x, y], index) => {
+      flat[index * 2] = x;
+      flat[index * 2 + 1] = y;
+    });
+    stroke.points = flat;
+  }
+
+  const pointCount = stroke => ArrayBuffer.isView(stroke.points) ? stroke.points.length / 2 : stroke.points.length;
+
+  function pointList(stroke) {
+    const points = stroke.points;
+    if (!ArrayBuffer.isView(points)) return points;
+    const list = [];
+    for (let index = 0; index < points.length; index += 2) list.push([+points[index].toFixed(4), +points[index + 1].toFixed(4)]);
+    return list;
+  }
   const TEXT_MAX = 200;
   const TEXTBOX_MAX = 2000;
   const TEXTBOX_MIN = 0.04;              // arrastou menos que isso: é um toque
@@ -10052,12 +10079,22 @@
     if (!redrawQueue.size) requestAnimationFrame(() => {
       const boards = [...redrawQueue];
       redrawQueue.clear();
-      boards.forEach(redrawBoard);
+      boards.forEach(boardId => redrawBoard(boardId, true));
     });
     redrawQueue.add(boardId);
   }
 
-  function redrawBoard(boardId) {
+  // "autor:id" dos traços que redesenham o quadro enquanto são feitos
+  // (formas e marca-texto), meus e dos outros.
+  const liveStrokes = new Set();
+  const redrawsLive = tool => SHAPES.has(tool) || tool === "highlighter";
+
+  // Terminou: sai da lista e o quadro volta à ordem de verdade (pela hora).
+  function endLive(key, boardId) {
+    if (liveStrokes.delete(key)) redrawBoard(boardId);
+  }
+
+  function redrawBoard(boardId, useBase = false) {
 
     const view = session?.windows.get("board:" + boardId);
 
@@ -10070,13 +10107,44 @@
     }
 
     const size = view.canvas.width;
+    const ctx = view.ctx;
 
-    view.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    view.ctx.clearRect(0, 0, size, size);
+    // Formas e marca-texto sendo desenhados agora: vão por cima de uma
+    // camada pronta com o resto, que só é refeita quando o resto muda.
+    const live = [...liveStrokes].map(key => session.strokes.get(key)).filter(stroke => stroke?.board === boardId);
 
-    const strokes = [...session.strokes].filter(([, stroke]) => stroke.board === boardId).sort(strokeOrder);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    for (const [, stroke] of strokes) drawStroke(view.ctx, size, stroke);
+    if (useBase && live.length && view.base?.width === size && !view.baseStale) {
+      ctx.clearRect(0, 0, size, size);
+      ctx.drawImage(view.base, 0, 0);
+      live.forEach(stroke => drawStroke(ctx, size, stroke));
+      return;
+    }
+
+    const strokes = [...session.strokes]
+      .filter(([, stroke]) => stroke.board === boardId && !live.includes(stroke))
+      .sort(strokeOrder);
+
+    if (!live.length) {
+      view.base = null;
+      ctx.clearRect(0, 0, size, size);
+      for (const [, stroke] of strokes) drawStroke(ctx, size, stroke);
+      return;
+    }
+
+    view.base ||= document.createElement("canvas");
+    if (view.base.width !== size) view.base.width = view.base.height = size;
+
+    const base = view.base.getContext("2d");
+    base.setTransform(1, 0, 0, 1, 0, 0);
+    base.clearRect(0, 0, size, size);
+    for (const [, stroke] of strokes) drawStroke(base, size, stroke);
+    view.baseStale = false;
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(view.base, 0, 0);
+    live.forEach(stroke => drawStroke(ctx, size, stroke));
 
   }
 
@@ -10095,14 +10163,19 @@
   function drawStroke(ctx, size, stroke) {
 
     const points = stroke.points;
+    const packed = ArrayBuffer.isView(points);
+    const count = pointCount(stroke);
 
-    if (!points.length) return;
+    if (!count) return;
+
+    const px = index => (packed ? points[index * 2] : points[index][0]) * size;
+    const py = index => (packed ? points[index * 2 + 1] : points[index][1]) * size;
 
     ctx.save();
     styleFor(ctx, size, stroke);
 
-    const [x1, y1] = points[0].map(value => value * size);
-    const [x2, y2] = (points[points.length - 1]).map(value => value * size);
+    const x1 = px(0), y1 = py(0);
+    const x2 = px(count - 1), y2 = py(count - 1);
 
     ctx.beginPath();
 
@@ -10147,8 +10220,8 @@
 
       // À mão livre: um caminho só (o marca-texto não escurece onde se cruza).
       ctx.moveTo(x1, y1);
-      for (let index = 1; index < points.length; index++) ctx.lineTo(points[index][0] * size, points[index][1] * size);
-      if (points.length === 1) ctx.lineTo(x1 + 0.01, y1);
+      for (let index = 1; index < count; index++) ctx.lineTo(px(index), py(index));
+      if (count === 1) ctx.lineTo(x1 + 0.01, y1);
       ctx.stroke();
 
     }
@@ -10234,9 +10307,13 @@
     if (!view) return;
 
     if (stroke.tool !== "pen" && stroke.tool !== "eraser" && stroke.tool) {
-      redrawBoard(stroke.board);
+      scheduleRedraw(stroke.board);
       return;
     }
+
+    // Desenhou direto no quadro: a camada pronta (sem as formas sendo
+    // arrastadas) não tem este pedaço.
+    view.baseStale = true;
 
     const ctx = view.ctx;
     const size = view.canvas.width;
@@ -10283,6 +10360,7 @@
 
     session.strokes.set(me.id + ":" + id, stroke);
     session.mine.push({ board: boardId, key: me.id + ":" + id });
+    if (redrawsLive(stroke.tool)) liveStrokes.add(me.id + ":" + id);
 
     const { tool, color, width, v, t, text } = stroke;
     const end = tool === "textbox" ? stroke.points[1] : undefined;
@@ -10533,6 +10611,8 @@
 
     flushPoints();
     send({ type: "draw-end", id: session.drawing.id });
+    packStroke(session.strokes.get(me.id + ":" + session.drawing.id));
+    endLive(me.id + ":" + session.drawing.id, session.drawing.board);
     session.drawing = null;
 
   }
@@ -10744,6 +10824,7 @@
       if (stroke.tool === "textbox") stroke.points.push(isPoint(message.end) ? message.end : message.point);
 
       session.strokes.set(key, stroke);
+      if (redrawsLive(stroke.tool)) liveStrokes.add(key);
 
       if (FREEHAND.has(stroke.tool) && stroke.tool !== "highlighter") drawSegment(stroke, 0);
       else redrawBoard(boardId);
@@ -10760,6 +10841,8 @@
         stroke.points[1] = message.end;
         scheduleRedraw(stroke.board);
       } else if (Array.isArray(message.points)) {
+        // Veio compactado pelo histórico, mas a pessoa ainda está desenhando.
+        if (ArrayBuffer.isView(stroke.points)) stroke.points = pointList(stroke);
         for (const point of message.points) {
           if (!isPoint(point)) continue;
           stroke.points.push(point);
@@ -10767,6 +10850,13 @@
         }
       }
 
+    }
+
+    if (message.type === "draw-end") {
+      const stroke = session.strokes.get(key);
+      packStroke(stroke);
+      if (stroke) endLive(key, stroke.board);
+      else liveStrokes.delete(key);
     }
 
     // "Fulano está desenhando…" some logo depois que ele para.
@@ -16326,7 +16416,8 @@
 
   }
 
-  function isTap({ points }) {
+  function isTap(stroke) {
+    const points = pointList(stroke);
     const xs = points.map(point => point[0]);
     const ys = points.map(point => point[1]);
     return Math.max(...xs) - Math.min(...xs) < 0.006 && Math.max(...ys) - Math.min(...ys) < 0.006;
