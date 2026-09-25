@@ -5702,6 +5702,7 @@
 
     session.micTrack?.stop();
     stopMutedWatch();
+    stopSoundsOf();
     session.screenTrack?.stop();
     session.shareAudioTrack?.stop();
     session.objectUrls.forEach(url => URL.revokeObjectURL(url));
@@ -10526,6 +10527,7 @@
     session.gallery.delete(id);
     session.layout.delete("display:" + id);
 
+    stopSoundsOf(id);
     removeWindow("display:" + id);
 
     if (!fromPeer) send({ type: "display-close", id });
@@ -12848,7 +12850,6 @@
   function createSoundsWidget(entry, view) {
 
     view.list = el("ul", "sounds-list widget-scroll");
-    view.playing = new Map(); // chave do som -> quantos tocando agora
     view.renaming = null;
 
     const form = el("form", "sounds-form");
@@ -12951,12 +12952,14 @@
       const item = el("li");
       const src = soundSrc(sound);
 
+      const playing = soundPlaying(entry, sound.key);
       const play = widgetButton("", () => playSoundForAll(entry, sound.key), "sound-play");
-      play.append(el("span", "", "▶"), el("span", "sound-name", sound.name));
+      play.append(el("span", "", playing ? "⏹" : "▶"), el("span", "sound-name", sound.name));
       play.disabled = !src;
       play.title = !src ? "Recebendo o arquivo…"
+        : playing ? "Parar para todos"
         : `Tocar para todos · adicionado por ${sound.by === me.id ? "você" : peers.has(sound.by) ? peerLabel(peers.get(sound.by)) : "alguém que saiu"}`;
-      play.classList.toggle("playing", !!view.playing.get(sound.key));
+      play.classList.toggle("playing", playing);
       item.append(play);
 
       if (soundCanEdit(entry, sound)) {
@@ -13250,15 +13253,33 @@
   $("soundMoreBtn").onclick = () => searchFreesound(soundLib.token, soundLib.page + 1);
   $("closeSoundLibBtn").onclick = closeSoundLibrary;
 
+  // Tocando aqui: "<card>|<som>" -> <audio>. Um de cada som por vez.
+  const soundPlayers = new Map();
+
+  const SOUND_MAX_MS = 15000; // som comprido (alarme, ambiente): para sozinho
+
+  const soundPlaying = (entry, key) => soundPlayers.has(entry.id + "|" + key);
+
+  // ▶ toca uma vez para todos; ⏹ (apertar enquanto toca) para para todos.
   function playSoundForAll(entry, key) {
+
+    if (soundPlaying(entry, key)) {
+      stopSound(entry, key);
+      send({ type: "sound-play", id: entry.id, key, stop: true });
+      return;
+    }
+
     if (!playSound(entry, key)) return;
     send({ type: "sound-play", id: entry.id, key });
+
   }
 
   function receiveSoundPlay(peer, message) {
 
     const entry = session.displays.get(message.id);
     if (entry?.kind !== "sounds" || typeof message.key !== "string") return;
+
+    if (message.stop) return stopSound(entry, message.key);
 
     // Apertando sem parar: um de cada vez por pessoa.
     const now = Date.now();
@@ -13269,34 +13290,67 @@
 
   }
 
-  // Toca aqui (cada um no seu aparelho). false: não tem esse som (ainda).
+  function stopSound(entry, key) {
+
+    const id = entry.id + "|" + key;
+    const audio = soundPlayers.get(id);
+
+    if (!audio) return;
+
+    soundPlayers.delete(id);
+    clearTimeout(audio.stopTimer);
+    audio.onended = audio.onerror = null;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+
+    renderDisplay(entry.id);
+
+  }
+
+  // Toca aqui (cada um no seu aparelho), uma vez, do começo.
+  // false: não tem esse som (ainda).
   function playSound(entry, key) {
 
     const sound = soundList(entry).find(item => item.key === key);
     const src = sound && soundSrc(sound);
 
     if (!src) return false;
+
+    // Já tocando (ou o outro apertou de novo): recomeça, não soma.
+    stopSound(entry, key);
+
     if (!session.speakerOn) return true;
 
-    const view = session.windows.get("display:" + entry.id);
+    const id = entry.id + "|" + key;
     const audio = new Audio(src);
+    audio.loop = false;
+
     const finish = () => {
-      if (!view?.playing) return;
-      const left = (view.playing.get(key) || 1) - 1;
-      if (left) view.playing.set(key, left); else view.playing.delete(key);
-      renderDisplay(entry.id);
+      if (soundPlayers.get(id) === audio) stopSound(entry, key);
     };
 
     audio.onended = audio.onerror = finish;
+    audio.stopTimer = setTimeout(finish, SOUND_MAX_MS);
     audio.play().catch(finish);
 
-    if (view?.playing) {
-      view.playing.set(key, (view.playing.get(key) || 0) + 1);
-      renderDisplay(entry.id);
-    }
+    soundPlayers.set(id, audio);
+    renderDisplay(entry.id);
 
     return true;
 
+  }
+
+  // Card fechado ou sessão acabou: nada fica tocando.
+  function stopSoundsOf(entryId = null) {
+    for (const id of [...soundPlayers.keys()]) {
+      if (entryId && !id.startsWith(entryId + "|")) continue;
+      const audio = soundPlayers.get(id);
+      soundPlayers.delete(id);
+      clearTimeout(audio.stopTimer);
+      audio.onended = audio.onerror = null;
+      audio.pause();
+    }
   }
 
 
