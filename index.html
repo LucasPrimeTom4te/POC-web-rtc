@@ -838,6 +838,42 @@
       font-size: 12px;
     }
 
+    /* Janela fazendo som: uma ondinha no título. */
+    .win-wave {
+      display: none;
+      align-items: center;
+      gap: 2px;
+      height: 14px;
+      margin-left: 6px;
+      flex: none;
+    }
+
+    .win.sounding .win-wave {
+      display: inline-flex;
+    }
+
+    .win-wave i {
+      width: 3px;
+      height: 100%;
+      border-radius: 2px;
+      background: var(--person, var(--ok));
+      transform-origin: center;
+      animation: win-wave 0.9s ease-in-out infinite;
+    }
+
+    .win-wave i:nth-child(2) { animation-delay: -.3s; }
+    .win-wave i:nth-child(3) { animation-delay: -.6s; }
+    .win-wave i:nth-child(4) { animation-delay: -.15s; }
+
+    @keyframes win-wave {
+      0%, 100% { transform: scaleY(.3); }
+      50% { transform: scaleY(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .win-wave i { animation: none; transform: scaleY(.6); }
+    }
+
     .pill {
       flex: none;
       display: inline-flex;
@@ -15786,6 +15822,110 @@
     view.soundBtn.title = muted ? "Ligar o som desta tela (só aqui)" : "Tirar o som desta tela (só aqui)";
     view.soundBtn.classList.toggle("warn", muted);
   }
+
+  /* ---- 🔊 ondinha na janela que está fazendo som ----
+   *
+   * YouTube, rádio e sons: pelo estado (tocando, com som, aqui). Telas com
+   * áudio: pelo nível de verdade do áudio que chega (ou que eu mando).
+   */
+  const WAVE_EVERY_MS = 400;
+  const WAVE_LEVEL = 0.01;
+
+  const waveMeters = new WeakMap(); // faixa de áudio -> { analyser, samples }
+  let waveContext = null;
+
+  // Nível (0–1, RMS) de uma faixa de áudio.
+  function trackLevel(track) {
+
+    if (!track || track.readyState !== "live") return 0;
+
+    let meter = waveMeters.get(track);
+
+    if (!meter) {
+      try {
+        waveContext ||= new AudioContext();
+        const analyser = waveContext.createAnalyser();
+        analyser.fftSize = 512;
+        const source = waveContext.createMediaStreamSource(new MediaStream([track]));
+        source.connect(analyser);
+        track.addEventListener("ended", () => source.disconnect(), { once: true });
+        meter = { analyser, samples: new Float32Array(analyser.fftSize) };
+        waveMeters.set(track, meter);
+      } catch {
+        return 0;
+      }
+    }
+
+    if (waveContext.state === "suspended") waveContext.resume().catch(() => {});
+
+    meter.analyser.getFloatTimeDomainData(meter.samples);
+
+    let sum = 0;
+    for (const value of meter.samples) sum += value * value;
+
+    return Math.sqrt(sum / meter.samples.length);
+
+  }
+
+  function isSounding(view) {
+
+    if (view.kind === "screen") {
+      const id = view.id.slice("screen:".length);
+      if (id === me.id) return trackLevel(session.shareAudioTrack) > WAVE_LEVEL;
+      const peer = peers.get(id);
+      const pref = volumeOf(id);
+      if (!session.speakerOn || !peer?.remote.audioShare || pref.muted || pref.shareMuted) return false;
+      return trackLevel(peer.shareAudio?.srcObject?.getAudioTracks()[0]) > WAVE_LEVEL;
+    }
+
+    if (!session.speakerOn) return false;
+
+    if (view.kind === "youtube") {
+      const player = view.player;
+      try {
+        return !!(view.ready && player && !view.localMuted && view.volume > 0 && player.getPlayerState() === 1 && !player.isMuted());
+      } catch {
+        return false;
+      }
+    }
+
+    if (view.kind === "radio") {
+      const audio = view.audio;
+      return !!(audio && !audio.paused && !audio.muted && audio.volume > 0);
+    }
+
+    if (view.kind === "sounds") {
+      const prefix = view.id.slice("display:".length) + "|";
+      for (const key of soundPlayers.keys()) if (key.startsWith(prefix)) return true;
+    }
+
+    return false;
+
+  }
+
+  function tickWaves() {
+
+    if (!session || document.hidden) return;
+
+    for (const view of session.windows.values()) {
+
+      const on = isSounding(view);
+
+      if (on && !view.wave) {
+        view.wave = document.createElement("span");
+        view.wave.className = "win-wave";
+        view.wave.setAttribute("aria-hidden", "true");
+        view.wave.append(...[0, 1, 2, 3].map(() => document.createElement("i")));
+        view.label.after(view.wave);
+      }
+
+      if (view.el.classList.contains("sounding") !== on) view.el.classList.toggle("sounding", on);
+
+    }
+
+  }
+
+  setInterval(tickWaves, WAVE_EVERY_MS);
 
   async function togglePip(video) {
 
