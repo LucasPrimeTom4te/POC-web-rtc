@@ -825,6 +825,19 @@
       }
     }
 
+    .my-color {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .my-color .tool {
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+
     .pill {
       flex: none;
       display: inline-flex;
@@ -4899,9 +4912,16 @@
       </section>
 
       <section class="set-section">
-        <h4>🙂 Seu nome</h4>
+        <h4>🙂 Seu nome e sua cor</h4>
         <input id="myNameInput" class="text-input" maxlength="40" autocomplete="off">
-        <p class="muted small">Na sala, quem não escolheu um nome ganha um aleatório ao entrar.</p>
+        <div class="my-color">
+          <span id="myColorSwatches" class="tool-group" role="group" aria-label="Sua cor"></span>
+          <label class="color-pick" title="Outra cor">
+            <input id="myColorInput" type="color" aria-label="Outra cor">
+          </label>
+          <button id="myColorAutoBtn" class="tool" title="Voltar à cor automática (sai do seu id)">Automática</button>
+        </div>
+        <p class="muted small">Nome e cor ficam guardados neste aparelho e valem em todas as salas. Quem ainda não escolheu um nome ganha um aleatório na primeira sala.</p>
       </section>
 
       <section id="roomModeSection" class="set-section hidden">
@@ -6190,7 +6210,7 @@
       }
     };
 
-    sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name, joinedAt: peer.room ? room?.joinedAt : undefined });
+    sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name, color: chosenColors.get(me.id), joinedAt: peer.room ? room?.joinedAt : undefined });
     sendState(peer);
 
     const wanted = effectiveReceive();
@@ -6351,7 +6371,13 @@
   }
 
   // Cor de cada pessoa (bolinha, mouse, janela da tela): sai do id.
+  // Cor que cada um escolheu (id -> "#rrggbb"); quem não escolheu fica
+  // com a que sai do id.
+  const chosenColors = new Map();
+  const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
   function personColor(id) {
+    if (chosenColors.has(id)) return chosenColors.get(id);
     // FNV-1a: espalha bem até ids parecidos.
     let hash = 2166136261;
     for (const char of String(id)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
@@ -6563,6 +6589,7 @@
       case "hello":
         peer.remote.device = message.device;
         peer.remote.name = cleanName(message.name);
+        setPersonColor(peer.id, message.color);
         if (Number.isFinite(message.joinedAt)) peer.remote.joinedAt = message.joinedAt;
         peerNameChanged(peer, message.name);
         renderPeers();
@@ -7749,6 +7776,7 @@
     // Sala: quem ainda está conectando.
     for (const request of roomRequests.values()) {
       if (peers.get(request.peer.id)?.connected) continue;
+      if (HEX_COLOR.test(request.peer.color || "")) chosenColors.set(request.peer.id, request.peer.color);
       avatar(request.peer.id, peerName(request.peer), { text: "⏳" }, "pending").title = peerName(request.peer) + "\n⏳ conectando";
     }
 
@@ -16962,7 +16990,7 @@
 
   storageSet(STORAGE_KEYS.id, me.id);
 
-  const publicMe = () => ({ id: me.id, name: me.name });
+  const publicMe = () => ({ id: me.id, name: me.name, color: chosenColors.get(me.id) });
 
   const peerName = peer => cleanName(peer?.name) || "O outro aparelho";
 
@@ -17919,10 +17947,11 @@
 
     setAddress(roomPath(name));
 
-    // Quem não escolheu um nome ganha um aleatório ao entrar.
+    // Quem não escolheu um nome ganha um aleatório ao entrar (e fica com
+    // ele nas próximas salas, até mudar).
     const randomized = !storageGet(STORAGE_KEYS.name);
 
-    if (randomized) setMyName(randomName(), false);
+    if (randomized) setMyName(randomName());
 
     // A sessão da sala abre já, mesmo sozinho: o quadro e o chat valem
     // enquanto estiver aqui.
@@ -18912,7 +18941,7 @@
       trackRoom().catch(() => {});
 
       if (session) {
-        send({ type: "hello", device: IS_MOBILE ? "phone" : "computer", name });
+        send({ type: "hello", device: IS_MOBILE ? "phone" : "computer", name, color: chosenColors.get(me.id) });
         renderRemoteState();
       }
 
@@ -18922,6 +18951,78 @@
     $("myNameInput").value = me.name;
 
   }
+
+  /* ---- minha cor (guardada neste aparelho, vale em todas as salas) ---- */
+
+  const MY_COLOR_KEY = "rtc.myColor";
+  const MY_COLOR_PRESETS = ["#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e", "#14b8a6",
+    "#06b6d4", "#3b82f6", "#6366f1", "#a855f7", "#ec4899"];
+
+  if (HEX_COLOR.test(storageGet(MY_COLOR_KEY) || "")) chosenColors.set(me.id, storageGet(MY_COLOR_KEY).toLowerCase());
+
+  // A cor de alguém mudou (ou chegou): tudo que usa a cor dele se redesenha.
+  function setPersonColor(id, color) {
+    const next = HEX_COLOR.test(color || "") ? color.toLowerCase() : null;
+    if ((chosenColors.get(id) || null) === next) return;
+    if (next) chosenColors.set(id, next);
+    else chosenColors.delete(id);
+    refreshPersonColors();
+  }
+
+  function refreshPersonColors() {
+    if (!session) return;
+    renderRemoteState();
+    renderScreens();
+    renderCursors();
+    session.displays.forEach(entry => renderDisplay(entry.id));
+  }
+
+  // null: volta à cor automática.
+  function setMyColor(color) {
+
+    storageSet(MY_COLOR_KEY, HEX_COLOR.test(color || "") ? color : "");
+    setPersonColor(me.id, color);
+    renderMyColor();
+
+    myChannel?.track(publicMe()).catch(() => {});
+    trackRoom().catch(() => {});
+
+    if (session) send({ type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name, color: chosenColors.get(me.id) });
+
+  }
+
+  // Cor automática em #rrggbb (o seletor de cor só entende assim).
+  function hexOf(color) {
+    const ctx = document.createElement("canvas").getContext("2d");
+    ctx.fillStyle = color;
+    return ctx.fillStyle;
+  }
+
+  function renderMyColor() {
+
+    const current = chosenColors.get(me.id) || null;
+
+    $("myColorSwatches").replaceChildren(...MY_COLOR_PRESETS.map(color => {
+      const button = document.createElement("button");
+      button.className = "swatch" + (current === color ? " active" : "");
+      button.style.background = color;
+      button.title = "Usar esta cor";
+      button.setAttribute("aria-label", "Cor " + color);
+      button.setAttribute("aria-pressed", current === color);
+      button.onclick = () => setMyColor(color);
+      return button;
+    }));
+
+    $("myColorInput").value = hexOf(personColor(me.id));
+    $("myColorAutoBtn").classList.toggle("active", !current);
+    $("myColorAutoBtn").disabled = !current;
+
+  }
+
+  $("myColorInput").onchange = () => setMyColor($("myColorInput").value);
+  $("myColorAutoBtn").onclick = () => setMyColor(null);
+
+  renderMyColor();
 
   // Nome aleatório para a sala: bicho + cor (as cores não mudam com o gênero).
   const NAME_ANIMALS = ["Capivara", "Tucano", "Onça", "Arara", "Jabuti", "Lobo-guará", "Mico", "Boto",
