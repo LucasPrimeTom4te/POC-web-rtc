@@ -976,6 +976,23 @@
       background: #000;
     }
 
+    /* Tela girada por quem compartilha (para todos). De lado (90°/270°),
+       o vídeo troca largura e altura para caber na janela. */
+    .win-body.rotated {
+      position: relative;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .win-body.rotated video {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: var(--rot-w, 100%);
+      height: var(--rot-h, 100%);
+      transform: translate(-50%, -50%) rotate(var(--rot));
+    }
+
     .board-win canvas {
       background: white;
       touch-action: none;
@@ -6944,6 +6961,7 @@
       mic: !!session.micTrack,
       speaker: session.speakerOn,
       screen: sharingScreen(),
+      screenRotation: sharingScreen() ? session.screenRotation || 0 : 0,
       site: session.screenFor,
       audioShare: !!session.shareAudioTrack
     };
@@ -6992,7 +7010,7 @@
 
   }
 
-  function handleRemoteState(peer, { mic, speaker, screen = false, site = null, audioShare = false }) {
+  function handleRemoteState(peer, { mic, speaker, screen = false, site = null, audioShare = false, screenRotation = 0 }) {
 
     const remote = peer.remote;
     const who = peerLabel(peer);
@@ -7051,8 +7069,13 @@
     const screenChanged = screen !== remote.screen;
     remote.screen = screen;
 
+    const rotation = SCREEN_ROTATIONS.includes(screenRotation) ? screenRotation : 0;
+    const rotationChanged = rotation !== (remote.screenRotation || 0);
+    remote.screenRotation = rotation;
+
     renderRemoteState();
     if (screenChanged) renderScreens(screen ? peer : null);
+    else if (rotationChanged) renderScreens();
     if (siteChanged) renderSitesOf(peer.id);
 
   }
@@ -7586,6 +7609,30 @@
 
   };
 
+  const SCREEN_ROTATIONS = [0, 90, 180, 270];
+
+  // Gira a minha tela 90° para todos (o vídeo vai igual; cada um gira na exibição).
+  function rotateMyScreen() {
+
+    if (!sharingScreen()) return;
+
+    session.screenRotation = ((session.screenRotation || 0) + 90) % 360;
+
+    // Virou de lado: o lado maior da janela continua do mesmo tamanho (para todos).
+    const id = "screen:" + me.id;
+    const view = session.windows.get(id);
+    const layout = layoutOf(id);
+    if (view?.aspect && layout?.w) {
+      const longest = Math.max(layout.w, layout.w / view.aspect);
+      const aspect = 1 / view.aspect;
+      setLayout(id, { w: aspect < 1 ? longest * aspect : longest });
+    }
+
+    renderScreens();
+    sendState();
+
+  }
+
   async function stopScreenShare() {
 
     if (!sharingScreen()) return;
@@ -7607,6 +7654,8 @@
       old.onended = null;
       old.stop();
     }
+
+    if (track !== old) session.screenRotation = 0;
 
     session.screenTrack = track;
     session.screenFor = track ? siteId : null;
@@ -14592,12 +14641,12 @@
     const sharers = [];
 
     if (sharingScreen()) {
-      sharers.push({ id: me.id, name: "Você (o que os outros veem)", track: session.screenTrack, mine: true });
+      sharers.push({ id: me.id, name: "Você (o que os outros veem)", track: session.screenTrack, mine: true, rotation: session.screenRotation || 0 });
     }
 
     for (const peer of connectedPeers()) {
       const track = peer.videoStream?.getVideoTracks()[0];
-      if (peer.remote.screen && track) sharers.push({ id: peer.id, name: peerLabel(peer), track, mine: false });
+      if (peer.remote.screen && track) sharers.push({ id: peer.id, name: peerLabel(peer), track, mine: false, rotation: peer.remote.screenRotation || 0 });
     }
 
     const ids = new Set(sharers.map(sharer => "screen:" + sharer.id));
@@ -14622,6 +14671,7 @@
 
       view.label.textContent = sharer.name;
       view.el.style.setProperty("--person", personColor(sharer.id));
+      view.setRotation(sharer.rotation);
 
     }
 
@@ -14665,13 +14715,19 @@
 
     const pipBtn = windowButton("📺", "Picture-in-picture: assistir numa janelinha por cima de tudo (só aqui)", () => togglePip(view.video));
     const fullBtn = windowButton("⛶", "Tela cheia (só aqui)", () => {
-      if (view.video.requestFullscreen) view.video.requestFullscreen().catch(() => {});
+      // Girada: a janela inteira vai para a tela cheia (o vídeo sozinho perderia o giro).
+      const target = view.rotation && view.body.requestFullscreen ? view.body : view.video;
+      if (target.requestFullscreen) target.requestFullscreen().catch(() => {});
       else view.video.webkitEnterFullscreen?.(); // iPhone
     });
 
     pipBtn.hidden = !CAN_PIP;
 
-    const view = createWindow({ id, kind: "screen", extraButtons: [pipBtn, fullBtn] });
+    // Só quem compartilha gira (para todos).
+    const rotateBtn = windowButton("⟳", "Girar a transmissão 90° (para todos)", () => rotateMyScreen());
+    rotateBtn.hidden = id !== "screen:" + me.id;
+
+    const view = createWindow({ id, kind: "screen", extraButtons: [rotateBtn, pipBtn, fullBtn] });
 
     const video = document.createElement("video");
     video.autoplay = true;
@@ -14681,13 +14737,39 @@
     view.body.prepend(video);
     view.video = video;
 
-    // Proporção real do vídeo (a janela acompanha).
+    view.rotation = 0;
+
+    const sideways = () => view.rotation === 90 || view.rotation === 270;
+
+    // De lado: o vídeo (antes de girar) tem a altura da janela como largura.
+    const fitRotated = () => {
+      if (!sideways()) return;
+      view.body.style.setProperty("--rot-w", view.body.clientHeight + "px");
+      view.body.style.setProperty("--rot-h", view.body.clientWidth + "px");
+    };
+
+    // Proporção real do vídeo, já girado (a janela acompanha).
     const fitRatio = () => {
       if (!video.videoWidth || !video.videoHeight) return;
-      view.aspect = video.videoWidth / video.videoHeight;
-      view.body.style.setProperty("--ar", `${video.videoWidth} / ${video.videoHeight}`);
+      const [w, h] = sideways() ? [video.videoHeight, video.videoWidth] : [video.videoWidth, video.videoHeight];
+      view.aspect = w / h;
+      view.body.style.setProperty("--ar", `${w} / ${h}`);
       positionWindow(view);
+      fitRotated();
     };
+
+    view.setRotation = rotation => {
+      if (rotation === view.rotation) return;
+      view.rotation = rotation;
+      video.dataset.rot = rotation;
+      view.body.classList.toggle("rotated", !!rotation);
+      view.body.style.setProperty("--rot", rotation + "deg");
+      view.body.style.removeProperty("--rot-w");
+      view.body.style.removeProperty("--rot-h");
+      fitRatio();
+    };
+
+    new ResizeObserver(fitRotated).observe(view.body);
 
     video.addEventListener("loadedmetadata", fitRatio);
     video.addEventListener("resize", fitRatio);
@@ -15113,9 +15195,13 @@
 
     if (!video.videoWidth || !video.videoHeight) return box;
 
-    const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
-    const width = video.videoWidth * scale;
-    const height = video.videoHeight * scale;
+    // Girado de lado: a caixa já vem girada, a imagem troca largura e altura.
+    const side = video.dataset.rot === "90" || video.dataset.rot === "270";
+    const [videoW, videoH] = side ? [video.videoHeight, video.videoWidth] : [video.videoWidth, video.videoHeight];
+
+    const scale = Math.min(box.width / videoW, box.height / videoH);
+    const width = videoW * scale;
+    const height = videoH * scale;
 
     return {
       left: box.left + (box.width - width) / 2,
