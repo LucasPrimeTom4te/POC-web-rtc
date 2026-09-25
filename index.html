@@ -2857,6 +2857,625 @@
     }
 
     /* ----------------------------------------------------------
+     * FERRAMENTAS DA SALA (enquete, timer, sorteio, tarefas, rádio)
+     * ---------------------------------------------------------- */
+
+    .widget-win .win-body {
+      display: flex;
+      align-items: stretch;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .widget {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .widget input:not([type="checkbox"]):not([type="range"]),
+    .widget select,
+    .widget textarea {
+      min-width: 0;
+      padding: 7px 9px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+    }
+
+    .widget .tool {
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+
+    .widget-scroll {
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+
+    .widget-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .widget-actions .widget-hint {
+      flex: 1;
+    }
+
+    .widget-hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .widget-empty {
+      margin: auto;
+      padding: 12px;
+      color: var(--muted);
+      text-align: center;
+      list-style: none;
+    }
+
+    .widget-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 10px;
+      background: var(--bg);
+      flex: none;
+    }
+
+    .widget-tabs .tool {
+      flex: 1;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .widget-tabs .tool.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* 📊 Enquete */
+
+    .poll-results,
+    .poll-form {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .poll-form-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .poll-form-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .poll-form-row input {
+      flex: 1;
+    }
+
+    .poll-q {
+      font-size: 17px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .poll-options {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .poll-option {
+      position: relative;
+      flex: none;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 8px;
+      padding: 9px 11px;
+      overflow: hidden;
+      text-align: left;
+      border-radius: 10px;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 35%, transparent) var(--share, 0%), var(--bg) var(--share, 0%));
+      transition: background .3s;
+    }
+
+    .poll-option.mine {
+      border-color: var(--accent);
+    }
+
+    .poll-option.winner {
+      border-color: var(--ok);
+      background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 40%, transparent) var(--share, 0%), var(--bg) var(--share, 0%));
+    }
+
+    .poll-option:disabled {
+      cursor: default;
+      opacity: 1;
+    }
+
+    .poll-text {
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .poll-count {
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .poll-names {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .poll-names:empty {
+      display: none;
+    }
+
+    /* ⏱️ Timer */
+
+    .timer-widget {
+      justify-content: space-between;
+    }
+
+    .timer-digits {
+      margin: auto 0;
+      text-align: center;
+      font: 700 clamp(40px, 16cqw, 96px) / 1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -1px;
+    }
+
+    .timer-win .win-body {
+      container-type: inline-size;
+    }
+
+    .timer-digits.done {
+      color: var(--error);
+      animation: timer-blink 1s steps(2) infinite;
+    }
+
+    @keyframes timer-blink {
+      50% { opacity: .35; }
+    }
+
+    .timer-bar {
+      flex: none;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    .timer-bar span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--accent);
+      transition: width .25s linear;
+    }
+
+    .timer-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .timer-custom {
+      display: flex;
+      gap: 4px;
+    }
+
+    .timer-custom input {
+      width: 76px;
+    }
+
+    .timer-actions {
+      justify-content: center;
+    }
+
+    /* 🎲 Sorteio */
+
+    .dice-result {
+      flex: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 10px;
+      border-radius: 12px;
+      background: var(--bg);
+    }
+
+    .dice-face {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 72px;
+    }
+
+    .die {
+      display: inline-grid;
+      place-items: center;
+      min-width: 56px;
+      height: 56px;
+      padding: 0 6px;
+      border-radius: 12px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-size: 26px;
+      font-weight: 800;
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .15);
+    }
+
+    .die.six {
+      padding: 0;
+      background: none;
+      box-shadow: none;
+      color: #f8fafc;
+      font-size: 72px;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .dice-total,
+    .dice-pick {
+      font-size: 26px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+      text-align: center;
+    }
+
+    .coin {
+      font-size: 56px;
+      line-height: 1;
+    }
+
+    .dice-empty {
+      color: var(--muted);
+    }
+
+    .dice-result.rolling .dice-face {
+      animation: dice-shake .14s linear infinite;
+    }
+
+    @keyframes dice-shake {
+      25% { transform: translate(-2px, 1px) rotate(-4deg); }
+      75% { transform: translate(2px, -1px) rotate(4deg); }
+    }
+
+    .dice-names {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 0;
+    }
+
+    .dice-names textarea {
+      height: 74px;
+      resize: none;
+    }
+
+    .dice-history {
+      flex: 1;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dice-history li {
+      padding: 3px 0;
+      border-top: 1px solid var(--border);
+      overflow-wrap: anywhere;
+    }
+
+    /* ✅ Tarefas */
+
+    .tasks-form {
+      display: flex;
+      gap: 6px;
+      flex: none;
+    }
+
+    .tasks-form input {
+      flex: 1;
+    }
+
+    .tasks-list {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .tasks-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 2px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tasks-list input[type="checkbox"] {
+      flex: none;
+      width: 18px;
+      height: 18px;
+      accent-color: var(--ok);
+    }
+
+    .widget .tasks-list .task-text {
+      flex: 1;
+      padding: 5px 6px;
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .widget .tasks-list .task-text:focus {
+      border-color: var(--border);
+      background: var(--bg);
+      outline: none;
+    }
+
+    .tasks-list li.done .task-text {
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+
+    .widget .task-remove {
+      flex: none;
+      padding: 4px 7px;
+      border-color: transparent;
+      background: transparent;
+      opacity: 0;
+    }
+
+    .tasks-list li:hover .task-remove,
+    .task-remove:focus-visible {
+      opacity: 1;
+    }
+
+    @media (pointer: coarse) {
+      .widget .task-remove {
+        opacity: .6;
+      }
+    }
+
+    /* 📻 Rádio */
+
+    .radio-now {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border-radius: 12px;
+      background: var(--bg);
+    }
+
+    .widget .radio-now img {
+      flex: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #fff;
+    }
+
+    .radio-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .radio-info strong,
+    .radio-info span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .widget .radio-play {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border-radius: 50%;
+      font-size: 16px;
+    }
+
+    .radio-now input[type="range"] {
+      width: 80px;
+    }
+
+    .radio-search {
+      display: flex;
+      gap: 6px;
+      flex: none;
+    }
+
+    .radio-search input {
+      flex: 1;
+    }
+
+    .radio-genres {
+      flex: none;
+    }
+
+    .radio-status:empty {
+      display: none;
+    }
+
+    .radio-results {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .radio-item {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px;
+      text-align: left;
+      border-radius: 10px;
+    }
+
+    .radio-item.active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+    }
+
+    .widget .radio-item img {
+      flex: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #fff;
+    }
+
+    .radio-item-text {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .radio-item-text strong,
+    .radio-item-text span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .radio-item-text span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    /* ----------------------------------------------------------
+     * REAÇÕES FLUTUANTES
+     * ---------------------------------------------------------- */
+
+    .react-picker {
+      position: fixed;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: repeat(6, 42px);
+      gap: 4px;
+      padding: 6px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .5);
+    }
+
+    .react-picker button {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      font-size: 24px;
+      transition: transform .1s;
+    }
+
+    .react-picker button:hover {
+      background: var(--bg);
+      transform: scale(1.15);
+    }
+
+    .react-picker button:active {
+      transform: scale(.9);
+    }
+
+    .react-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 19;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .react-float {
+      position: absolute;
+      bottom: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: react-rise 2.8s ease-out forwards;
+    }
+
+    .react-emoji {
+      font-size: 40px;
+      line-height: 1;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .4));
+    }
+
+    .react-name {
+      margin-top: 2px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--person, var(--accent));
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    @keyframes react-rise {
+      0% { transform: translate(0, 0) scale(.4); opacity: 0; }
+      12% { transform: translate(0, -30px) scale(1.15); opacity: 1; }
+      70% { opacity: 1; }
+      100% { transform: translate(var(--drift, 0), -55vh) scale(1); opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .react-float { animation-duration: 1.5s; }
+      .dice-result.rolling .dice-face { animation: none; }
+    }
+
+    /* ----------------------------------------------------------
      * BIBLIOTECA DE JOGOS (modal)
      * ---------------------------------------------------------- */
 
@@ -3469,10 +4088,15 @@
           <button id="addVideoBtn" class="tool" title="Mostrar um vídeo do YouTube para todos, com som (só você controla)"><span class="ic" data-icon="youtube"></span><span class="rail-label">YouTube</span></button>
           <button id="addGameBtn" class="tool" title="Biblioteca de jogos: escolha um e ele abre numa janela de site (todos veem ao vivo, só você joga)"><span class="ic" data-icon="game"></span><span class="rail-label">Jogos</span></button>
           <button id="addCodeBtn" class="tool" title="Editor de código: todos veem e todos podem escrever"><span class="ic" data-icon="code"></span><span class="rail-label">Código</span></button>
+          <button id="addPollBtn" class="tool" title="Enquete: todos votam e veem o resultado ao vivo"><span class="ic" data-icon="poll"></span><span class="rail-label">Enquete</span></button>
+          <button id="addTimerBtn" class="tool" title="Timer e cronômetro: o mesmo para todos, todos controlam"><span class="ic" data-icon="timer"></span><span class="rail-label">Timer</span></button>
+          <button id="addDiceBtn" class="tool" title="Sorteio: dado, moeda ou nome (todos veem o mesmo resultado)"><span class="ic" data-icon="dice"></span><span class="rail-label">Sorteio</span></button>
+          <button id="addTasksBtn" class="tool" title="Lista de tarefas: todos adicionam e marcam"><span class="ic" data-icon="tasks"></span><span class="rail-label">Tarefas</span></button>
+          <button id="addRadioBtn" class="tool" title="Rádio: música ambiente tocando para todos (cada um no seu volume)"><span class="ic" data-icon="radio"></span><span class="rail-label">Rádio</span></button>
         </div>
         <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
         <button id="boardModeBtn" class="tool active"><span id="boardModeIcon" class="ic"></span><span id="boardModeLabel" class="btn-label">Editando</span></button>
-        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo, jogos e código" aria-expanded="false">⋯</button>
+        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo, jogos, código, enquete, timer, sorteio, tarefas e rádio" aria-expanded="false">⋯</button>
       </div>
 
       <!-- Espaço infinito: arrastar o fundo move, pinça / Ctrl+roda dá zoom. -->
@@ -3537,6 +4161,9 @@
     </button>
     <button id="shareAudioBtn" class="ctl hidden" disabled title="Manda o som de uma guia (ou do computador) sem mandar a imagem">
       <span class="ic" data-icon="music"></span><span id="shareAudioLabel" class="ctl-label">Compartilhar áudio</span>
+    </button>
+    <button id="reactBtn" class="ctl" title="Mandar uma reação (sobe na tela de todos)">
+      <span class="ic" data-icon="smile"></span><span class="ctl-label">Reações</span>
     </button>
     <button id="settingsBtn" class="ctl" title="Quem está aqui, seu nome, sala, qualidade e mouse">
       <span class="ic" data-icon="settings"></span><span class="ctl-label">Configurações</span>
@@ -3676,6 +4303,10 @@
   </div>
 
 </div>
+
+<!-- Reações: o seletor (em cima do botão) e a camada onde elas sobem -->
+<div id="reactPicker" class="react-picker hidden" role="menu" aria-label="Reações"></div>
+<div id="reactLayer" class="react-layer" aria-hidden="true"></div>
 
 <!-- Biblioteca de jogos (catálogos HTML5 públicos) -->
 <div id="gameModal" class="modal hidden">
@@ -3859,6 +4490,19 @@
           jogos HTML5 (GamePix e GameMonetize, em JSON). O jogo escolhido abre
           pela URL dele numa janela 🌐 Site, então funciona igual: só quem
           abriu joga e os outros assistem ao vivo.
+        </li>
+        <li>
+          <strong>📊 Enquete, ⏱️ Timer, 🎲 Sorteio, ✅ Tarefas e 📻 Rádio</strong>:
+          janelas em que todos mexem. Cada mudança manda só o pedaço que mudou
+          (um voto, uma tarefa), e vale a versão mais nova de cada pedaço, então
+          duas pessoas mexendo ao mesmo tempo não se atropelam. O sorteio é
+          feito por quem apertou e o resultado vai para todos (ninguém vê um
+          número diferente). O rádio vem do catálogo aberto
+          <em>Radio Browser</em>: cada um toca o mesmo endereço, no seu volume.
+        </li>
+        <li>
+          <strong>Reações</strong> (😊 lá embaixo): um emoji sobe na tela de
+          todos, com o nome de quem mandou.
         </li>
         <li>
           <strong>▶️ YouTube</strong>: cada um carrega o mesmo vídeo no player
@@ -4879,6 +5523,10 @@
         receiveSuggestion(peer, message);
         break;
 
+      case "react":
+        receiveReaction(peer, message);
+        break;
+
       case "img-data":
         receiveImageChunk(peer, message);
         break;
@@ -5641,6 +6289,7 @@
 
     session.speakerOn = !session.speakerOn;
     peers.forEach(applyPeerVolume);
+    renderRadios();
 
     if (session.speakerOn) playRemoteAudio();
 
@@ -6658,7 +7307,7 @@
     if (!session || event.target.closest(".stage-ui")) return;
 
     // Rolar dentro do editor de código rola o texto (Ctrl+roda ainda dá zoom).
-    if (event.target.closest(".code-area, .yt-queue-list") && !event.ctrlKey && !event.metaKey) return;
+    if (event.target.closest(".code-area, .yt-queue-list, .widget-scroll") && !event.ctrlKey && !event.metaKey) return;
 
     event.preventDefault();
 
@@ -6923,6 +7572,7 @@
       : kind === "site" ? "display-win site-win"
       : kind === "youtube" ? "display-win yt-win"
       : kind === "code" ? "display-win code-win"
+      : WIDGETS[kind] ? `display-win widget-win ${kind}-win`
       : "screen-tile");
     el.dataset.id = id;
 
@@ -6947,7 +7597,7 @@
 
     const bubble = document.createElement("span");
     bubble.className = "bubble";
-    bubble.textContent = kind === "board" ? "🎨" : kind === "display" ? "🖼️" : kind === "site" ? "🌐" : kind === "youtube" ? "▶️" : kind === "code" ? "💻" : "🖥️";
+    bubble.textContent = WIDGETS[kind] ? WIDGETS[kind].icon : kind === "board" ? "🎨" : kind === "display" ? "🖼️" : kind === "site" ? "🌐" : kind === "youtube" ? "▶️" : kind === "code" ? "💻" : "🖥️";
 
     const view = { id, kind, el, head, body, label, aspect: kind === "board" ? 1 : 16 / 9 };
 
@@ -7416,6 +8066,12 @@
     site: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
     youtube: '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3Z"/>',
     code: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
+    poll: '<path d="M3 3v18h18"/><path d="M8 17v-5"/><path d="M13 17V7"/><path d="M18 17v-9"/>',
+    timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M10 2h4"/>',
+    dice: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r=".8"/><circle cx="16" cy="8" r=".8"/><circle cx="12" cy="12" r=".8"/><circle cx="8" cy="16" r=".8"/><circle cx="16" cy="16" r=".8"/>',
+    tasks: '<path d="m3 6 2 2 3-3"/><path d="m3 13 2 2 3-3"/><path d="M11 7h10"/><path d="M11 14h10"/><path d="M11 20h10"/>',
+    radio: '<rect x="2" y="8" width="20" height="13" rx="2"/><path d="m6 8 11-5"/><circle cx="8" cy="14.5" r="2.5"/><path d="M15 13h3"/><path d="M15 16h3"/>',
+    smile: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/>',
     game: '<rect x="2" y="6" width="20" height="12" rx="4"/><path d="M6 12h4"/><path d="M8 10v4"/><circle cx="15.5" cy="11" r=".6"/><circle cx="18" cy="13.5" r=".6"/>',
     mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/>',
     micOff: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/><path d="m3 3 18 18"/>',
@@ -8381,8 +9037,9 @@
 
   const isMine = entry => entry.owner === me.id;
 
-  // kind: "image" | "site" | "youtube" (veja "janelas de site e de vídeo") | "code".
-  const DISPLAY_KINDS = ["image", "site", "youtube", "code"];
+  // kind: "image" | "site" | "youtube" (veja "janelas de site e de vídeo") | "code"
+  // | "poll" | "timer" | "dice" | "tasks" | "radio" (veja "ferramentas da sala").
+  const DISPLAY_KINDS = ["image", "site", "youtube", "code", "poll", "timer", "dice", "tasks", "radio"];
 
   function ensureDisplay(id, owner, kind = "image") {
 
@@ -8391,7 +9048,7 @@
     let entry = session.displays.get(id);
 
     if (!entry) {
-      entry = { id, owner, kind, current: null, url: null, video: null, play: null, queue: [], code: "", by: owner, rev: 0 };
+      entry = { id, owner, kind, current: null, url: null, video: null, play: null, queue: [], code: "", state: {}, by: owner, rev: 0 };
       session.displays.set(id, entry);
     }
 
@@ -8400,6 +9057,7 @@
     if (!session.windows.has("display:" + id)) {
       if (kind === "image") createDisplayWindow(entry);
       else if (kind === "code") createCodeWindow(entry);
+      else if (WIDGETS[kind]) createWidgetWindow(entry);
       else createSiteWindow(entry);
     }
 
@@ -8522,6 +9180,7 @@
     if (!entry || !view) return;
 
     if (entry.kind === "code") return renderCode(entry, view);
+    if (WIDGETS[entry.kind]) return renderWidget(entry, view);
     if (entry.kind !== "image") return renderSite(entry, view);
 
     const mine = isMine(entry);
@@ -8770,8 +9429,8 @@
   }
 
   // O que todos precisam saber de uma janela (vai no "display-set" e no histórico).
-  const displayData = ({ id, owner, kind, current, url, video, queue, code, by, rev }) =>
-    ({ id, owner, kind, current, url, video, ...(kind === "code" ? { code, by } : {}), ...(kind === "youtube" ? { queue } : {}), rev });
+  const displayData = ({ id, owner, kind, current, url, video, queue, code, state, by, rev }) =>
+    ({ id, owner, kind, current, url, video, ...(kind === "code" ? { code, by } : {}), ...(kind === "youtube" ? { queue } : {}), ...(WIDGETS[kind] ? { state } : {}), rev });
 
   // "display-set": ao vivo vem do dono; do histórico, de quem estava lá.
   function applyDisplay(data, from) {
@@ -8782,6 +9441,17 @@
 
     // Versão antiga da página: só havia imagem.
     const kind = DISPLAY_KINDS.includes(data.kind) ? data.kind : "image";
+
+    // Ferramentas: qualquer um muda (cada chave tem suas regras).
+    if (WIDGETS[kind]) {
+      const isNew = !!from && data.fresh === true && !session.displays.has(data.id);
+      const entry = ensureDisplay(data.id, owner, kind);
+      if (!entry) return;
+      mergeWidget(entry, data.state, from, data.live === true);
+      renderDisplay(entry.id);
+      if (isNew) addNote(`${WIDGETS[kind].icon} ${peerLabel(from)} abriu ${WIDGETS[kind].note}`);
+      return;
+    }
 
     // Ao vivo, só o dono muda a janela dele (o código, qualquer um).
     if (from && owner !== from.id && kind !== "code") return;
@@ -8876,7 +9546,7 @@
    * { kind: "youtube", video, play }.
    */
 
-  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻" };
+  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻", poll: "📊", timer: "⏱️", dice: "🎲", tasks: "✅", radio: "📻" };
 
   const CAN_SITE = CAN_SHARE_SCREEN && ("RestrictionTarget" in window || "CropTarget" in window);
   const YT_ID = /^[\w-]{11}$/;
@@ -10272,6 +10942,1211 @@
   }
 
 
+  /* ---- ferramentas da sala: enquete, timer, sorteio, tarefas e rádio ---- */
+
+  /*
+   * Janelas em que todos mexem. O estado de cada uma é um conjunto de
+   * chaves ({ v, rev, by }); cada mudança troca só as chaves que mudaram
+   * e manda só elas no "display-set". Vale, por chave, a de rev maior
+   * (empate: o id do aparelho decide). Assim duas pessoas mexendo ao
+   * mesmo tempo em coisas diferentes (dois votos, duas tarefas) não se
+   * atropelam. Algumas chaves só o dono muda (a pergunta da enquete) e
+   * outras só a própria pessoa (o voto dela): quem manda é quem enviou,
+   * não o que vem escrito na mensagem.
+   *
+   * O timer guarda horários absolutos (Date.now()): cada aparelho conta
+   * pelo próprio relógio, que costuma estar certo (acertado pela rede).
+   */
+
+  const WIDGETS = {
+    poll: { icon: "📊", name: "Enquete", note: "uma enquete", w: 460, ar: [4, 3], create: createPollWidget, render: renderPollWidget, clean: cleanPollKey },
+    timer: { icon: "⏱️", name: "Timer", note: "um timer", w: 420, ar: [4, 3], create: createTimerWidget, render: renderTimerWidget, clean: cleanTimerKey },
+    dice: { icon: "🎲", name: "Sorteio", note: "um sorteio", w: 440, ar: [1, 1], create: createDiceWidget, render: renderDiceWidget, clean: cleanDiceKey, prune: pruneDice },
+    tasks: { icon: "✅", name: "Tarefas", note: "uma lista de tarefas", w: 420, ar: [4, 5], create: createTasksWidget, render: renderTasksWidget, clean: cleanTaskKey },
+    radio: { icon: "📻", name: "Rádio", note: "o rádio", w: 520, ar: [1, 1], create: createRadioWidget, render: renderRadioWidget, clean: cleanRadioKey }
+  };
+
+  const WIDGET_KEYS_MAX = 400;
+  const WIDGET_VALUE_MAX = 4000;
+
+  $("addPollBtn").onclick = () => openWidget("poll");
+  $("addTimerBtn").onclick = () => openWidget("timer");
+  $("addDiceBtn").onclick = () => openWidget("dice");
+  $("addTasksBtn").onclick = () => openWidget("tasks");
+  $("addRadioBtn").onclick = () => openWidget("radio");
+
+  function openWidget(kind) {
+
+    if (!session) return;
+
+    setTray(null);
+
+    const widget = WIDGETS[kind];
+    const id = me.id.slice(0, 8) + "-" + randomId();
+    const winId = "display:" + id;
+    const entry = ensureDisplay(id, me.id, kind);
+
+    send({ type: "display-set", ...displayData(entry), fresh: true });
+
+    const place = freeSpot({ ...defaultLayout(winId), w: widget.w }, winId, widget.ar[0] / widget.ar[1]);
+    setLayout(winId, { x: place.x, y: place.y, w: place.w, z: ++topZ });
+
+    renderDisplay(id);
+    revealWindow(winId);
+
+    return entry;
+
+  }
+
+  const widgetValue = (entry, key) => entry.state[key]?.v ?? null;
+
+  // Mudança minha: { chave: valor } (null apaga). Vale aqui e vai para todos.
+  function setWidget(entry, changes) {
+
+    if (!session?.displays.has(entry.id)) return;
+
+    const state = {};
+
+    for (const [key, value] of Object.entries(changes)) {
+      const v = WIDGETS[entry.kind].clean(key, value, me.id, entry);
+      if (v !== undefined) state[key] = entry.state[key] = { v, rev: (entry.state[key]?.rev || 0) + 1, by: me.id };
+    }
+
+    WIDGETS[entry.kind].prune?.(entry);
+
+    send({ type: "display-set", id: entry.id, owner: entry.owner, kind: entry.kind, rev: 0, state, live: true });
+    renderDisplay(entry.id);
+
+  }
+
+  // Chaves que chegaram. Mudança ao vivo (live): o autor é quem mandou.
+  // Estado inteiro (janela nova, histórico): vale o autor de cada chave.
+  function mergeWidget(entry, state, from, live) {
+
+    if (!state || typeof state !== "object" || Array.isArray(state)) return;
+
+    const widget = WIDGETS[entry.kind];
+
+    for (const [key, item] of Object.entries(state)) {
+
+      if (key.length > 80 || !item || typeof item !== "object" || !Number.isInteger(item.rev) || item.rev < 1) continue;
+
+      const by = from && live ? from.id : item.by;
+      const current = entry.state[key];
+
+      if (!isDeviceId(by)) continue;
+      if (current && (item.rev < current.rev || (item.rev === current.rev && by <= current.by))) continue;
+      if (!current && Object.keys(entry.state).length >= WIDGET_KEYS_MAX) continue;
+      if (JSON.stringify(item.v ?? null).length > WIDGET_VALUE_MAX) continue;
+
+      const v = widget.clean(key, item.v ?? null, by, entry);
+
+      if (v !== undefined) entry.state[key] = { v, rev: item.rev, by };
+
+    }
+
+    widget.prune?.(entry);
+
+  }
+
+  function createWidgetWindow(entry) {
+
+    const widget = WIDGETS[entry.kind];
+    const winId = "display:" + entry.id;
+    let view = null;
+
+    const fullBtn = windowButton("⛶", "Tela cheia (só aqui)", () => toggleWindowFull(view));
+
+    view = createWindow({
+      id: winId,
+      kind: entry.kind,
+      extraButtons: [fullBtn],
+      closable: true,
+      onClose: () => closeDisplay(entry.id)
+    });
+
+    view.displayId = entry.id;
+    view.aspect = widget.ar[0] / widget.ar[1];
+    view.body.style.setProperty("--ar", widget.ar.join(" / "));
+
+    const box = document.createElement("div");
+    box.className = "widget " + entry.kind + "-widget";
+    view.body.prepend(box);
+    view.box = box;
+
+    // Mexer aqui não arrasta a vista nem desenha.
+    for (const type of ["pointerdown", "keydown", "dblclick"]) {
+      box.addEventListener(type, event => {
+        event.stopPropagation();
+        if (type === "pointerdown" && DESKTOP_LAYOUT.matches) bringToFront(winId);
+      });
+    }
+
+    widget.create(entry, view);
+
+    view.cleanup = () => view.widgetCleanup?.();
+
+    enableCursorSurface(view.body, () => winId, () => view.body.getBoundingClientRect());
+
+    return view;
+
+  }
+
+  function renderWidget(entry, view) {
+
+    const widget = WIDGETS[entry.kind];
+
+    view.label.textContent = `${widget.icon} ${widget.name}` + (isMine(entry) ? "" : ` de ${ownerNameOf(entry)}`) + " · todos mexem";
+    view.el.style.setProperty("--person", personColor(entry.owner));
+    renderWinSwitcher();
+
+    widget.render(entry, view);
+
+  }
+
+  // Pequenos construtores de elementos (as ferramentas têm muitos).
+  function el(tag, className = "", text = "") {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (text) element.textContent = text;
+    return element;
+  }
+
+  function widgetButton(text, onClick, className = "") {
+    const button = el("button", "tool " + className, text);
+    button.type = "button";
+    button.onclick = event => {
+      event.stopPropagation();
+      onClick(event);
+    };
+    return button;
+  }
+
+  const cleanText = (value, max) => typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+
+  // Número aleatório de 0 a n-1 (crypto: sem vício).
+  function randomInt(n) {
+    const limit = Math.floor(0x100000000 / n) * n;
+    const buffer = new Uint32Array(1);
+    do crypto.getRandomValues(buffer); while (buffer[0] >= limit);
+    return buffer[0] % n;
+  }
+
+  // "há 5 min" etc.
+  function timeAgo(time) {
+    const seconds = Math.max(0, Math.round((Date.now() - time) / 1000));
+    if (seconds < 10) return "agora";
+    if (seconds < 60) return `há ${seconds} s`;
+    if (seconds < 3600) return `há ${Math.floor(seconds / 60)} min`;
+    return new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+
+  /* 📊 Enquete
+   * "poll": { pid, q, options } (só o dono) · "closed": pid encerrado (só o dono)
+   * "vote:<id>": { pid, choice, name } (só a própria pessoa). Voto de outra
+   * enquete (pid velho) não conta.
+   */
+
+  const POLL_OPTIONS_MAX = 8;
+
+  function cleanPollKey(key, v, by, entry) {
+
+    if (key === "poll") {
+      if (by !== entry.owner || !v || typeof v !== "object") return undefined;
+      const options = Array.isArray(v.options) ? v.options.map(option => cleanText(option, 80)).filter(Boolean).slice(0, POLL_OPTIONS_MAX) : [];
+      const q = cleanText(v.q, 200);
+      if (typeof v.pid !== "string" || !BOARD_ID.test(v.pid) || !q || options.length < 2) return undefined;
+      return { pid: v.pid, q, options };
+    }
+
+    if (key === "closed") {
+      if (by !== entry.owner) return undefined;
+      return typeof v === "string" && BOARD_ID.test(v) ? v : null;
+    }
+
+    if (key.startsWith("vote:")) {
+      if (key !== "vote:" + by) return undefined;
+      if (v === null) return null;
+      if (typeof v?.pid !== "string" || !Number.isInteger(v.choice) || v.choice < 0 || v.choice >= POLL_OPTIONS_MAX) return undefined;
+      return { pid: v.pid, choice: v.choice, name: cleanName(v.name) || "Alguém" };
+    }
+
+    return undefined;
+
+  }
+
+  function createPollWidget(entry, view) {
+    view.results = el("div", "poll-results");
+    view.box.append(view.results);
+  }
+
+  // O dono monta (ou refaz) a pergunta e as opções.
+  function openPollForm(entry, view) {
+
+    const poll = widgetValue(entry, "poll");
+
+    const form = el("form", "poll-form widget-scroll");
+
+    const question = el("input");
+    question.placeholder = "Pergunta (ex.: Qual jogo agora?)";
+    question.maxLength = 200;
+    question.value = poll?.q || "";
+
+    const list = el("div", "poll-form-options");
+
+    const addOption = (value = "") => {
+      if (list.children.length >= POLL_OPTIONS_MAX) return;
+      const row = el("div", "poll-form-row");
+      const input = el("input");
+      input.maxLength = 80;
+      input.value = value;
+      input.placeholder = "Opção " + (list.children.length + 1);
+      const remove = widgetButton("✕", () => {
+        if (list.children.length > 2) row.remove();
+        more.hidden = list.children.length >= POLL_OPTIONS_MAX;
+      });
+      remove.title = "Tirar esta opção";
+      row.append(input, remove);
+      list.append(row);
+      more.hidden = list.children.length >= POLL_OPTIONS_MAX;
+      return input;
+    };
+
+    const more = widgetButton("➕ Opção", () => addOption()?.focus());
+
+    (poll?.options?.length ? poll.options : ["", ""]).forEach(option => addOption(option));
+
+    const actions = el("div", "widget-actions");
+    const start = el("button", "tool primary", poll ? "🔄 Começar de novo" : "▶ Começar votação");
+    actions.append(more, start);
+
+    if (poll) {
+      actions.prepend(widgetButton("Cancelar", () => {
+        view.editing = false;
+        renderDisplay(entry.id);
+      }));
+    }
+
+    form.onsubmit = event => {
+      event.preventDefault();
+      const options = [...list.querySelectorAll("input")].map(input => cleanText(input.value, 80)).filter(Boolean);
+      const q = cleanText(question.value, 200);
+      if (!q) return question.focus();
+      if (options.length < 2) return toast("📊 Escreva pelo menos duas opções.");
+      view.editing = false;
+      setWidget(entry, { poll: { pid: randomId(), q, options }, closed: null });
+    };
+
+    form.append(el("div", "widget-hint", poll ? "Uma enquete nova apaga os votos desta." : "Todos na sala vão poder votar."), question, list, actions);
+
+    view.results.replaceChildren(form);
+    setTimeout(() => question.focus(), 30);
+
+  }
+
+  function renderPollWidget(entry, view) {
+
+    const mine = isMine(entry);
+    const poll = widgetValue(entry, "poll");
+
+    // Montando a enquete: não refaz o formulário enquanto o dono escreve.
+    if (mine && (view.editing || !poll)) {
+      if (!view.results.querySelector(".poll-form")) openPollForm(entry, view);
+      return;
+    }
+
+    if (!poll) {
+      view.results.replaceChildren(el("div", "widget-empty", `${ownerNameOf(entry)} está montando a enquete…`));
+      return;
+    }
+
+    const closed = widgetValue(entry, "closed") === poll.pid;
+    const votes = Object.entries(entry.state)
+      .filter(([key, item]) => key.startsWith("vote:") && item.v?.pid === poll.pid && item.v.choice < poll.options.length)
+      .map(([key, item]) => ({ id: key.slice(5), ...item.v }));
+    const counts = poll.options.map((_, index) => votes.filter(vote => vote.choice === index));
+    const top = Math.max(0, ...counts.map(list => list.length));
+    const myVote = votes.find(vote => vote.id === me.id)?.choice;
+
+    const title = el("div", "poll-q", poll.q);
+
+    const list = el("div", "poll-options widget-scroll");
+
+    poll.options.forEach((option, index) => {
+
+      const voters = counts[index];
+      const share = votes.length ? Math.round(voters.length / votes.length * 100) : 0;
+
+      const row = el("button", "poll-option");
+      row.type = "button";
+      row.disabled = closed;
+      row.classList.toggle("mine", myVote === index);
+      row.classList.toggle("winner", closed && voters.length > 0 && voters.length === top);
+      row.style.setProperty("--share", share + "%");
+      row.title = voters.length ? voters.map(vote => vote.id === me.id ? "você" : vote.name).join(", ") : "Ninguém votou nesta ainda";
+
+      const text = el("span", "poll-text", (myVote === index ? "✓ " : "") + option);
+      const count = el("span", "poll-count", votes.length ? `${voters.length} · ${share}%` : "0");
+      const names = el("span", "poll-names", voters.map(vote => vote.id === me.id ? "você" : vote.name).join(", "));
+
+      row.append(text, count, names);
+
+      row.onclick = () => setWidget(entry, {
+        ["vote:" + me.id]: myVote === index ? null : { pid: poll.pid, choice: index, name: me.name }
+      });
+
+      list.append(row);
+
+    });
+
+    const foot = el("div", "widget-actions");
+    foot.append(el("span", "widget-hint", closed ? `🔒 Encerrada · ${votes.length} voto${votes.length === 1 ? "" : "s"}`
+      : `${votes.length} voto${votes.length === 1 ? "" : "s"} · toque para votar (de novo tira)`));
+
+    if (mine) {
+      foot.append(
+        widgetButton(closed ? "🔓 Reabrir" : "🔒 Encerrar", () => setWidget(entry, { closed: closed ? null : poll.pid })),
+        widgetButton("✏️ Nova", () => {
+          view.editing = true;
+          renderDisplay(entry.id);
+        })
+      );
+    }
+
+    view.results.replaceChildren(title, list, foot);
+
+  }
+
+
+  /* ⏱️ Timer e cronômetro
+   * "clock": { mode: "down" | "up", dur, acc, at, run }: acc = quanto já
+   * correu antes de at (a hora em que deu play); dur = duração do timer.
+   */
+
+  const TIMER_MAX = 24 * 3600 * 1000;
+  const TIMER_PRESETS = [1, 3, 5, 10, 15, 25];
+
+  function cleanTimerKey(key, v) {
+    if (key !== "clock" || !v || typeof v !== "object") return undefined;
+    const ms = value => Number.isFinite(value) ? Math.round(clamp(value, 0, TIMER_MAX)) : 0;
+    return {
+      mode: v.mode === "up" ? "up" : "down",
+      dur: Math.max(1000, ms(v.dur)),
+      acc: ms(v.acc),
+      at: v.run && Number.isFinite(v.at) ? v.at : null,
+      run: !!v.run && Number.isFinite(v.at)
+    };
+  }
+
+  const timerClock = entry => widgetValue(entry, "clock") || { mode: "down", dur: 5 * 60000, acc: 0, at: null, run: false };
+
+  const timerElapsed = clock => Math.min(TIMER_MAX, clock.acc + (clock.run ? Math.max(0, Date.now() - clock.at) : 0));
+
+  function formatClock(ms, up) {
+    const total = up ? Math.floor(ms / 1000) : Math.ceil(ms / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor(total / 60) % 60;
+    const s = total % 60;
+    const pad = n => String(n).padStart(2, "0");
+    return (h ? h + ":" + pad(m) : pad(m)) + ":" + pad(s);
+  }
+
+  // "5", "5:30", "1:05:00" -> ms (minutos, se for um número só).
+  function parseClock(text) {
+    const parts = String(text).trim().split(":").map(part => part.trim());
+    if (!parts.length || parts.length > 3 || parts.some(part => !/^\d{1,3}$/.test(part))) return null;
+    const numbers = parts.map(Number);
+    const seconds = numbers.length === 1 ? numbers[0] * 60
+      : numbers.length === 2 ? numbers[0] * 60 + numbers[1]
+      : numbers[0] * 3600 + numbers[1] * 60 + numbers[2];
+    return seconds > 0 && seconds * 1000 <= TIMER_MAX ? seconds * 1000 : null;
+  }
+
+  // Três bipes (Web Audio: não precisa de arquivo).
+  function beep() {
+    try {
+      const context = new AudioContext();
+      [0, 0.35, 0.7].forEach(start => {
+        const osc = context.createOscillator();
+        const gain = context.createGain();
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, context.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.25, context.currentTime + start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + start + 0.25);
+        osc.connect(gain).connect(context.destination);
+        osc.start(context.currentTime + start);
+        osc.stop(context.currentTime + start + 0.3);
+      });
+      setTimeout(() => context.close(), 1500);
+    } catch {}
+  }
+
+  function createTimerWidget(entry, view) {
+
+    const setClock = patch => setWidget(entry, { clock: { ...timerClock(entry), ...patch } });
+
+    const tabs = el("div", "widget-tabs");
+    view.tabDown = widgetButton("⏳ Timer", () => setClock({ mode: "down", acc: 0, at: null, run: false }));
+    view.tabUp = widgetButton("⏱️ Cronômetro", () => setClock({ mode: "up", acc: 0, at: null, run: false }));
+    tabs.append(view.tabDown, view.tabUp);
+
+    view.digits = el("div", "timer-digits");
+    view.bar = el("div", "timer-bar");
+    view.bar.append(el("span"));
+
+    const presets = el("div", "timer-presets");
+    for (const minutes of TIMER_PRESETS) {
+      presets.append(widgetButton(minutes + " min", () => setClock({ mode: "down", dur: minutes * 60000, acc: 0, at: null, run: false })));
+    }
+
+    const custom = el("form", "timer-custom");
+    const input = el("input");
+    input.placeholder = "mm:ss";
+    input.inputMode = "numeric";
+    input.title = "Outro tempo: minutos (ex.: 7) ou mm:ss (ex.: 2:30)";
+    input.setAttribute("aria-label", input.title);
+    custom.append(input, el("button", "tool", "OK"));
+    custom.onsubmit = event => {
+      event.preventDefault();
+      const ms = parseClock(input.value);
+      if (!ms) return toast("⏱️ Use minutos (7) ou mm:ss (2:30).");
+      input.value = "";
+      input.blur();
+      setClock({ mode: "down", dur: ms, acc: 0, at: null, run: false });
+    };
+    presets.append(custom);
+    view.presets = presets;
+
+    const actions = el("div", "widget-actions timer-actions");
+    view.playBtn = widgetButton("▶ Iniciar", () => {
+      const clock = timerClock(entry);
+      if (clock.run) setClock({ acc: timerElapsed(clock), at: null, run: false });
+      else if (clock.mode === "down" && timerElapsed(clock) >= clock.dur) setClock({ acc: 0, at: Date.now(), run: true });
+      else setClock({ at: Date.now(), run: true });
+    }, "primary");
+    view.plusBtn = widgetButton("+1 min", () => {
+      const clock = timerClock(entry);
+      const elapsed = timerElapsed(clock);
+      // Já acabou: mais um minuto a partir de agora.
+      setClock(elapsed >= clock.dur ? { dur: 60000, acc: 0, at: clock.run ? Date.now() : null } : { dur: Math.min(TIMER_MAX, clock.dur + 60000) });
+    });
+    const resetBtn = widgetButton("↺ Zerar", () => setClock({ acc: 0, at: null, run: false }));
+    actions.append(view.playBtn, view.plusBtn, resetBtn);
+
+    view.box.append(tabs, view.digits, view.bar, view.presets, actions);
+
+    view.timer = setInterval(() => tickTimer(entry, view), 250);
+    view.widgetCleanup = () => clearInterval(view.timer);
+
+  }
+
+  function tickTimer(entry, view) {
+
+    const clock = timerClock(entry);
+    const up = clock.mode === "up";
+    const elapsed = timerElapsed(clock);
+    const left = Math.max(0, clock.dur - elapsed);
+    const done = !up && clock.run && left === 0;
+
+    view.digits.textContent = formatClock(up ? elapsed : left, up);
+    view.digits.classList.toggle("done", done);
+    view.bar.firstChild.style.width = up ? "0%" : (100 - left / clock.dur * 100) + "%";
+
+    // Acabou agora (uma vez por largada): bipa e avisa.
+    const mark = clock.at + ":" + clock.dur + ":" + clock.acc;
+    if (done && view.doneMark !== mark) {
+      const late = Date.now() - (clock.at + clock.dur - clock.acc);
+      view.doneMark = mark;
+      if (late < 5000) {
+        beep();
+        toast("⏰ Acabou o tempo!");
+      }
+    }
+
+  }
+
+  function renderTimerWidget(entry, view) {
+
+    const clock = timerClock(entry);
+    const up = clock.mode === "up";
+
+    view.tabDown.classList.toggle("active", !up);
+    view.tabUp.classList.toggle("active", up);
+    view.bar.hidden = up;
+    view.presets.hidden = up || clock.run;
+    view.plusBtn.hidden = up;
+    view.playBtn.textContent = clock.run ? "⏸ Pausar" : timerElapsed(clock) > 0 && (up || timerElapsed(clock) < clock.dur) ? "▶ Continuar" : "▶ Iniciar";
+
+    tickTimer(entry, view);
+
+  }
+
+
+  /* 🎲 Sorteio: dado, moeda ou nome
+   * "names": a lista de nomes (um por linha) · "r:<id>": um resultado
+   * { mode, values, sides, side, pick, name, at }. Ficam os últimos DICE_KEEP.
+   */
+
+  const DICE_KEEP = 20;
+  const DICE_SIDES = [4, 6, 8, 10, 12, 20, 100];
+  const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+  const NAMES_MAX = 2000;
+
+  function cleanDiceKey(key, v, by) {
+
+    if (key === "names") return typeof v === "string" ? v.slice(0, NAMES_MAX) : undefined;
+
+    if (!key.startsWith("r:") || !v || typeof v !== "object" || !Number.isFinite(v.at)) return undefined;
+
+    const base = { mode: v.mode, name: cleanName(v.name) || "Alguém", at: v.at };
+
+    if (v.mode === "dice") {
+      const sides = DICE_SIDES.includes(v.sides) ? v.sides : null;
+      const values = Array.isArray(v.values) ? v.values.slice(0, 6) : [];
+      if (!sides || !values.length || values.some(value => !Number.isInteger(value) || value < 1 || value > sides)) return undefined;
+      return { ...base, sides, values };
+    }
+
+    if (v.mode === "coin") return v.side === "cara" || v.side === "coroa" ? { ...base, side: v.side } : undefined;
+
+    if (v.mode === "name") {
+      const pick = cleanText(v.pick, 80);
+      return pick ? { ...base, pick, of: Number.isInteger(v.of) ? clamp(v.of, 1, 500) : 1 } : undefined;
+    }
+
+    return undefined;
+
+  }
+
+  const diceResults = entry => Object.entries(entry.state)
+    .filter(([key, item]) => key.startsWith("r:") && item.v)
+    .map(([key, item]) => ({ key, ...item.v }))
+    .sort((a, b) => b.at - a.at || (a.key < b.key ? 1 : -1));
+
+  function pruneDice(entry) {
+    for (const old of diceResults(entry).slice(DICE_KEEP)) delete entry.state[old.key];
+  }
+
+  const diceNames = entry => [...new Set(String(widgetValue(entry, "names") || "").split("\n").map(name => cleanText(name, 80)).filter(Boolean))];
+
+  function createDiceWidget(entry, view) {
+
+    view.mode = "dice";
+    view.count = 1;
+    view.sides = 6;
+
+    const tabs = el("div", "widget-tabs");
+    view.tabs = {
+      dice: widgetButton("🎲 Dado", () => { view.mode = "dice"; renderDisplay(entry.id); }),
+      coin: widgetButton("🪙 Moeda", () => { view.mode = "coin"; renderDisplay(entry.id); }),
+      name: widgetButton("🎫 Nome", () => { view.mode = "name"; renderDisplay(entry.id); })
+    };
+    tabs.append(...Object.values(view.tabs));
+
+    view.result = el("div", "dice-result");
+
+    // Controles de cada modo.
+    const diceControls = el("div", "widget-actions");
+    const count = el("select");
+    count.title = "Quantos dados";
+    for (let n = 1; n <= 6; n++) count.append(new Option(n + (n === 1 ? " dado" : " dados"), n));
+    count.onchange = () => { view.count = Number(count.value); };
+    const sides = el("select");
+    sides.title = "Lados do dado";
+    for (const n of DICE_SIDES) sides.append(new Option(n + " lados", n, n === 6, n === 6));
+    sides.onchange = () => { view.sides = Number(sides.value); };
+    diceControls.append(count, sides, widgetButton("🎲 Rolar", () => {
+      const values = Array.from({ length: view.count }, () => randomInt(view.sides) + 1);
+      addDiceResult(entry, { mode: "dice", sides: view.sides, values });
+    }, "primary"));
+
+    const coinControls = el("div", "widget-actions");
+    coinControls.append(widgetButton("🪙 Jogar a moeda", () => {
+      addDiceResult(entry, { mode: "coin", side: randomInt(2) ? "cara" : "coroa" });
+    }, "primary"));
+
+    const nameControls = el("div", "dice-names");
+    const names = el("textarea", "widget-scroll");
+    names.placeholder = "Um nome por linha (todos veem e podem mudar)";
+    names.maxLength = NAMES_MAX;
+    names.setAttribute("aria-label", "Nomes para sortear");
+    let namesTimer = null;
+    const flushNames = () => {
+      namesTimer = null;
+      if (names.value !== (widgetValue(entry, "names") || "")) setWidget(entry, { names: names.value });
+    };
+    names.oninput = () => { if (!namesTimer) namesTimer = setTimeout(flushNames, 400); };
+    names.onblur = () => { if (namesTimer) { clearTimeout(namesTimer); flushNames(); } };
+    const nameActions = el("div", "widget-actions");
+    nameActions.append(
+      widgetButton("👥 Quem está aqui", () => {
+        const people = [me.name, ...connectedPeers().map(peerLabel)];
+        names.value = people.join("\n");
+        flushNames();
+      }),
+      widgetButton("🎫 Sortear", () => {
+        flushNames();
+        const list = diceNames(entry);
+        if (!list.length) return toast("🎫 Escreva os nomes primeiro (um por linha).");
+        addDiceResult(entry, { mode: "name", pick: list[randomInt(list.length)], of: list.length });
+      }, "primary")
+    );
+    nameControls.append(names, nameActions);
+
+    view.controls = { dice: diceControls, coin: coinControls, name: nameControls };
+    view.namesArea = names;
+    view.history = el("ol", "dice-history widget-scroll");
+
+    view.box.append(tabs, view.result, diceControls, coinControls, nameControls, view.history);
+    view.widgetCleanup = () => { clearTimeout(namesTimer); clearInterval(view.rollAnim); };
+
+  }
+
+  function addDiceResult(entry, result) {
+    setWidget(entry, { ["r:" + me.id.slice(0, 8) + "-" + randomId()]: { ...result, name: me.name, at: Date.now() } });
+  }
+
+  const diceText = result => result.mode === "dice"
+    ? result.values.join(" + ") + (result.values.length > 1 ? " = " + result.values.reduce((a, b) => a + b, 0) : "") + ` (d${result.sides})`
+    : result.mode === "coin" ? (result.side === "cara" ? "Cara" : "Coroa")
+    : `${result.pick} (de ${result.of})`;
+
+  function diceFace(value, sides) {
+    return sides === 6 ? el("span", "die six", DICE_FACES[value - 1]) : el("span", "die", String(value));
+  }
+
+  function renderDiceWidget(entry, view) {
+
+    const results = diceResults(entry);
+    const last = results[0];
+
+    // Chegou um resultado novo: mostra o modo dele e anima.
+    const fresh = last && view.lastKey !== undefined && last.key !== view.lastKey;
+    if (fresh) view.mode = last.mode;
+    view.lastKey = last?.key ?? null;
+
+    for (const [mode, button] of Object.entries(view.tabs)) button.classList.toggle("active", mode === view.mode);
+    for (const [mode, controls] of Object.entries(view.controls)) controls.hidden = mode !== view.mode;
+
+    if (document.activeElement !== view.namesArea) view.namesArea.value = widgetValue(entry, "names") || "";
+
+    const paint = result => {
+      const face = el("div", "dice-face");
+      if (!result) {
+        face.append(el("span", "dice-empty", "Ninguém sorteou ainda"));
+      } else if (result.mode === "dice") {
+        face.append(...result.values.map(value => diceFace(value, result.sides)));
+        if (result.values.length > 1) face.append(el("span", "dice-total", "= " + result.values.reduce((a, b) => a + b, 0)));
+      } else if (result.mode === "coin") {
+        face.append(el("span", "coin " + result.side, result.side === "cara" ? "😀" : "👑"), el("span", "dice-total", result.side === "cara" ? "Cara" : "Coroa"));
+      } else {
+        face.append(el("span", "dice-pick", "🎉 " + result.pick));
+      }
+      const by = el("div", "widget-hint", result ? `${result.name === me.name ? "você" : result.name} · ${timeAgo(result.at)}` : "");
+      view.result.replaceChildren(face, by);
+    };
+
+    clearInterval(view.rollAnim);
+
+    // Uns giros de mentira antes do resultado (só a animação: o resultado já veio).
+    if (fresh && Date.now() - last.at < 3000) {
+      let spins = 0;
+      view.result.classList.add("rolling");
+      view.rollAnim = setInterval(() => {
+        if (++spins >= 8) {
+          clearInterval(view.rollAnim);
+          view.result.classList.remove("rolling");
+          return paint(last);
+        }
+        paint(last.mode === "dice" ? { ...last, values: last.values.map(() => randomInt(last.sides) + 1) }
+          : last.mode === "coin" ? { ...last, side: spins % 2 ? "cara" : "coroa" }
+          : { ...last, pick: diceNames(entry)[randomInt(Math.max(1, diceNames(entry).length))] || last.pick });
+      }, 70);
+    } else {
+      view.result.classList.remove("rolling");
+      paint(last);
+    }
+
+    view.history.replaceChildren(...results.slice(1, 8).map(result => {
+      const icon = result.mode === "dice" ? "🎲" : result.mode === "coin" ? "🪙" : "🎫";
+      return el("li", "", `${icon} ${diceText(result)} · ${result.name === me.name ? "você" : result.name}`);
+    }));
+
+  }
+
+
+  /* ✅ Tarefas: "t:<id>": { text, done, at, name } (null = apagada). */
+
+  const TASK_MAX = 300;
+
+  function cleanTaskKey(key, v) {
+    if (!key.startsWith("t:")) return undefined;
+    if (v === null) return null;
+    const text = cleanText(v?.text, TASK_MAX);
+    if (!text || !Number.isFinite(v.at)) return undefined;
+    return { text, done: !!v.done, at: v.at, name: cleanName(v.name) || "Alguém" };
+  }
+
+  const taskList = entry => Object.entries(entry.state)
+    .filter(([key, item]) => key.startsWith("t:") && item.v)
+    .map(([key, item]) => ({ key, ...item.v }))
+    .sort((a, b) => a.at - b.at || (a.key < b.key ? -1 : 1));
+
+  function createTasksWidget(entry, view) {
+
+    const form = el("form", "tasks-form");
+    const input = el("input");
+    input.placeholder = "Nova tarefa (Enter adiciona)";
+    input.maxLength = TASK_MAX;
+    input.setAttribute("aria-label", "Nova tarefa");
+    form.append(input, el("button", "tool primary", "➕"));
+    form.onsubmit = event => {
+      event.preventDefault();
+      const text = cleanText(input.value, TASK_MAX);
+      if (!text) return;
+      input.value = "";
+      setWidget(entry, { ["t:" + me.id.slice(0, 8) + "-" + randomId()]: { text, done: false, at: Date.now(), name: me.name } });
+    };
+
+    view.list = el("ul", "tasks-list widget-scroll");
+    view.foot = el("div", "widget-actions");
+    view.count = el("span", "widget-hint");
+    view.clearBtn = widgetButton("🧹 Tirar as feitas", () => {
+      const done = taskList(entry).filter(task => task.done);
+      setWidget(entry, Object.fromEntries(done.map(task => [task.key, null])));
+    });
+    view.foot.append(view.count, view.clearBtn);
+
+    view.box.append(form, view.list, view.foot);
+    view.taskInput = input;
+
+    setTimeout(() => { if (isMine(entry)) input.focus(); }, 60);
+
+  }
+
+  function renderTasksWidget(entry, view) {
+
+    const tasks = taskList(entry);
+    const done = tasks.filter(task => task.done).length;
+
+    view.count.textContent = tasks.length ? `${done} de ${tasks.length} feita${tasks.length === 1 ? "" : "s"}` : "";
+    view.clearBtn.hidden = !done;
+
+    // Editando o texto de uma: não refaz a lista agora.
+    if (view.list.contains(document.activeElement) && document.activeElement.classList.contains("task-text")) return;
+
+    if (!tasks.length) {
+      view.list.replaceChildren(el("li", "widget-empty", "Nenhuma tarefa. Todos podem adicionar, marcar e tirar."));
+      return;
+    }
+
+    view.list.replaceChildren(...tasks.map(task => {
+
+      const item = el("li", task.done ? "done" : "");
+
+      const check = el("input");
+      check.type = "checkbox";
+      check.checked = task.done;
+      check.title = task.done ? "Desmarcar" : "Marcar como feita";
+      check.onchange = () => setWidget(entry, { [task.key]: { ...task, key: undefined, done: check.checked } });
+
+      const text = el("input", "task-text");
+      text.type = "text";
+      text.value = task.text;
+      text.maxLength = TASK_MAX;
+      text.title = `Por ${task.name === me.name ? "você" : task.name} · clique para editar`;
+      const save = () => {
+        const value = cleanText(text.value, TASK_MAX);
+        if (value && value !== task.text) setWidget(entry, { [task.key]: { ...task, key: undefined, text: value } });
+        else if (!value) text.value = task.text;
+      };
+      text.onkeydown = event => {
+        if (event.key === "Enter") text.blur();
+        if (event.key === "Escape") { text.value = task.text; text.blur(); }
+      };
+      text.onblur = () => {
+        save();
+        setTimeout(() => renderDisplay(entry.id), 0);
+      };
+
+      const remove = widgetButton("✕", () => setWidget(entry, { [task.key]: null }), "task-remove");
+      remove.title = "Tirar esta tarefa";
+
+      item.append(check, text, remove);
+      return item;
+
+    }));
+
+  }
+
+
+  /* 📻 Rádio (música ambiente)
+   * "station": { name, url, icon, tags } · "on": tocando (para todos).
+   * Cada um toca o mesmo endereço no seu <audio> (rádio é ao vivo: não
+   * precisa acertar o tempo); volume e mudo são só daqui. O catálogo vem
+   * do Radio Browser (radio-browser.info: aberto, sem chave). Só entram
+   * rádios em https que o <audio> toca direto (sem HLS nem playlist).
+   */
+
+  const RADIO_API = "https://de1.api.radio-browser.info/json/stations/search";
+  const RADIO_VOLUME_KEY = "rtc.radioVolume";
+  const RADIO_GENRES = [
+    ["lofi", "Lo-fi"], ["chillout", "Chill"], ["jazz", "Jazz"], ["classical", "Clássica"],
+    ["mpb", "MPB"], ["samba", "Samba"], ["bossa nova", "Bossa nova"], ["rock", "Rock"],
+    ["pop", "Pop"], ["electronic", "Eletrônica"], ["ambient", "Ambiente"], ["news", "Notícias"]
+  ];
+
+  function cleanRadioKey(key, v) {
+
+    if (key === "on") return !!v;
+
+    if (key !== "station") return undefined;
+    if (v === null) return null;
+
+    const url = cleanSiteUrl(v?.url);
+    if (!url || !url.startsWith("https:")) return undefined;
+
+    const icon = cleanSiteUrl(v.icon);
+
+    return {
+      name: cleanText(v.name, 120) || new URL(url).hostname,
+      url,
+      icon: icon?.startsWith("https:") ? icon : "",
+      tags: cleanText(v.tags, 100)
+    };
+
+  }
+
+  const radioPlayable = station =>
+    typeof station?.url_resolved === "string" &&
+    station.url_resolved.startsWith("https://") &&
+    !station.hls &&
+    !/\.(m3u8?|pls|asx)(\?|$)/i.test(station.url_resolved);
+
+  function createRadioWidget(entry, view) {
+
+    const saved = Number(storageGet(RADIO_VOLUME_KEY));
+    view.volume = storageGet(RADIO_VOLUME_KEY) !== null && saved >= 0 && saved <= 100 ? saved : 60;
+    view.localMuted = false;
+
+    const audio = el("audio");
+    audio.preload = "none";
+    audio.onplaying = () => { view.needsTap = false; view.error = null; view.loading = false; renderDisplay(entry.id); };
+    audio.onwaiting = () => { view.loading = true; renderDisplay(entry.id); };
+    audio.onerror = () => {
+      if (!audio.getAttribute("src")) return;
+      view.error = "⚠️ Essa rádio não abriu aqui. Tente outra.";
+      view.loading = false;
+      renderDisplay(entry.id);
+    };
+    view.audio = audio;
+
+    // Tocando agora.
+    const now = el("div", "radio-now");
+    view.nowIcon = el("img");
+    view.nowIcon.alt = "";
+    view.nowIcon.referrerPolicy = "no-referrer";
+    view.nowIcon.onerror = () => { view.nowIcon.hidden = true; };
+    const info = el("div", "radio-info");
+    view.nowName = el("strong");
+    view.nowStatus = el("span", "widget-hint");
+    info.append(view.nowName, view.nowStatus);
+
+    view.playBtn = widgetButton("▶", () => {
+      const on = !widgetValue(entry, "on");
+      if (on) audio.play().catch(() => {});
+      setWidget(entry, { on });
+    }, "primary radio-play");
+
+    view.muteBtn = widgetButton("🔊", () => {
+      view.localMuted = !view.localMuted;
+      renderDisplay(entry.id);
+    });
+    view.muteBtn.title = "Tirar o som só aqui";
+
+    const range = el("input");
+    range.type = "range";
+    range.min = "0";
+    range.max = "100";
+    range.value = view.volume;
+    range.title = "Volume do rádio (só aqui)";
+    range.setAttribute("aria-label", range.title);
+    range.oninput = () => {
+      view.volume = Number(range.value);
+      view.localMuted = false;
+      storageSet(RADIO_VOLUME_KEY, view.volume);
+      renderDisplay(entry.id);
+    };
+
+    now.append(view.nowIcon, info, view.playBtn, view.muteBtn, range);
+
+    view.tapBtn = widgetButton("🔊 Toque para ouvir o rádio", () => {
+      view.needsTap = false;
+      audio.play().catch(() => {});
+      renderDisplay(entry.id);
+    }, "primary radio-tap");
+
+    // Procurar: gêneros, nome ou link.
+    const search = el("form", "radio-search");
+    const input = el("input");
+    input.type = "search";
+    input.placeholder = "Procurar rádio (nome) ou colar o link do stream";
+    input.setAttribute("aria-label", "Procurar rádio");
+    const country = el("select");
+    country.title = "País";
+    country.append(new Option("🌎 Todas", ""), new Option("🇧🇷 Brasil", "BR"));
+    country.onchange = () => view.query && searchRadios(entry, view, view.query);
+    search.append(input, country);
+    search.onsubmit = event => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (/^https:\/\//i.test(text)) {
+        const url = cleanSiteUrl(text);
+        if (!url) return toast("📻 Esse link não dá para tocar.");
+        input.value = "";
+        return tuneRadio(entry, view, { name: new URL(url).hostname, url, icon: "", tags: "link" });
+      }
+      if (text) searchRadios(entry, view, { name: text });
+    };
+    view.country = country;
+
+    const genres = el("div", "games-cats radio-genres");
+    view.genreButtons = RADIO_GENRES.map(([tag, label]) => {
+      const button = widgetButton(label, () => searchRadios(entry, view, { tag }));
+      button.dataset.tag = tag;
+      return button;
+    });
+    genres.append(...view.genreButtons);
+
+    view.results = el("div", "radio-results widget-scroll");
+    view.searchStatus = el("div", "widget-hint radio-status");
+
+    view.box.append(now, view.tapBtn, search, genres, view.searchStatus, view.results);
+
+    view.widgetCleanup = () => {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    };
+
+    searchRadios(entry, view, { tag: "lofi" });
+
+  }
+
+  function tuneRadio(entry, view, station) {
+    // Ainda no toque: o navegador deixa começar a tocar com som.
+    view.audio.src = station.url;
+    view.audio.play().catch(() => {});
+    view.error = null;
+    setWidget(entry, { station, on: true });
+  }
+
+  async function searchRadios(entry, view, query) {
+
+    view.query = query;
+    const ticket = view.searchTicket = (view.searchTicket || 0) + 1;
+
+    for (const button of view.genreButtons) button.classList.toggle("active", button.dataset.tag === query.tag);
+
+    const params = new URLSearchParams({ limit: "60", hidebroken: "true", order: "clickcount", reverse: "true", is_https: "true", ...query });
+    if (view.country.value) params.set("countrycode", view.country.value);
+
+    view.searchStatus.textContent = "⏳ Procurando rádios…";
+
+    let stations = [];
+
+    try {
+      const response = await fetch(RADIO_API + "?" + params);
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      stations = (await response.json()).filter(radioPlayable);
+    } catch (error) {
+      if (ticket !== view.searchTicket) return;
+      log("Erro ao procurar rádios: " + error.message);
+      view.searchStatus.textContent = "⚠️ Não foi possível procurar rádios agora.";
+      view.results.replaceChildren();
+      return;
+    }
+
+    if (ticket !== view.searchTicket) return;
+
+    // Uma de cada endereço (o catálogo repete bastante).
+    const seen = new Set();
+    stations = stations.filter(station => !seen.has(station.url_resolved) && seen.add(station.url_resolved)).slice(0, 40);
+
+    view.searchStatus.textContent = stations.length ? "Toque numa rádio: toca para todos." : "Nenhuma rádio encontrada.";
+
+    view.results.replaceChildren(...stations.map(station => {
+
+      const item = el("button", "radio-item");
+      item.type = "button";
+
+      const icon = el("img");
+      icon.alt = "";
+      icon.loading = "lazy";
+      icon.referrerPolicy = "no-referrer";
+      if (station.favicon?.startsWith("https://")) icon.src = station.favicon;
+      else icon.hidden = true;
+      icon.onerror = () => { icon.hidden = true; };
+
+      const text = el("span", "radio-item-text");
+      text.append(el("strong", "", cleanText(station.name, 120)), el("span", "", [station.countrycode, cleanText(station.tags, 60).replace(/,/g, ", ")].filter(Boolean).join(" · ")));
+
+      item.append(icon, text);
+      item.dataset.url = station.url_resolved;
+      item.onclick = () => tuneRadio(entry, view, {
+        name: cleanText(station.name, 120),
+        url: station.url_resolved,
+        icon: station.favicon?.startsWith("https://") ? station.favicon : "",
+        tags: cleanText(station.tags, 100)
+      });
+
+      return item;
+
+    }));
+
+    renderDisplay(entry.id);
+
+  }
+
+  function renderRadioWidget(entry, view) {
+
+    const station = widgetValue(entry, "station");
+    const on = !!widgetValue(entry, "on") && !!station;
+    const audio = view.audio;
+
+    // Trocou a rádio (ou ligou/desligou) para todos.
+    if (station && audio.getAttribute("src") !== station.url) {
+      audio.src = station.url;
+      view.error = null;
+    }
+
+    if (on && audio.paused && !view.error && !view.needsTap) {
+      view.loading = true;
+      audio.play().catch(error => {
+        if (error.name === "NotAllowedError") view.needsTap = true;
+        view.loading = false;
+        renderDisplay(entry.id);
+      });
+    } else if (!on && !audio.paused) {
+      audio.pause();
+    }
+
+    audio.volume = view.volume / 100;
+    audio.muted = view.localMuted || !session.speakerOn;
+
+    view.nowName.textContent = station ? station.name : "Nenhuma rádio";
+    view.nowIcon.hidden = !station?.icon;
+    if (station?.icon && view.nowIcon.getAttribute("src") !== station.icon) view.nowIcon.src = station.icon;
+
+    view.nowStatus.textContent = !station ? "Escolha uma aí embaixo: toca para todos na sala."
+      : view.error ? view.error
+      : !on ? "⏸ Parado para todos"
+      : view.needsTap ? "O navegador pediu um toque para tocar"
+      : view.loading ? "⏳ Conectando…"
+      : !session.speakerOn ? "🔇 Seu som está desligado"
+      : "🎶 Tocando para todos" + (station.tags ? " · " + station.tags.split(",").slice(0, 3).join(", ") : "");
+
+    view.playBtn.textContent = on ? "⏸" : "▶";
+    view.playBtn.title = on ? "Parar para todos" : "Tocar para todos";
+    view.playBtn.disabled = !station;
+
+    const silent = view.localMuted || view.volume === 0;
+    view.muteBtn.textContent = silent ? "🔇" : "🔊";
+    view.muteBtn.title = silent ? "Ligar o som (só aqui)" : "Tirar o som (só aqui)";
+
+    view.tapBtn.hidden = !(on && view.needsTap);
+
+    for (const item of view.results.children) item.classList.toggle("active", item.dataset.url === station?.url);
+
+  }
+
+  function renderRadios() {
+    for (const entry of session?.displays.values() || []) if (entry.kind === "radio") renderDisplay(entry.id);
+  }
+
+
+  /* ---- reações flutuantes ---- */
+
+  /*
+   * Um emoji sobe pela tela de todos (com o nome de quem mandou).
+   * { type: "react", e } pelo canal de controle; só os da lista valem,
+   * e cada pessoa tem um limite por segundo (para ninguém inundar a tela).
+   */
+
+  const REACTIONS = ["👍", "👏", "😂", "❤️", "🔥", "🎉", "😮", "🤔", "👀", "🙏", "💯", "😢"];
+  const REACT_BURST = 8;
+  const REACT_WINDOW_MS = 2000;
+  const REACT_ON_SCREEN = 40;
+
+  $("reactPicker").replaceChildren(...REACTIONS.map(emoji => {
+    const button = el("button", "", emoji);
+    button.type = "button";
+    button.onclick = () => sendReaction(emoji);
+    return button;
+  }));
+
+  $("reactBtn").onclick = event => {
+    event.stopPropagation();
+    toggleReactPicker();
+  };
+
+  function toggleReactPicker(open = $("reactPicker").classList.contains("hidden")) {
+    show("reactPicker", open);
+    $("reactBtn").classList.toggle("on", open);
+    if (!open) return;
+    const button = $("reactBtn").getBoundingClientRect();
+    const picker = $("reactPicker");
+    picker.style.left = clamp(button.left + button.width / 2 - picker.offsetWidth / 2, 8, innerWidth - picker.offsetWidth - 8) + "px";
+    picker.style.bottom = innerHeight - button.top + 8 + "px";
+  }
+
+  document.addEventListener("pointerdown", event => {
+    if (!event.target.closest?.("#reactPicker, #reactBtn")) toggleReactPicker(false);
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") toggleReactPicker(false);
+  });
+
+  function sendReaction(emoji) {
+    if (!session || !allowReaction(me)) return;
+    floatReaction(me.id, "você", emoji);
+    send({ type: "react", e: emoji });
+  }
+
+  function allowReaction(who) {
+    const now = Date.now();
+    who.reactTimes = (who.reactTimes || []).filter(time => now - time < REACT_WINDOW_MS);
+    if (who.reactTimes.length >= REACT_BURST) return false;
+    who.reactTimes.push(now);
+    return true;
+  }
+
+  function receiveReaction(peer, message) {
+    if (!REACTIONS.includes(message.e) || !allowReaction(peer)) return;
+    floatReaction(peer.id, peerLabel(peer), message.e);
+  }
+
+  function floatReaction(id, name, emoji) {
+
+    const layer = $("reactLayer");
+
+    if (layer.childElementCount >= REACT_ON_SCREEN) layer.firstElementChild.remove();
+
+    const item = el("div", "react-float");
+    item.style.left = (8 + Math.random() * 78) + "%";
+    item.style.setProperty("--drift", (Math.random() * 80 - 40).toFixed(0) + "px");
+    item.style.setProperty("--person", personColor(id));
+
+    item.append(el("span", "react-emoji", emoji), el("span", "react-name", name));
+    item.addEventListener("animationend", () => item.remove());
+
+    layer.append(item);
+
+  }
+
+
   /* ---- telas compartilhadas ---- */
 
   // Uma janela por pessoa compartilhando (inclusive eu: a prévia do que
@@ -10853,7 +12728,7 @@
     if (view.kind === "board") return view.canvas.getBoundingClientRect();
     if (view.kind === "display") return imageContentRect(view);
     if (view.kind === "site" || view.kind === "youtube") return siteContentRect(view);
-    if (view.kind === "code") return view.body.getBoundingClientRect();
+    if (view.kind === "code" || WIDGETS[view.kind]) return view.body.getBoundingClientRect();
     return videoContentRect(view.video);
 
   }
