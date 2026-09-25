@@ -1742,6 +1742,9 @@
     <button id="screenBtn" class="ctl hidden" disabled>
       <span class="ic">🖥️</span><span id="screenLabel">Compartilhar tela</span>
     </button>
+    <button id="shareAudioBtn" class="ctl hidden" disabled title="Manda o som de uma guia (ou do computador) sem mandar a imagem">
+      <span class="ic">🎵</span><span id="shareAudioLabel">Compartilhar áudio</span>
+    </button>
     <button id="leaveBtn" class="ctl danger">
       <span class="ic">✕</span><span>Desconectar</span>
     </button>
@@ -1916,6 +1919,13 @@
           tela do computador.
         </li>
         <li>
+          <strong>Compartilhar áudio</strong> usa a mesma janela de escolha,
+          mas só o som segue: o vídeo é descartado na hora. Vai por um segundo
+          canal de áudio, separado do microfone. O som de uma guia funciona no
+          Chrome e no Edge; o do computador inteiro, onde o navegador oferece
+          (Windows, por exemplo). Safari e Firefox não capturam áudio assim.
+        </li>
+        <li>
           Os <strong>traços do quadro</strong> vão como coordenadas de 0 a 1.
           Assim o desenho fica igual em telas de tamanhos diferentes.
         </li>
@@ -2002,7 +2012,8 @@
    * pelo id do aparelho:
    *
    *   { id, name, role, pairId, channel, pc, dc, connected, closed,
-   *     audioTransceiver, videoTransceiver, audioReady, audio,
+   *     audioTransceiver, videoTransceiver, shareAudioTransceiver,
+   *     audioReady, audio, shareAudio,
    *     videoStream, remote, reconnect }
    *
    * role é o papel NESTA conexão: "host" (aceitou o pedido e faz a
@@ -2101,10 +2112,12 @@
       closed: false,
       audioTransceiver: null,
       videoTransceiver: null,
+      shareAudioTransceiver: null, // 2º canal de áudio: som compartilhado (sem vídeo)
       audioReady: false,
-      audio: null,            // <audio> com o som dele
+      audio: null,            // <audio> com o microfone dele
+      shareAudio: null,       // <audio> com o áudio que ele compartilha
       videoStream: null,      // tela dele, quando compartilha
-      remote: { known: false, mic: false, speaker: true, screen: false, device: null, name: "" },
+      remote: { known: false, mic: false, speaker: true, screen: false, audioShare: false, device: null, name: "" },
       reconnect: null         // { startedAt, giveUp } enquanto a conexão está caída
     };
 
@@ -2143,9 +2156,10 @@
       peer.dc.close();
     }
 
-    if (peer.audio) {
-      peer.audio.srcObject = null;
-      peer.audio.remove();
+    for (const audio of [peer.audio, peer.shareAudio]) {
+      if (!audio) continue;
+      audio.srcObject = null;
+      audio.remove();
     }
 
     if (peer.pc) {
@@ -2304,6 +2318,10 @@
    * disso, ligar/desligar o microfone é só trocar a trilha
    * (replaceTrack), sem negociar de novo.
    *
+   * Áudio compartilhado (som de uma guia ou do computador, sem a
+   * imagem): um segundo canal de áudio, separado do microfone, criado
+   * na mesma renegociação.
+   *
    * Arquivos: cada arquivo aceito vai num DataChannel próprio
    * ("file:<id>"), em pedaços, com controle de fluxo.
    * ============================================================
@@ -2374,6 +2392,7 @@
       stage: "board",         // PC: o que aparece à esquerda (board | screen)
       unread: { chat: 0, board: 0, screen: 0 },
       screenTrack: null,
+      shareAudioTrack: null,  // áudio que estou compartilhando (sem vídeo)
       color: room ? colorFor(me.id) : role === "host" ? BOARD_COLORS[1] : BOARD_COLORS[2],
       width: BOARD_WIDTHS.thin,
       boardMode: "edit",      // "edit" (desenha) | "view" (só olha)
@@ -2405,6 +2424,7 @@
     $("sessionView").classList.remove("has-screen");
     show("remoteScreenPill", false);
     show("screenBtn", CAN_SHARE_SCREEN);
+    show("shareAudioBtn", CAN_SHARE_SCREEN);
     renderSwatches();
     renderBoardMode();
     renderLocalControls();
@@ -2442,17 +2462,24 @@
         return;
       }
 
-      log(`Áudio de ${peerLabel(peer)} recebido.`);
+      // O 1º canal de áudio é o microfone; o 2º, o áudio compartilhado.
+      const audioTransceivers = pc.getTransceivers()
+        .filter(transceiver => transceiver.receiver.track?.kind === "audio");
+      const slot = audioTransceivers.indexOf(event.transceiver) === 1 ? "shareAudio" : "audio";
 
-      if (!peer.audio) {
-        peer.audio = document.createElement("audio");
-        peer.audio.autoplay = true;
-        peer.audio.playsInline = true;
-        $("remoteAudios").appendChild(peer.audio);
+      log(slot === "shareAudio"
+        ? `Canal do áudio compartilhado de ${peerLabel(peer)} recebido.`
+        : `Áudio de ${peerLabel(peer)} recebido.`);
+
+      if (!peer[slot]) {
+        peer[slot] = document.createElement("audio");
+        peer[slot].autoplay = true;
+        peer[slot].playsInline = true;
+        $("remoteAudios").appendChild(peer[slot]);
       }
 
-      peer.audio.srcObject = new MediaStream([event.track]);
-      peer.audio.muted = !session.speakerOn;
+      peer[slot].srcObject = new MediaStream([event.track]);
+      peer[slot].muted = !session.speakerOn;
       playRemoteAudio();
 
     };
@@ -2542,6 +2569,7 @@
 
     session.micTrack?.stop();
     session.screenTrack?.stop();
+    session.shareAudioTrack?.stop();
     session.objectUrls.forEach(url => URL.revokeObjectURL(url));
 
     $("screenVideo").srcObject = null;
@@ -2622,7 +2650,7 @@
 
   // Qualquer toque na sessão libera o áudio bloqueado pelo navegador.
   $("sessionView").addEventListener("pointerdown", () => {
-    if (connectedPeers().some(peer => peer.audio?.srcObject && peer.audio.paused)) {
+    if (remoteAudios().some(audio => audio.paused)) {
       playRemoteAudio();
     }
   });
@@ -3168,6 +3196,10 @@
     peer.videoTransceiver =
       pc.addTransceiver("video", { direction: "sendrecv" });
 
+    // Áudio compartilhado (sem vídeo): um segundo canal de áudio.
+    peer.shareAudioTransceiver =
+      pc.addTransceiver("audio", { direction: "sendrecv" });
+
     await pc.setLocalDescription(await pc.createOffer());
 
     sendTo(peer, { type: "sdp", description: pc.localDescription.toJSON() });
@@ -3188,12 +3220,17 @@
       const transceiverOf = kind => pc.getTransceivers()
         .find(transceiver => transceiver.receiver.track?.kind === kind);
 
-      peer.audioTransceiver = transceiverOf("audio");
+      const audioTransceivers = pc.getTransceivers()
+        .filter(transceiver => transceiver.receiver.track?.kind === "audio");
+
+      peer.audioTransceiver = audioTransceivers[0];
       peer.videoTransceiver = transceiverOf("video");
+      peer.shareAudioTransceiver = audioTransceivers[1] || null;
 
       peer.audioTransceiver.direction = "sendrecv";
 
       if (peer.videoTransceiver) peer.videoTransceiver.direction = "sendrecv";
+      if (peer.shareAudioTransceiver) peer.shareAudioTransceiver.direction = "sendrecv";
 
       await pc.setLocalDescription(await pc.createAnswer());
 
@@ -3205,7 +3242,7 @@
 
     peer.audioReady = true;
 
-    // Microfone ou tela já ligados (por causa de outra pessoa): manda para este também.
+    // Microfone, tela ou áudio já ligados (por causa de outra pessoa): manda para este também.
     await applyLocalTracks(peer);
 
     renderLocalControls();
@@ -3230,20 +3267,42 @@
 
     return Promise.all([
       peer.audioTransceiver.sender.replaceTrack(session.micTrack),
-      peer.videoTransceiver?.sender.replaceTrack(session.screenTrack)
+      peer.videoTransceiver?.sender.replaceTrack(session.screenTrack),
+      setShareAudio(peer.shareAudioTransceiver, session.shareAudioTrack)
     ]).catch(error => log("Erro ao trocar a trilha: " + error.message));
 
   }
 
-  // Troca a trilha do microfone ou da tela em todas as conexões.
+  // Troca a trilha em todas as conexões.
+  // kind: "audio" (microfone) | "video" (tela) | "shareAudio" (áudio compartilhado)
   function replaceTrackEverywhere(kind, track) {
 
     return Promise.all(connectedPeers()
       .filter(peer => peer.audioReady)
       .map(peer => {
+        if (kind === "shareAudio") return setShareAudio(peer.shareAudioTransceiver, track);
         const transceiver = kind === "audio" ? peer.audioTransceiver : peer.videoTransceiver;
         return transceiver?.sender.replaceTrack(track);
       }));
+
+  }
+
+  async function setShareAudio(transceiver, track) {
+
+    if (!transceiver) return;
+
+    await transceiver.sender.replaceTrack(track);
+
+    if (!track) return;
+
+    // Mais qualidade que o padrão (pensado para voz).
+    try {
+      const parameters = transceiver.sender.getParameters();
+      if (parameters.encodings?.[0]) {
+        parameters.encodings[0].maxBitrate = 128000;
+        await transceiver.sender.setParameters(parameters);
+      }
+    } catch {}
 
   }
 
@@ -3314,7 +3373,7 @@
     if (!session) return;
 
     session.speakerOn = !session.speakerOn;
-    peers.forEach(peer => { if (peer.audio) peer.audio.muted = !session.speakerOn; });
+    remoteAudios(true).forEach(audio => { audio.muted = !session.speakerOn; });
 
     if (session.speakerOn) playRemoteAudio();
 
@@ -3326,11 +3385,16 @@
   $("unlockAudioBtn").onclick = playRemoteAudio;
 
   // O navegador pode bloquear som que começa sem um toque do usuário.
+  // Microfone e áudio compartilhado de cada um (os que já chegaram).
+  // all: também de quem ainda está conectando.
+  const remoteAudios = (all = false) =>
+    (all ? [...peers.values()] : connectedPeers())
+      .flatMap(peer => [peer.audio, peer.shareAudio])
+      .filter(audio => audio?.srcObject);
+
   function playRemoteAudio() {
 
-    const audios = connectedPeers()
-      .map(peer => peer.audio)
-      .filter(audio => audio?.srcObject);
+    const audios = remoteAudios();
 
     if (!audios.length) return;
 
@@ -3347,7 +3411,8 @@
       type: "state",
       mic: !!session.micTrack,
       speaker: session.speakerOn,
-      screen: !!session.screenTrack
+      screen: !!session.screenTrack,
+      audioShare: !!session.shareAudioTrack
     };
 
     if (peer) sendTo(peer, message);
@@ -3380,9 +3445,15 @@
     $("screenBtn").classList.toggle("on", sharing);
     $("screenLabel").textContent = sharing ? "Parar de compartilhar" : "Compartilhar tela";
 
+    const sharingAudio = !!session.shareAudioTrack;
+
+    $("shareAudioBtn").disabled = !canShareScreen();
+    $("shareAudioBtn").classList.toggle("on", sharingAudio);
+    $("shareAudioLabel").textContent = sharingAudio ? "Parar o áudio" : "Compartilhar áudio";
+
   }
 
-  function handleRemoteState(peer, { mic, speaker, screen = false }) {
+  function handleRemoteState(peer, { mic, speaker, screen = false, audioShare = false }) {
 
     const remote = peer.remote;
     const who = peerLabel(peer);
@@ -3417,9 +3488,19 @@
       toast(text);
     }
 
+    // Áudio compartilhado: avisa sempre que muda (também no estado inicial).
+    if (audioShare !== remote.audioShare) {
+      const text = audioShare
+        ? `🎵 ${who} começou a compartilhar áudio`
+        : `🎵 ${who} parou de compartilhar áudio`;
+      addNote(text);
+      toast(text);
+    }
+
     remote.known = true;
     remote.mic = mic;
     remote.speaker = speaker;
+    remote.audioShare = audioShare;
 
     const screenChanged = screen !== remote.screen;
     remote.screen = screen;
@@ -3471,14 +3552,18 @@
           pill(speaker ? "🔊 Ouvindo você" : "🔇 Não está ouvindo você", speaker ? "on" : "warn")
         );
 
+        if (peer.remote.audioShare) container.append(pill("🎵 Compartilhando áudio", "on"));
+
       } else {
 
         micPill = pill(
-          (mic ? "🎙️ " : "🤐 ") + peerLabel(peer) + (speaker ? "" : " · 🔇 sem som"),
+          (mic ? "🎙️ " : "🤐 ") + peerLabel(peer) +
+            (peer.remote.audioShare ? " · 🎵" : "") + (speaker ? "" : " · 🔇 sem som"),
           speaker ? (mic ? "on" : "") : "warn"
         );
 
         micPill.title = (mic ? "Microfone ligado" : "Microfone desligado") +
+          (peer.remote.audioShare ? ", compartilhando áudio" : "") +
           (speaker ? ", ouvindo" : ", com o som desligado (não ouve ninguém)");
 
         container.append(micPill);
@@ -3538,6 +3623,91 @@
     $("micBtn").classList.toggle(
       "speaking", !!session.micTrack && localLevel > SPEAKING_LEVEL
     );
+
+  }
+
+
+  /* ---------------- compartilhar áudio (sem vídeo) ---------------- */
+
+  // O getDisplayMedia não aceita pedir só áudio (o Chrome exige vídeo):
+  // pede os dois, descarta o vídeo na hora e manda só o áudio, para
+  // todos, num segundo canal de áudio (separado do microfone). O áudio
+  // vem de uma guia ("Compartilhar áudio da guia") em qualquer sistema,
+  // ou do computador inteiro onde o Chrome oferece (Windows, ChromeOS).
+  $("shareAudioBtn").onclick = async () => {
+
+    if (!session || !canShareScreen()) return;
+
+    if (session.shareAudioTrack) {
+      stopAudioShare();
+      return;
+    }
+
+    try {
+
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        // Música e vídeo: sem os filtros feitos para voz.
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        systemAudio: "include"
+      });
+
+      stream.getVideoTracks().forEach(track => track.stop());
+
+      const track = stream.getAudioTracks()[0];
+
+      if (!track) {
+        toast("🎵 Nenhum áudio veio junto. Escolha uma guia e marque “Compartilhar áudio da guia”.");
+        return;
+      }
+
+      if (!session) {
+        track.stop();
+        return;
+      }
+
+      track.contentHint = "music";
+
+      // "Parar compartilhamento" do próprio navegador.
+      track.onended = () => stopAudioShare();
+
+      session.shareAudioTrack = track;
+      await replaceTrackEverywhere("shareAudio", track);
+
+      log("Compartilhando áudio (sem vídeo).");
+
+    } catch (error) {
+
+      // NotAllowedError: a pessoa fechou a janela de escolha.
+      if (error.name !== "NotAllowedError") {
+        log("Erro ao compartilhar áudio: " + error.message);
+        toast("🎵 Não foi possível compartilhar o áudio: " + error.message);
+      }
+      return;
+
+    }
+
+    renderLocalControls();
+    sendState();
+
+  };
+
+  async function stopAudioShare() {
+
+    const track = session?.shareAudioTrack;
+
+    if (!track) return;
+
+    session.shareAudioTrack = null;
+    track.onended = null;
+    track.stop();
+
+    await replaceTrackEverywhere("shareAudio", null).catch(() => {});
+
+    log("Parou de compartilhar áudio.");
+
+    renderLocalControls();
+    sendState();
 
   }
 
