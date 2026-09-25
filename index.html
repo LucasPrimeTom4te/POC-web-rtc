@@ -4776,11 +4776,17 @@
    * ============================================================
    */
 
+  // Os servidores ICE vêm de /api/config (com TURN, se configurado na
+  // Vercel); este é só o padrão até ela responder.
   const RTC_CONFIG = {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" }
     ]
   };
+
+  // Sem TURN, quem está atrás de NAT restrito (4G, rede de empresa) não
+  // conecta com parte da sala.
+  let hasTurn = false;
 
   // Conexão caiu durante a sessão: por quanto tempo esperar ela voltar.
   const RECONNECT_GIVE_UP_S = 60;
@@ -14123,7 +14129,11 @@
         throw new Error("a biblioteca do Supabase não carregou (sem internet?)");
       }
 
-      const { url, anonKey } = await loadConfig();
+      const { url, anonKey, iceServers, turn } = await loadConfig();
+
+      if (Array.isArray(iceServers) && iceServers.length) RTC_CONFIG.iceServers = iceServers;
+      hasTurn = turn === true;
+      log(hasTurn ? "Servidor TURN configurado." : "Sem servidor TURN: redes restritas podem não conectar.");
 
       client = supabase.createClient(url, anonKey);
 
@@ -14751,6 +14761,9 @@
       roomRequests.delete(peer.pairId);
     }
 
+    room?.retries.delete(peer.id);
+    logRoute(peer);
+
     const auto = pending?.pairId === peer.pairId && !!pending.auto;
 
     if (pending?.pairId === peer.pairId) {
@@ -14780,6 +14793,20 @@
         : "⚡ O outro aparelho aceitou automaticamente (“Sempre aceitar”).");
     }
 
+  }
+
+  // Por onde a conexão passa: direto (host/srflx) ou repassada pelo TURN (relay).
+  async function logRoute(peer) {
+    try {
+      const stats = await peer.pc.getStats();
+      for (const report of stats.values()) {
+        if (report.type !== "candidate-pair" || !report.nominated || report.state !== "succeeded") continue;
+        const local = stats.get(report.localCandidateId);
+        const remote = stats.get(report.remoteCandidateId);
+        log(`Caminho com ${peerLabel(peer)}: ${local?.candidateType} ↔ ${remote?.candidateType}`);
+        return;
+      }
+    } catch {}
   }
 
   // O outro saiu (ou a conexão não voltou).
@@ -14912,7 +14939,7 @@
     // attempted: "<id>:<joinedAt>" de quem já pedi (pedir de novo só se ele reentrar).
     // public: modo da sala (quem está há mais tempo decide; veja onRoomSync).
     // Começa pública: quem entrar conecta sem pedir, até o dono mudar.
-    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), public: true, ownerId: null, announced: false };
+    room = { name, channel, joinedAt: Date.now(), attempted: new Set(), retries: new Map(), public: true, ownerId: null, announced: false };
 
     // Sozinho na sala: depois de um tempo, avisa como ela está.
     setTimeout(() => { if (room?.channel === channel) onRoomSync(); }, ROOM_SETTLE_MS + 100);
@@ -15178,7 +15205,7 @@
         break;
 
       case "decline":
-        roomRequestFailed(entry, `${name} recusou a conexão.`);
+        roomRequestFailed(entry, `${name} recusou a conexão.`, { retry: false });
         break;
 
       case "busy":
@@ -15193,7 +15220,11 @@
 
   }
 
-  function roomRequestFailed(entry, text) {
+  // Quantas vezes pedir de novo a quem não conectou (a rede oscilou, um
+  // aviso do Supabase se perdeu). Recusou: não pede de novo.
+  const ROOM_RETRIES = 4;
+
+  function roomRequestFailed(entry, text, { retry = true } = {}) {
 
     if (roomRequests.get(entry.pairId) !== entry) return;
 
@@ -15206,8 +15237,27 @@
 
     log("Sala: " + text);
 
+    // Quem pediu (chegou depois) pede de novo, se ele ainda estiver na sala.
+    const tries = room?.retries.get(entry.peer.id) || 0;
+    const again = retry && entry.role === "guest" && !!room && tries < ROOM_RETRIES;
+
+    if (again) {
+      room.retries.set(entry.peer.id, tries + 1);
+      const current = room;
+      setTimeout(() => {
+        if (room !== current || peers.get(entry.peer.id)?.connected) return;
+        for (const key of room.attempted) {
+          if (key.startsWith(entry.peer.id + ":")) room.attempted.delete(key);
+        }
+        onRoomSync();
+      }, 3000 * (tries + 1));
+    }
+
     if (session) {
-      addNote("⚠️ " + text);
+      const hint = retry && !hasTurn
+        ? " A rede de um de vocês pode estar bloqueando a conexão direta (falta um servidor TURN)."
+        : "";
+      if (!again) addNote("⚠️ " + text + hint);
       renderRemoteState();
     }
 
