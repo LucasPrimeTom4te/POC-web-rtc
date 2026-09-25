@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sala": {
+      "command": "node",
+      "args": ["tools/room-mcp/server.mjs"]
+    }
+  }
+}
