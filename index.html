@@ -1148,6 +1148,12 @@
       display: none;
     }
 
+    /* Janela fora da vista: o navegador não pinta (nem o que tem dentro). */
+    .win {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 300px;
+    }
+
     .win-head .bubble {
       display: none;
       font-size: calc(20px * var(--iz, 1));
@@ -5490,13 +5496,29 @@
       `[${new Date().toLocaleTimeString()}] ${message}`;
 
     element.appendChild(line);
-    element.scrollTop = element.scrollHeight;
+    // Só as últimas LOG_KEEP linhas ficam na página (antes crescia sem fim).
+    while (element.childElementCount > LOG_KEEP) element.firstElementChild.remove();
+    // Rolar força o navegador a recalcular o layout: só com o log aberto.
+    if (element.parentElement.open) element.scrollTop = element.scrollHeight;
 
     logLines.push(line.textContent);
     if (logLines.length > LOG_KEEP) logLines.splice(0, logLines.length - LOG_KEEP);
-    logListeners.forEach(listener => { try { listener(); } catch {} });
+    scheduleLogListeners();
 
     console.log(message);
+  }
+
+  // Várias linhas de uma vez (conectando, por exemplo): o card de erros
+  // redesenha uma vez só, no próximo quadro de tela.
+  let logListenersScheduled = false;
+
+  function scheduleLogListeners() {
+    if (logListenersScheduled || !logListeners.size) return;
+    logListenersScheduled = true;
+    requestAnimationFrame(() => {
+      logListenersScheduled = false;
+      logListeners.forEach(listener => { try { listener(); } catch {} });
+    });
   }
 
 
@@ -6067,7 +6089,16 @@
 
   // Para todos na sessão.
   function send(message) {
+    markRoomDirty(message);
     connectedPeers().forEach(peer => sendTo(peer, message));
+  }
+
+  // Mudou algo que a sala guarda (quadro, chat, janelas…): o próximo
+  // saveRoomMemory grava. O que é só do momento não conta.
+  const ROOM_NOISE = new Set(["cursor", "ping", "react", "mesh", "state", "transcript-live", "hello", "bye"]);
+
+  function markRoomDirty(message) {
+    if (session?.room && !ROOM_NOISE.has(message.type) && !/^(bridge|relay)/.test(message.type)) session.roomDirty = true;
   }
 
   function formatSize(bytes) {
@@ -6189,7 +6220,7 @@
     keepScreenOn();
     requestAnimationFrame(layoutWorkspace);
 
-    session.statsTimer = setInterval(updateAudioLevels, 250);
+    session.statsTimer = setInterval(updateAudioLevels, 500);
     session.roomSaveTimer = setInterval(saveRoomMemory, ROOM_SAVE_MS);
     if (!room) session.paletteTimer = setTimeout(ensurePalette, 2500);
 
@@ -6620,6 +6651,8 @@
 
     if (!session || !peer.connected) return;
 
+    markRoomDirty(message);
+
     switch (message.type) {
 
       case "hello":
@@ -6989,7 +7022,9 @@
 
   function saveRoomMemory() {
 
-    if (!session?.room || !session.roomRestoreChecked) return;
+    if (!session?.room || !session.roomRestoreChecked || !session.roomDirty) return;
+
+    session.roomDirty = false;
 
     const workspace = workspaceSnapshot();
     const hidden = new Set(workspace.displays.filter(item => item.kind === "image").map(item => "display:" + item.id));
@@ -7002,11 +7037,8 @@
 
     const text = JSON.stringify({ saved: Date.now(), ...workspace, chat, strokes });
 
-    if (text === session.roomSaved) return;
-
     try {
       localStorage.setItem(roomMemoryKey(session.room), text);
-      session.roomSaved = text;
     } catch {}
 
   }
@@ -7823,7 +7855,8 @@
   // Nível do som (0–1) pelo getStats: acende quem está falando.
   async function updateAudioLevels() {
 
-    if (!session) return;
+    // getStats é pesado: com a aba escondida ninguém vê quem está falando.
+    if (!session || document.hidden) return;
 
     const current = session;
     const list = connectedPeers().filter(peer => peer.audioReady);
@@ -8094,6 +8127,7 @@
 
       mutedWatch.timer = setInterval(() => {
 
+        if (document.hidden) return;
         if (context.state === "suspended") context.resume().catch(() => {});
 
         analyser.getFloatTimeDomainData(samples);
@@ -8106,7 +8140,8 @@
           mutedWatch.voiced.push(now);
           mutedWatch.lastVoice = now;
         }
-        mutedWatch.voiced = mutedWatch.voiced.filter(time => now - time < MUTED_WINDOW_MS);
+        // Tira do começo o que saiu da janela (sem criar outra lista a cada 100 ms).
+        while (mutedWatch.voiced.length && now - mutedWatch.voiced[0] >= MUTED_WINDOW_MS) mutedWatch.voiced.shift();
 
         const talking = mutedWatch.voiced.length * 100 >= MUTED_TALK_MS;
         const visible = !$("mutedAlert").classList.contains("hidden");
@@ -8556,12 +8591,15 @@
     const key = mine.height + "/" + mine.fps;
     const load = balanceLoad();
 
-    $("autoBalanceHint").textContent = !screenQuality.auto
+    const hint = !screenQuality.auto
       ? "Desligado: as telas ficam na qualidade escolhida acima, com qualquer quantidade de gente."
       : sendLevel(load) || effectiveReceive().height !== screenQuality.receive.height
         ? `Ligado, agora baixando: envio até ${mine.height}p e ${mine.fps} fps` +
           ` (${load.viewers} pessoa${load.viewers === 1 ? "" : "s"}, ${load.receiving} tela${load.receiving === 1 ? "" : "s"} chegando).`
         : "Ligado: com muita gente ou muita coisa aberta, baixa sozinho a qualidade das telas (a que eu envio e a que eu recebo).";
+
+    // A cada 3 s: só mexe na página se o texto mudou.
+    if ($("autoBalanceHint").textContent !== hint) $("autoBalanceHint").textContent = hint;
 
     if (!force && key === balancedSend) return;
 
@@ -9402,6 +9440,21 @@
       if (DESKTOP_LAYOUT.matches && !event.target.closest("button")) bringToFront(id);
     });
 
+    // Fora da vista (content-visibility: auto): o navegador não pinta a
+    // janela; aqui o vídeo da tela pausa e o quadro só redesenha ao voltar.
+    el.addEventListener("contentvisibilityautostatechange", event => {
+      view.offscreen = event.skipped;
+      const video = view.video;
+      if (video && !view.pip && document.pictureInPictureElement !== video) {
+        if (event.skipped) video.pause();
+        else video.play().catch(() => {});
+      }
+      if (!event.skipped && view.boardDirty) {
+        view.boardDirty = false;
+        redrawBoard(view.board);
+      }
+    });
+
     enableWindowDrag(view);
     enableWindowResize(view, handle);
 
@@ -9447,8 +9500,21 @@
 
   }
 
-  new MutationObserver(() => renderWinSwitcher()).observe($("workspace"), { childList: true });
-  new MutationObserver(() => renderWinSwitcher()).observe($("maxLayer"), { childList: true });
+  // Várias mudanças seguidas (abrir, renomear, maximizar…): os chips são
+  // refeitos uma vez só, logo depois.
+  let winSwitcherQueued = false;
+
+  function queueWinSwitcher() {
+    if (winSwitcherQueued) return;
+    winSwitcherQueued = true;
+    queueMicrotask(() => {
+      winSwitcherQueued = false;
+      queueWinSwitcher();
+    });
+  }
+
+  new MutationObserver(queueWinSwitcher).observe($("workspace"), { childList: true });
+  new MutationObserver(queueWinSwitcher).observe($("maxLayer"), { childList: true });
 
   function removeWindow(id) {
 
@@ -9654,7 +9720,7 @@
     if (!view) view = createBoardWindow(entry);
 
     view.label.textContent = "🎨 " + entry.title;
-    renderWinSwitcher();
+    queueWinSwitcher();
 
     return entry;
 
@@ -9978,11 +10044,30 @@
 
   const strokeOrder = (a, b) => a[1].t - b[1].t || (a[0] < b[0] ? -1 : 1);
 
+  // Arrastando uma forma (a minha ou a de outro): redesenha o quadro no
+  // máximo uma vez por quadro de tela, não a cada movimento do mouse.
+  const redrawQueue = new Set();
+
+  function scheduleRedraw(boardId) {
+    if (!redrawQueue.size) requestAnimationFrame(() => {
+      const boards = [...redrawQueue];
+      redrawQueue.clear();
+      boards.forEach(redrawBoard);
+    });
+    redrawQueue.add(boardId);
+  }
+
   function redrawBoard(boardId) {
 
     const view = session?.windows.get("board:" + boardId);
 
     if (!view) return;
+
+    // Fora da vista: desenha quando voltar a aparecer.
+    if (view.offscreen) {
+      view.boardDirty = true;
+      return;
+    }
 
     const size = view.canvas.width;
 
@@ -10168,9 +10253,8 @@
 
   }
 
-  function boardPoint(canvas, event) {
-
-    const rect = canvas.getBoundingClientRect();
+  // rect: o do canvas já lido (vários pontos do mesmo movimento).
+  function boardPoint(canvas, event, rect = canvas.getBoundingClientRect()) {
 
     return [
       +clamp((event.clientX - rect.left) / rect.width, 0, 1).toFixed(4),
@@ -10274,15 +10358,16 @@
 
         stroke.points[1] = boardPoint(canvas, event);
         session.pendingEnd = stroke.points[1];
-        redrawBoard(boardId);
+        scheduleRedraw(boardId);
 
       } else {
 
         const coalesced = event.getCoalescedEvents?.();
         const events = coalesced?.length ? coalesced : [event];
+        const rect = canvas.getBoundingClientRect();
 
         for (const item of events) {
-          const point = boardPoint(canvas, item);
+          const point = boardPoint(canvas, item, rect);
           stroke.points.push(point);
           session.pendingPoints.push(point);
           drawSegment(stroke, stroke.points.length - 1);
@@ -10673,7 +10758,7 @@
 
       if (SHAPES.has(stroke.tool) && isPoint(message.end)) {
         stroke.points[1] = message.end;
-        redrawBoard(stroke.board);
+        scheduleRedraw(stroke.board);
       } else if (Array.isArray(message.points)) {
         for (const point of message.points) {
           if (!isPoint(point)) continue;
@@ -11041,8 +11126,12 @@
     const ownerName = ownerNameOf(entry);
     const image = entry.current && session.images.get(entry.current);
 
+    // As que já passaram por esta janela (o dono pode voltar a qualquer
+    // uma só com um aviso): saem da memória quando a janela fechar.
+    if (entry.current) (entry.seen ||= new Set()).add(entry.current);
+
     view.label.textContent = mine ? "🖼️ Sua imagem" : `🖼️ Imagem de ${ownerName}`;
-    renderWinSwitcher();
+    queueWinSwitcher();
     view.el.style.setProperty("--person", personColor(entry.owner));
 
     if (image) {
@@ -11349,6 +11438,29 @@
 
   }
 
+  // Janela fechou: as imagens (e arquivos de som) dela que nenhuma outra
+  // janela usa saem da memória. Antes ficavam até o fim da sessão.
+  function imagesOf(entry, gallery = session.gallery.get(entry.id) || []) {
+    const ids = new Set([...(entry.seen || []), ...gallery]);
+    if (entry.current) ids.add(entry.current);
+    if (entry.kind === "sounds") soundFiles(entry).forEach(file => ids.add(file));
+    return ids;
+  }
+
+  function releaseImages(entry, gallery) {
+
+    const inUse = new Set();
+    for (const other of session.displays.values()) imagesOf(other).forEach(imageId => inUse.add(imageId));
+
+    for (const imageId of imagesOf(entry, gallery)) {
+      const image = session.images.get(imageId);
+      if (!image || inUse.has(imageId)) continue;
+      URL.revokeObjectURL(image.url);
+      session.images.delete(imageId);
+    }
+
+  }
+
   function closeDisplay(id, fromPeer = null) {
 
     const entry = session.displays.get(id);
@@ -11368,10 +11480,14 @@
     // Transmitindo este site: para.
     if (session.screenFor === id) setVideoTrack(null);
 
+    const gallery = session.gallery.get(id) || [];
+
     session.closedDisplays.add(id);
     session.displays.delete(id);
     session.gallery.delete(id);
     session.layout.delete("display:" + id);
+
+    releaseImages(entry, gallery);
 
     stopSoundsOf(id);
     removeWindow("display:" + id);
@@ -11856,7 +11972,7 @@
     view.overlay.hidden = !message;
     view.overlay.textContent = message;
 
-    renderWinSwitcher();
+    queueWinSwitcher();
 
   }
 
@@ -12917,7 +13033,7 @@
   function renderCode(entry, view) {
 
     view.label.textContent = isMine(entry) ? "💻 Seu código" : `💻 Código de ${ownerNameOf(entry)}`;
-    renderWinSwitcher();
+    queueWinSwitcher();
     view.el.style.setProperty("--person", personColor(entry.owner));
 
     const area = view.area;
@@ -13102,7 +13218,7 @@
 
     view.label.textContent = `${widget.icon} ${widget.name}` + (isMine(entry) ? "" : ` de ${ownerNameOf(entry)}`) + " · " + (widget.label || "todos mexem");
     view.el.style.setProperty("--person", personColor(entry.owner));
-    renderWinSwitcher();
+    queueWinSwitcher();
 
     widget.render(entry, view);
 
