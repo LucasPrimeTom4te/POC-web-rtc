@@ -3721,6 +3721,28 @@
       display: none !important;
     }
 
+    /* A sala inteira na janela flutuante: ocupa tudo. */
+    .room-pip #stageArea {
+      position: fixed;
+      inset: 0;
+      width: auto;
+      height: auto;
+      border-radius: 0;
+    }
+
+    .room-pip-holder {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      margin: 8px;
+      padding: 16px;
+      border: 2px dashed var(--accent);
+      border-radius: 12px;
+      color: var(--muted);
+      text-align: center;
+      cursor: pointer;
+    }
+
     .workspace > .pip-holder {
       position: absolute;
       box-sizing: border-box;
@@ -4585,6 +4607,7 @@
           <button id="zoomResetBtn" title="Voltar a 100% (Ctrl 0)"><span id="zoomLabel">100%</span></button>
           <button id="zoomInBtn" title="Aumentar o zoom (Ctrl +)">+</button>
           <button id="zoomFitBtn" title="Ver tudo (Shift 1)">⤢</button>
+          <button id="roomPipBtn" hidden title="Picture-in-picture: a sala inteira numa janela flutuante (só aqui)">📌</button>
         </div>
       </div>
 
@@ -6057,6 +6080,8 @@
   function endSession() {
 
     if (!session) return;
+
+    roomPip?.close();
 
     quietWindowSounds();
     saveRoomMemory();
@@ -8627,7 +8652,7 @@
   }, true);
 
   // Antes de todo mundo: durante a pinça ninguém mais vê esses dedos.
-  window.addEventListener("pointermove", event => {
+  function stagePointerMove(event) {
 
     if (!session) return;
 
@@ -8648,7 +8673,9 @@
 
     if (gesture.blocked.has(event.pointerId)) event.stopPropagation();
 
-  }, true);
+  }
+
+  window.addEventListener("pointermove", stagePointerMove, true);
 
   function endPointer(event) {
 
@@ -14584,6 +14611,7 @@
 
     if (view.pip) return view.pip.close();
     if (!CAN_DOC_PIP) return toast("📌 Este navegador não abre janelas flutuantes (só Chrome e Edge no computador).");
+    if (roomPip) return toast("📌 A sala inteira já está na janela flutuante (o navegador só deixa uma).");
 
     if (document.fullscreenElement === view.el) await document.exitFullscreen().catch(() => {});
     if (view.el.classList.contains("win-full")) exitWindowFull(view);
@@ -14667,6 +14695,119 @@
       placeWindow(view);
       positionWindow(view);
       setTimeout(() => resizeCanvas(view), 50);
+
+    });
+
+  }
+
+  /* ---- a sala inteira em picture-in-picture ---- */
+
+  /*
+   * 📌 na barra de zoom: a área da sala (#stageArea, com todas as janelas)
+   * vai inteira para uma janela flutuante (Document PiP) e na aba fica um
+   * marcador. Tudo continua o mesmo código daqui: só os eventos que eram
+   * do window/document da aba passam a vir também da flutuante, e o
+   * requestAnimationFrame passa a ser o dela (a aba escondida não anima).
+   */
+
+  let roomPip = null;
+
+  $("roomPipBtn").hidden = !CAN_DOC_PIP;
+  $("roomPipBtn").onclick = () => toggleRoomPip();
+
+  async function toggleRoomPip() {
+
+    if (roomPip) return roomPip.close();
+    if (!CAN_DOC_PIP || !session) return;
+
+    // Só uma flutuante por vez: a de uma janela volta antes.
+    for (const view of session.windows.values()) if (view.pip) view.pip.close();
+
+    const stage = $("stageArea");
+    const rect = stage.getBoundingClientRect();
+    let pip;
+
+    try {
+      pip = await documentPictureInPicture.requestWindow({
+        width: Math.round(clamp(rect.width * 0.6, 360, screen.availWidth * 0.8)),
+        height: Math.round(clamp(rect.height * 0.6, 260, screen.availHeight * 0.8))
+      });
+    } catch (error) {
+      toast("📌 Não foi possível abrir a janela flutuante: " + error.message);
+      return;
+    }
+
+    if (!session) return pip.close();
+
+    for (const node of document.head.querySelectorAll("style, link[rel=stylesheet]")) pip.document.head.append(node.cloneNode(true));
+    pip.document.title = session.room ? `Sala “${session.room}”` : "Sala";
+    pip.document.documentElement.className = document.documentElement.className;
+    pip.document.body.className = "pip-body room-pip";
+
+    // O site transmitido era recortado desta aba: lá não dá.
+    if (session.screenFor) {
+      setVideoTrack(null);
+      toast("🌐 A transmissão do site parou: dentro da janela flutuante ela não funciona.");
+    }
+
+    const holder = document.createElement("div");
+    holder.className = "room-pip-holder";
+    holder.textContent = "📌 A sala está numa janela flutuante · clique para trazer de volta";
+    holder.onclick = () => pip.close();
+    stage.before(holder);
+
+    const menu = $("ctxMenu");
+    pip.document.body.append(stage, menu);
+
+    // Teclado da flutuante -> os atalhos daqui (menos quando está escrevendo).
+    const forward = event => {
+      if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+      const copy = new KeyboardEvent(event.type, event);
+      document.dispatchEvent(copy);
+      if (copy.defaultPrevented) event.preventDefault();
+    };
+    pip.document.addEventListener("keydown", forward);
+    pip.document.addEventListener("keyup", forward);
+    pip.document.addEventListener("pointerdown", event => {
+      if (!event.target.closest?.("#ctxMenu")) closeMenu();
+    }, true);
+    pip.addEventListener("pointermove", stagePointerMove, true);
+    pip.addEventListener("pointerup", endPointer, true);
+    pip.addEventListener("pointercancel", endPointer, true);
+    pip.addEventListener("resize", () => {
+      layoutWorkspace();
+      renderCursors();
+    });
+
+    // A aba fica escondida: as animações usam o relógio da flutuante.
+    const raf = window.requestAnimationFrame;
+    const caf = window.cancelAnimationFrame;
+    window.requestAnimationFrame = callback => pip.requestAnimationFrame(callback);
+    window.cancelAnimationFrame = handle => pip.cancelAnimationFrame(handle);
+
+    roomPip = pip;
+    $("roomPipBtn").title = "Trazer a sala de volta para a aba";
+    setTimeout(() => {
+      layoutWorkspace();
+      session?.windows.forEach(view => { if (view.kind === "board") resizeCanvas(view); });
+    }, 50);
+
+    pip.addEventListener("pagehide", () => {
+
+      window.requestAnimationFrame = raf;
+      window.cancelAnimationFrame = caf;
+
+      holder.replaceWith(stage);
+      document.body.append(menu);
+      closeMenu();
+
+      roomPip = null;
+      $("roomPipBtn").title = "Picture-in-picture: a sala inteira numa janela flutuante (só aqui)";
+
+      setTimeout(() => {
+        layoutWorkspace();
+        session?.windows.forEach(view => { if (view.kind === "board") resizeCanvas(view); });
+      }, 50);
 
     });
 
