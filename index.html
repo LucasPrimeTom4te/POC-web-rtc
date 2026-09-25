@@ -573,8 +573,27 @@
     }
 
     .check input {
+      flex: none;
       width: 20px;
       height: 20px;
+    }
+
+    .checks {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+
+    .check.small {
+      font-size: 13px;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .check.small input {
+      width: 16px;
+      height: 16px;
     }
 
     #rememberBtn {
@@ -1524,7 +1543,8 @@
           <p id="rememberedEmpty" class="muted side-text">
             Nenhum ainda. Ao aceitar uma conexão, marque “Lembrar este
             dispositivo”: depois é só tocar em <strong>Conectar</strong> para
-            mandar um novo pedido (o outro sempre precisa aceitar).
+            mandar um novo pedido. Com “Sempre aceitar”, os pedidos dele
+            conectam sem perguntar.
           </p>
 
         </div>
@@ -1553,10 +1573,16 @@
 
     <p id="requestDetail" class="muted" style="margin:0"></p>
 
-    <label class="check">
-      <input type="checkbox" id="rememberCheck">
-      Lembrar este dispositivo
-    </label>
+    <div class="checks">
+      <label class="check">
+        <input type="checkbox" id="rememberCheck">
+        Lembrar este dispositivo
+      </label>
+      <label class="check">
+        <input type="checkbox" id="autoAcceptCheck">
+        <span>Sempre aceitar deste dispositivo <span class="muted">(conecta sem perguntar)</span></span>
+      </label>
+    </div>
 
     <div class="actions">
       <button id="declineBtn" class="big">Recusar</button>
@@ -1816,8 +1842,16 @@
         </li>
         <li>
           <strong>Lembrar um dispositivo</strong> guarda o id e o nome dele só
-          neste navegador. Depois dá para mandar um pedido novo direto, mas o
-          outro <strong>sempre</strong> precisa aceitar.
+          neste navegador. Depois dá para mandar um pedido novo direto, e o
+          outro precisa aceitar.
+        </li>
+        <li>
+          Com <strong>Sempre aceitar</strong>, os pedidos daquele dispositivo
+          conectam sem perguntar. Nesta prova de conceito o dispositivo é
+          reconhecido só pelo id que ele informa, que não é à prova de
+          falsificação: use apenas com aparelhos seus. Em produção, o certo é
+          fixar a identidade dele (por exemplo, o certificado DTLS) ou exigir
+          login.
         </li>
         <li>
           Nesta prova de conceito os canais do Supabase são públicos: quem
@@ -3895,9 +3929,12 @@
         pending.peer.name = from.name || pending.peer.name;
         clearTimeout(pending.timer);
         pending.timer = setTimeout(connectTimedOut, CONNECT_TIMEOUT_MS);
+        pending.auto = payload.auto === true;
         showPending({
-          icon: "🤝",
-          title: `${peerName(pending.peer)} aceitou!`,
+          icon: pending.auto ? "⚡" : "🤝",
+          title: pending.auto
+            ? `${peerName(pending.peer)} aceitou automaticamente!`
+            : `${peerName(pending.peer)} aceitou!`,
           status: "Abrindo a conexão direta…"
         });
         break;
@@ -3927,6 +3964,14 @@
 
     const remembered = isRemembered(request.from.id);
 
+    // "Sempre aceitar": conecta sem mostrar a pergunta.
+    if (isAutoAccept(request.from.id)) {
+      log("Aceitando automaticamente: " + request.from.name);
+      incoming = { ...request, timer: null };
+      acceptIncoming(true);
+      return;
+    }
+
     incoming = {
       ...request,
       timer: setTimeout(() => declineIncoming(), REQUEST_TIMEOUT_MS)
@@ -3944,6 +3989,7 @@
     ].join(" ").trim();
 
     $("rememberCheck").checked = remembered;
+    $("autoAcceptCheck").checked = false;
 
     show("requestModal");
 
@@ -3974,7 +4020,8 @@
 
   }
 
-  async function acceptIncoming() {
+  // auto: aceito sozinho por "Sempre aceitar" (não mexe nas preferências).
+  async function acceptIncoming(auto = false) {
 
     if (!incoming) return;
 
@@ -3983,18 +4030,26 @@
 
     closeIncoming();
 
-    if ($("rememberCheck").checked) remember(peer);
-    else forget(peer.id);
+    if (!auto) {
+      if ($("rememberCheck").checked) remember(peer, $("autoAcceptCheck").checked);
+      else forget(peer.id);
+    }
 
-    pending = { pairId: request.pairId, peer, role: "host", via: request.via, timer: null, failed: false };
+    pending = { pairId: request.pairId, peer, role: "host", via: request.via, timer: null, failed: false, auto };
     pending.timer = setTimeout(connectTimedOut, CONNECT_TIMEOUT_MS);
 
-    showPending({ icon: "🤝", title: `Conectando com ${peerName(peer)}…`, status: "Abrindo a conexão direta…" });
+    showPending({
+      icon: auto ? "⚡" : "🤝",
+      title: `Conectando com ${peerName(peer)}…`,
+      status: auto
+        ? "Aceito automaticamente (você marcou “Sempre aceitar”)."
+        : "Abrindo a conexão direta…"
+    });
 
     try {
 
       await openPair(request.pairId, "host", peer);
-      await sendToDevice(peer.id, { type: "accept", pairId: request.pairId, from: publicMe() });
+      await sendToDevice(peer.id, { type: "accept", pairId: request.pairId, auto, from: publicMe() });
       await startHostNegotiation();
 
     } catch (error) {
@@ -4130,7 +4185,16 @@
 
   };
 
-  $("acceptBtn").onclick = acceptIncoming;
+  $("acceptBtn").onclick = () => acceptIncoming();
+
+  // "Sempre aceitar" só existe para quem está lembrado.
+  $("autoAcceptCheck").onchange = () => {
+    if ($("autoAcceptCheck").checked) $("rememberCheck").checked = true;
+  };
+
+  $("rememberCheck").onchange = () => {
+    if (!$("rememberCheck").checked) $("autoAcceptCheck").checked = false;
+  };
   $("declineBtn").onclick = declineIncoming;
 
 
@@ -4256,6 +4320,8 @@
 
     currentPeer = { ...pair.peer };
 
+    const auto = !!pending?.auto;
+
     clearTimeout(pending?.timer);
     pending = null;
     show("pendingModal", false);
@@ -4265,6 +4331,12 @@
 
     startSession(role);
     renderRememberButton();
+
+    if (auto) {
+      addNote(role === "host"
+        ? "⚡ Aceito automaticamente: você marcou “Sempre aceitar” para este dispositivo."
+        : "⚡ O outro aparelho aceitou automaticamente (“Sempre aceitar”).");
+    }
 
   }
 
@@ -4494,14 +4566,32 @@
     return loadRemembered().some(item => item.id === id);
   }
 
-  function remember(peer) {
+  // autoAccept omitido: mantém o que já estava.
+  function remember(peer, autoAccept) {
 
-    const list = loadRemembered().filter(item => item.id !== peer.id);
+    const list = loadRemembered();
+    const old = list.find(item => item.id === peer.id);
 
-    list.unshift({ id: peer.id, name: cleanName(peer.name), savedAt: Date.now() });
+    saveRemembered([
+      {
+        id: peer.id,
+        name: cleanName(peer.name) || old?.name || "",
+        savedAt: old?.savedAt || Date.now(),
+        autoAccept: autoAccept ?? old?.autoAccept ?? false
+      },
+      ...list.filter(item => item.id !== peer.id)
+    ]);
 
-    saveRemembered(list);
+  }
 
+  function isAutoAccept(id) {
+    return loadRemembered().some(item => item.id === id && item.autoAccept === true);
+  }
+
+  function setAutoAccept(id, value) {
+    saveRemembered(loadRemembered().map(item =>
+      item.id === id ? { ...item, autoAccept: value } : item
+    ));
   }
 
   function forget(id) {
@@ -4532,7 +4622,17 @@
       date.className = "muted small";
       date.textContent = "Lembrado em " + new Date(item.savedAt).toLocaleDateString();
 
-      info.append(name, date);
+      const auto = document.createElement("label");
+      auto.className = "check small";
+
+      const autoInput = document.createElement("input");
+      autoInput.type = "checkbox";
+      autoInput.checked = item.autoAccept === true;
+      autoInput.onchange = () => setAutoAccept(item.id, autoInput.checked);
+
+      auto.append(autoInput, " Sempre aceitar (conecta sem perguntar)");
+
+      info.append(name, date, auto);
 
       const connect = document.createElement("button");
       connect.className = "primary";
