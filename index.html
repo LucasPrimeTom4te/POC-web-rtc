@@ -499,6 +499,19 @@
       font-size: 16px;
     }
 
+    .s-title-note {
+      font-weight: 400;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Conexão caiu: amarelo piscando enquanto tenta reconectar. */
+    .live-dot.warn {
+      background: var(--warn);
+      box-shadow: 0 0 0 4px rgba(245, 158, 11, .25);
+      animation: pulse 1s infinite;
+    }
+
     .s-sub {
       font-size: 13px;
       color: var(--muted);
@@ -1346,9 +1359,12 @@
   <div class="s-top">
 
     <div class="s-peer">
-      <span class="live-dot"></span>
+      <span id="liveDot" class="live-dot"></span>
       <div>
-        <div class="s-title">Conectado</div>
+        <div class="s-title">
+          <span id="sessionTitle">Conectado</span>
+          <span id="sessionTitleNote" class="s-title-note">(sem um servidor)</span>
+        </div>
         <div id="peerName" class="s-sub">direto com o outro aparelho</div>
       </div>
     </div>
@@ -1607,6 +1623,12 @@
       { urls: "stun:stun.l.google.com:19302" }
     ]
   };
+
+  // Conexão caiu durante a sessão: por quanto tempo esperar ela voltar.
+  const RECONNECT_GIVE_UP_S = 60;
+
+  const CONNECTION_LOST_MESSAGE =
+    "A conexão caiu e não voltou. Para conectar de novo, siga o passo a passo.";
 
   // Tempo máximo esperando o ICE gathering antes de gerar o QR.
   const ICE_GATHERING_TIMEOUT_MS = 4000;
@@ -1998,10 +2020,24 @@
 
     pc.onconnectionstatechange = () => {
 
-      log("Connection state: " + pc.connectionState);
+      const state = pc.connectionState;
 
-      if (pc.connectionState === "failed") {
-        onFailed("Falha na conexão. Os dois aparelhos estão na mesma rede?");
+      log("Connection state: " + state);
+
+      if (state === "failed") {
+
+        if (session) onFailed(CONNECTION_LOST_MESSAGE, true);
+        else onFailed("Falha na conexão. Os dois aparelhos estão na mesma rede?");
+
+      } else if (state === "disconnected") {
+
+        // Oscilação: o próprio WebRTC continua tentando. Só desiste depois.
+        connectionInterrupted(() => onFailed(CONNECTION_LOST_MESSAGE, true));
+
+      } else if (state === "connected") {
+
+        connectionRestored();
+
       }
 
     };
@@ -2375,23 +2411,22 @@
   }
 
   // O celular saiu: volta ao passo 1 com um código novo e avisa.
-  function computerDisconnected() {
+  function computerDisconnected(
+    message = "O celular foi desconectado. Para conectar de novo, siga o passo a passo."
+  ) {
 
     startComputerPairing();
 
-    setStatus(
-      "step1Status",
-      "O celular foi desconectado. Para conectar de novo, siga o passo a passo.",
-      "error"
-    );
+    setStatus("step1Status", message, "error");
     show("step1Status");
 
   }
 
-  function computerFailed(message) {
+  // lost: a conexão caiu durante a sessão e não voltou.
+  function computerFailed(message, lost = false) {
 
     if (session?.role === "host") {
-      computerDisconnected();
+      computerDisconnected(lost ? message : undefined);
       return;
     }
 
@@ -2547,9 +2582,10 @@
     );
   }
 
-  function phoneFailed(message) {
+  // lost: a conexão caiu durante a sessão e não voltou.
+  function phoneFailed(message, lost = false) {
 
-    if (session?.role === "guest") {
+    if (session?.role === "guest" && !lost) {
       message =
         "O computador foi desconectado. Para conectar de novo, toque em Ler código.";
     }
@@ -2812,7 +2848,8 @@
       outgoing: new Map(),
       incoming: new Map(),
       objectUrls: [],
-      statsTimer: null
+      statsTimer: null,
+      reconnect: null         // { startedAt, timer, giveUp } enquanto a conexão está caída
     };
 
     // Interface zerada.
@@ -2822,6 +2859,7 @@
     show("unlockAudioBtn", false);
     show("remoteDrawing", false);
     show("toast", false);
+    renderConnectionState();
     renderSwatches();
     renderLocalControls();
     renderRemoteState();
@@ -2870,6 +2908,7 @@
     if (!session) return;
 
     clearInterval(session.statsTimer);
+    clearInterval(session.reconnect?.timer);
     clearTimeout(session.toastTimer);
     clearTimeout(session.remoteDrawingTimer);
 
@@ -2897,6 +2936,76 @@
     const audio = $("remoteAudio");
     if (audio.srcObject && audio.paused) playRemoteAudio();
   });
+
+
+  /* ---------------- conexão caiu / voltou ---------------- */
+
+  // O WebRTC fica testando o caminho de rede sozinho enquanto está
+  // "disconnected"; se a rede voltar (Wi-Fi oscilou, tela apagou), a
+  // conexão volta com tudo como estava. Aqui só mostramos isso e
+  // desistimos depois de RECONNECT_GIVE_UP_S.
+  function connectionInterrupted(giveUp) {
+
+    if (!session || session.reconnect) return;
+
+    session.reconnect = {
+      startedAt: Date.now(),
+      timer: setInterval(renderConnectionState, 1000),
+      giveUp
+    };
+
+    addNote("⚠️ A conexão caiu. Tentando reconectar…");
+    toast("⚠️ A conexão caiu. Tentando reconectar…");
+
+    renderConnectionState();
+
+  }
+
+  function connectionRestored() {
+
+    if (!session?.reconnect) return;
+
+    clearInterval(session.reconnect.timer);
+    session.reconnect = null;
+
+    addNote("✅ Reconectado!");
+    toast("✅ Reconectado!");
+
+    renderConnectionState();
+
+  }
+
+  function renderConnectionState() {
+
+    if (!session) return;
+
+    const reconnect = session.reconnect;
+
+    if (reconnect) {
+
+      const elapsed = Math.floor((Date.now() - reconnect.startedAt) / 1000);
+
+      if (elapsed >= RECONNECT_GIVE_UP_S) {
+        clearInterval(reconnect.timer);
+        session.reconnect = null;
+        reconnect.giveUp();
+        return;
+      }
+
+      $("sessionTitle").textContent = "Reconectando…";
+      $("sessionTitleNote").textContent =
+        `(tentando há ${elapsed} s, desiste em ${RECONNECT_GIVE_UP_S - elapsed} s)`;
+
+    } else {
+
+      $("sessionTitle").textContent = "Conectado";
+      $("sessionTitleNote").textContent = "(sem um servidor)";
+
+    }
+
+    $("liveDot").classList.toggle("warn", !!reconnect);
+
+  }
 
 
   /* ---------------- mensagens ---------------- */
@@ -3937,9 +4046,9 @@
    * ============================================================
    */
 
-  if (location.hash.startsWith(OFFER_HASH)) {
+  // Aberto pelo QR do computador: responde direto.
+  function handleOfferLink() {
 
-    // Aberto pelo QR do computador: responde direto.
     const link = location.href;
 
     // Tira o offer da barra de endereço (recarregar não reusa um offer velho).
@@ -3953,6 +4062,17 @@
       log("Link inválido: " + error.message);
       phoneFailed("Link inválido. Toque em Ler código e leia de novo.");
     }
+
+  }
+
+  // Página já aberta e o QR lido de novo: só o "#" muda, sem recarregar.
+  window.addEventListener("hashchange", () => {
+    if (location.hash.startsWith(OFFER_HASH)) handleOfferLink();
+  });
+
+  if (location.hash.startsWith(OFFER_HASH)) {
+
+    handleOfferLink();
 
   } else if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
 
