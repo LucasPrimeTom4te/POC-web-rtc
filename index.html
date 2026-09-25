@@ -958,6 +958,12 @@
       background: white;
     }
 
+    /* Altura escolhida no canto (arrastando): larga e alta à vontade. */
+    .win.free-h .win-body {
+      aspect-ratio: auto;
+      height: var(--wh);
+    }
+
     .win-body video,
     .win-body canvas {
       display: block;
@@ -2143,7 +2149,7 @@
     }
 
     /* PC: a barra fica em pé, numa coluna à esquerda da área de trabalho
-       (2 colunas de ícones; o nome aparece ao passar o mouse). */
+       (uma coluna de ícones; o nome aparece ao passar o mouse). */
     @media (min-width: 900px) {
 
       .board-pane {
@@ -2163,8 +2169,11 @@
         margin-left: 10px;
         z-index: 25;
         display: grid;
-        grid-template-columns: repeat(2, 36px);
+        grid-template-columns: 36px;
         gap: 4px;
+        max-height: calc(100% - 10px);
+        overflow-y: auto;
+        scrollbar-width: none;
         padding: 6px;
         border-radius: 14px;
         background: var(--surface);
@@ -2253,11 +2262,15 @@
         max-width: 50vw;
       }
 
-      /* Tela baixa: 3 colunas, para caber em pé. */
-      @media (max-height: 720px) {
-        #boardTools {
-          grid-template-columns: repeat(3, 36px);
-        }
+      /* Ferramentas de desenho, cores, desfazer e modo ficam na janela
+         🖌️ Ferramentas (flutuante): aqui só o que abre janelas. */
+      #boardTools .tray[data-tray="tools"],
+      #boardTools .tray[data-tray="colors"],
+      #boardTools #undoBtn,
+      #boardTools .tool-sep,
+      #boardTools .spacer,
+      #boardTools #boardModeBtn {
+        display: none;
       }
 
     }
@@ -5124,6 +5137,7 @@
 
     session.statsTimer = setInterval(updateAudioLevels, 250);
     session.roomSaveTimer = setInterval(saveRoomMemory, ROOM_SAVE_MS);
+    session.paletteTimer = setTimeout(ensurePalette, 2500);
 
   }
 
@@ -5261,6 +5275,7 @@
     saveRoomMemory();
     clearInterval(session.roomSaveTimer);
     clearInterval(session.statsTimer);
+    clearTimeout(session.paletteTimer);
     clearInterval(session.reconnectTimer);
     clearTimeout(session.toastTimer);
     clearTimeout(session.remoteDrawingTimer);
@@ -6975,6 +6990,7 @@
   const WORK_H = 900;
   const WIN_HEAD_PX = 34;     // barra de título na tela (não muda com o zoom)
   const WIN_MIN_W = 240;      // em unidades do mundo
+  const WIN_MIN_H = 120;
   const WIN_MAX_W = 8000;
   const WORLD_MAX = 100000;   // até onde dá para levar uma janela
   const ZOOM_MIN = 0.1;
@@ -7103,7 +7119,7 @@
   function windowRect(view) {
     const entry = layoutOf(view.id);
     if (entry.min) return { x: entry.x, y: entry.y, w: 48 / session.cam.z, h: 48 / session.cam.z };
-    return { x: entry.x, y: entry.y, w: entry.w, h: headUnits() + entry.w / (view.aspect || 1) };
+    return { x: entry.x, y: entry.y, w: entry.w, h: headUnits() + bodyHeight(view, entry) };
   }
 
   const floatingViews = () =>
@@ -7432,26 +7448,34 @@
   // Onde a janela fica quando ninguém mexeu nela ainda (igual para todos).
   function defaultLayout(id) {
 
-    if (id === "board:" + MAIN_BOARD) return { x: 24, y: 24, w: 800, z: 1, min: false, max: false, rev: 0, by: "" };
+    if (id === "board:" + MAIN_BOARD) return { x: 24, y: 24, w: 800, z: 1, h: 0, min: false, max: false, rev: 0, by: "" };
 
     if (id.startsWith("board:")) {
       // À direita do principal, em cascata.
       const index = Math.max(0, [...session.boards.keys()].indexOf(id.slice(6)) - 1);
-      return { x: clamp(850 + index * 40, 0, WORK_W - 560), y: 40 + index * 36, w: 560, z: 1, min: false, max: false, rev: 0, by: "" };
+      return { x: clamp(850 + index * 40, 0, WORK_W - 560), y: 40 + index * 36, w: 560, z: 1, h: 0, min: false, max: false, rev: 0, by: "" };
     }
 
     if (id.startsWith("display:")) {
       const index = [...session.displays.keys()].indexOf(id.slice(8));
-      return { x: clamp(420 + index * 40, 0, WORK_W - 620), y: 120 + index * 36, w: 620, z: 1, min: false, max: false, rev: 0, by: "" };
+      return { x: clamp(420 + index * 40, 0, WORK_W - 620), y: 120 + index * 36, w: 620, z: 1, h: 0, min: false, max: false, rev: 0, by: "" };
     }
 
-    return { x: WORK_W - 660 - 24, y: WORK_H - 660 * 9 / 16 - 60, w: 660, z: 1, min: false, max: false, rev: 0, by: "" };
+    return { x: WORK_W - 660 - 24, y: WORK_H - 660 * 9 / 16 - 60, w: 660, z: 1, h: 0, min: false, max: false, rev: 0, by: "" };
 
   }
 
   const layoutOf = id => session.layout.get(id) || defaultLayout(id);
 
-  const LAYOUT_KEYS = ["x", "y", "w", "z", "min", "max"];
+  const LAYOUT_KEYS = ["x", "y", "w", "h", "z", "min", "max"];
+
+  // Altura livre (h, em unidades do mundo): todas menos o quadro, que é
+  // quadrado (os traços vão de 0 a 1 nos dois lados e esticariam).
+  // h = 0: a altura segue a proporção do conteúdo (view.aspect).
+  const freeHeight = view => view.kind !== "board";
+
+  const bodyHeight = (view, entry = layoutOf(view.id)) =>
+    freeHeight(view) && entry.h > 0 ? entry.h : entry.w / (view.aspect || 1);
 
   // Mudança minha: vale aqui na hora e vai para todos.
   function setLayout(id, patch, final = true) {
@@ -7519,6 +7543,7 @@
       x: clamp(data.x, -WORLD_MAX, WORLD_MAX),
       y: clamp(data.y, -WORLD_MAX, WORLD_MAX),
       w: clamp(data.w, WIN_MIN_W, WIN_MAX_W),
+      h: Number.isFinite(data.h) && data.h > 0 ? clamp(data.h, WIN_MIN_H, WIN_MAX_W) : 0,
       z: Math.max(0, Math.floor(data.z)),
       min: data.min === true,
       max: data.max === true,
@@ -7581,6 +7606,10 @@
     view.maxBtn.textContent = entry.max ? "🗗" : "⤢";
     view.maxBtn.title = entry.max ? "Voltar ao tamanho da janela (para todos)" : "Maximizar (para todos)";
 
+    // Altura livre só no mundo e maximizada (no celular, empilhada, segue a proporção).
+    const free = freeHeight(view) && entry.h > 0 && (floating || maxed);
+    el.classList.toggle("free-h", free);
+
     if (!floating && !maxed) {
       for (const property of ["left", "top", "width", "zIndex"]) el.style[property] = "";
       if (view.kind === "board") requestAnimationFrame(() => resizeCanvas(view));
@@ -7591,11 +7620,12 @@
 
       // O maior tamanho que cabe na vista, no meio.
       const box = stageBox();
-      const w = Math.max(0, Math.min(box.width, (box.height - WIN_HEAD_PX) * (view.aspect || 1)));
+      const w = free ? box.width : Math.max(0, Math.min(box.width, (box.height - WIN_HEAD_PX) * (view.aspect || 1)));
 
       el.style.left = (box.width - w) / 2 + "px";
       el.style.top = "0px";
       el.style.width = w + "px";
+      el.style.setProperty("--wh", Math.max(0, box.height - WIN_HEAD_PX) + "px");
 
     } else {
 
@@ -7603,6 +7633,7 @@
       el.style.left = entry.x + "px";
       el.style.top = entry.y + "px";
       el.style.width = entry.w + "px";
+      el.style.setProperty("--wh", entry.h + "px");
 
     }
 
@@ -7642,7 +7673,7 @@
 
     const handle = document.createElement("div");
     handle.className = "resize-handle";
-    handle.title = "Arraste para mudar o tamanho (para todos)";
+    handle.title = kind === "board" ? "Arraste para mudar o tamanho (para todos)" : "Arraste para mudar a largura e a altura (para todos)";
 
     const bubble = document.createElement("span");
     bubble.className = "bubble";
@@ -7809,15 +7840,17 @@
       event.stopPropagation();
       handle.setPointerCapture(event.pointerId);
 
-      const start = { x: event.clientX, w: layoutOf(view.id).w };
+      const start = { x: event.clientX, y: event.clientY, w: layoutOf(view.id).w, h: bodyHeight(view) };
 
       const move = moveEvent => {
 
         if (isGesturing(moveEvent.pointerId)) return;
 
-        setLayout(view.id, {
-          w: clamp(start.w + (moveEvent.clientX - start.x) / session.cam.z, WIN_MIN_W, WIN_MAX_W)
-        }, false);
+        const w = clamp(start.w + (moveEvent.clientX - start.x) / session.cam.z, WIN_MIN_W, WIN_MAX_W);
+
+        setLayout(view.id, freeHeight(view)
+          ? { w, h: clamp(start.h + (moveEvent.clientY - start.y) / session.cam.z, WIN_MIN_H, WIN_MAX_W) }
+          : { w }, false);
 
       };
 
@@ -12207,6 +12240,33 @@
     view.modeBtn.append(editing ? " Editando" : " Visualizando");
     view.modeBtn.classList.toggle("active", editing);
     view.modeBtn.title = $("boardModeBtn").title;
+
+  }
+
+  // No PC as ferramentas de desenho só existem nas barras flutuantes: quem
+  // começa a sala (ou a conexão direta) já ganha uma, à esquerda do quadro.
+  // Esperando um pouco, quem chega depois recebe a que já existe.
+  function ensurePalette() {
+
+    if (!session || !DESKTOP_LAYOUT.matches) return;
+    if ([...session.displays.values()].some(entry => entry.kind === "palette")) return;
+
+    const peersHere = connectedPeers();
+    if (session.room ? peersHere.length : peersHere.some(peer => peer.role === "guest")) return;
+
+    const id = me.id.slice(0, 8) + "-" + randomId();
+    const winId = "display:" + id;
+    const entry = ensureDisplay(id, me.id, "palette");
+
+    if (!entry) return;
+
+    send({ type: "display-set", ...displayData(entry), fresh: true });
+
+    const board = layoutOf("board:" + MAIN_BOARD);
+    setLayout(winId, { x: board.x - WIDGETS.palette.w - 24, y: board.y, w: WIDGETS.palette.w, z: ++topZ });
+
+    renderDisplay(id);
+    if (!session.camTouched) initialCamera();
 
   }
 
