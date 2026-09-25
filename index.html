@@ -1330,6 +1330,84 @@
       background: var(--dot, var(--text));
     }
 
+    /* O atributo hidden vale mesmo com display definido no CSS. */
+    [hidden] {
+      display: none !important;
+    }
+
+    /* Janela de imagem: a imagem atual; o dono tem a faixa de miniaturas. */
+    .display-win .win-body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111827;
+    }
+
+    .display-win .win-body img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .display-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .display-strip {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 18px 8px 8px;
+      background: linear-gradient(transparent, rgba(0, 0, 0, .8));
+      color: #e5e7eb;
+      font-size: 12px;
+      opacity: .92;
+      transition: opacity .2s;
+    }
+
+    /* A faixa sai da frente quando o mouse não está na janela (continua lá). */
+    .display-win:not(:hover) .display-strip.has-image {
+      opacity: 0;
+    }
+
+    .display-thumbs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .display-thumbs button {
+      flex: none;
+      width: 54px;
+      height: 40px;
+      padding: 0;
+      border-radius: 6px;
+      border: 2px solid transparent;
+      background: #000 center / cover no-repeat;
+      font-size: 18px;
+    }
+
+    .display-thumbs button.active {
+      border-color: var(--accent);
+    }
+
+    .display-change {
+      font-weight: 700;
+    }
+
     /* Texto no quadro: a caixa aparece onde tocou. */
     .board-text-input {
       position: fixed;
@@ -2355,6 +2433,8 @@
         <span id="remoteDrawing" class="remote-drawing hidden">✏️ O outro está desenhando…</span>
         <span class="spacer"></span>
         <button id="addBoardBtn" class="tool" title="Novo quadro (aparece para todos)">➕ Quadro</button>
+        <button id="addDisplayBtn" class="tool" title="Mostrar uma imagem para todos (dá para trocar quando quiser)">🖼️ Imagem</button>
+        <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
         <button id="boardModeBtn" class="tool active">✏️ Editando</button>
       </div>
 
@@ -2882,6 +2962,7 @@
       audioReady: false,
       audio: null,            // <audio> com o microfone dele
       shareAudio: null,       // <audio> com o áudio que ele compartilha
+      images: new Set(),      // imagens (janelas de imagem) que ele já tem
       videoStream: null,      // tela dele, quando compartilha
       remote: { known: false, mic: false, speaker: true, screen: false, audioShare: false, want: { height: 0, fps: 0 }, device: null, name: "" },
       reconnect: null         // { startedAt, giveUp } enquanto a conexão está caída
@@ -3179,6 +3260,11 @@
       boardMode: "edit",      // "edit" (desenha) | "view" (só olha)
       boards: new Map([[MAIN_BOARD, { id: MAIN_BOARD, title: "Quadro", version: 0, by: "" }]]),
       closedBoards: new Set(),// quadros fechados (não voltam por um histórico atrasado)
+      displays: new Map(),    // janelas de imagem (veja "janelas de imagem")
+      closedDisplays: new Set(),
+      gallery: new Map(),     // minhas janelas de imagem -> imagens que escolhi
+      images: new Map(),      // id da imagem -> { url, blob }
+      incomingImages: new Map(),
       strokes: new Map(),     // "<autor>:<id>" -> { author, board, color, width, v, points }
       drawing: null,          // { board, id } do traço que estou desenhando
       chat: new Map(),        // "<autor>:<id>" -> { id, author, name, text, time }
@@ -3293,6 +3379,8 @@
     if (session.room && peer.room) {
       sendSnapshot(peer, false);
       if (peer.role === "guest") requestSync();
+    } else {
+      for (const entry of session.displays.values()) if (isMine(entry)) publishDisplay(entry, peer);
     }
 
     if (peer.role === "host") {
@@ -3366,6 +3454,7 @@
     session.screenTrack?.stop();
     session.shareAudioTrack?.stop();
     session.objectUrls.forEach(url => URL.revokeObjectURL(url));
+    session.images.forEach(image => URL.revokeObjectURL(image.url));
 
     if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
     [...session.windows.keys()].forEach(removeWindow);
@@ -3650,6 +3739,18 @@
         handleRemoteErase(peer, message);
         break;
 
+      case "display-set":
+        applyDisplay(message, peer);
+        break;
+
+      case "display-close":
+        closeDisplay(message.id, peer);
+        break;
+
+      case "img-data":
+        receiveImageChunk(peer, message);
+        break;
+
       case "screen-quality":
         // Ele quer receber as telas mais leves.
         // (0 = sem limite)
@@ -3870,6 +3971,8 @@
       boards: [...session.boards.values()].map(({ id, title, version, by }) => ({ id, title, version, by })),
       closed: [...session.closedBoards],
       erased: [...session.erased],
+      displays: [...session.displays.values()].map(({ id, owner, current, rev }) => ({ id, owner, current, rev })),
+      closedDisplays: [...session.closedDisplays],
       layout: [...session.layout].map(([id, entry]) => ({ id, ...pickLayout(entry), rev: entry.rev, by: entry.by }))
     };
 
@@ -3880,6 +3983,11 @@
       ...batch,
       last: index === batches.length - 1
     }));
+
+    // Imagens que estão à vista (todas, no histórico completo; senão, as minhas).
+    for (const entry of session.displays.values()) {
+      if (entry.current && (full || isMine(entry))) sendImage(peer, entry.current);
+    }
 
     if (full) log(`Histórico enviado para ${peerLabel(peer)}: ${chat.length} mensagens, ${strokes.length} traços.`);
 
@@ -3907,6 +4015,15 @@
       const version = cleanVersion(item.version);
       if (entry && version !== null) applyClear(item.id, version);
     }
+
+    // Janelas de imagem (fechadas primeiro).
+    for (const id of list(message.closedDisplays)) {
+      if (typeof id !== "string" || !BOARD_ID.test(id)) continue;
+      if (session.displays.has(id)) closeDisplay(id, { id: session.displays.get(id).owner });
+      session.closedDisplays.add(id);
+    }
+
+    for (const item of list(message.displays)) applyDisplay(item, null);
 
     // Traços desfeitos lá: somem aqui (e não voltam).
     for (const key of list(message.erased)) {
@@ -4951,6 +5068,11 @@
       return { x: clamp(850 + index * 40, 0, WORK_W - 560), y: 40 + index * 36, w: 560, z: 1, min: false, max: false, rev: 0, by: "" };
     }
 
+    if (id.startsWith("display:")) {
+      const index = [...session.displays.keys()].indexOf(id.slice(8));
+      return { x: clamp(420 + index * 40, 0, WORK_W - 620), y: 120 + index * 36, w: 620, z: 1, min: false, max: false, rev: 0, by: "" };
+    }
+
     return { x: WORK_W - 660 - 24, y: WORK_H - 660 * 9 / 16 - 60, w: 660, z: 1, min: false, max: false, rev: 0, by: "" };
 
   }
@@ -5013,7 +5135,7 @@
   // Mudança de outra pessoa (ao vivo ou do histórico da sala).
   function applyLayout(id, data, by) {
 
-    if (typeof id !== "string" || !/^(board|screen):[\w-]{1,64}$/.test(id)) return;
+    if (typeof id !== "string" || !/^(board|screen|display):[\w-]{1,64}$/.test(id)) return;
     if (!isDeviceId(by) || !Number.isInteger(data.rev) || data.rev < 1) return;
     if (!["x", "y", "w", "z"].every(key => Number.isFinite(data[key]))) return;
 
@@ -5052,7 +5174,7 @@
   // No PC tudo fica na área de trabalho; no celular as telas vão para a aba Telas.
   function placeWindow(view) {
 
-    const parent = DESKTOP_LAYOUT.matches || view.kind === "board" ? $("workspace") : $("screenGrid");
+    const parent = DESKTOP_LAYOUT.matches || view.kind !== "screen" ? $("workspace") : $("screenGrid");
 
     if (view.el.parentNode !== parent) {
       parent.appendChild(view.el);
@@ -5112,7 +5234,7 @@
   function createWindow({ id, kind, extraButtons = [], closable = false, onClose = null }) {
 
     const el = document.createElement("div");
-    el.className = "win " + (kind === "board" ? "board-win" : "screen-tile");
+    el.className = "win " + (kind === "board" ? "board-win" : kind === "display" ? "display-win" : "screen-tile");
     el.dataset.id = id;
 
     const head = document.createElement("div");
@@ -6117,6 +6239,449 @@
   }
 
 
+  /* ---- janelas de imagem ---- */
+
+  /*
+   * Cada pessoa pode abrir janelas de imagem (🖼️ Imagem) e mostrar uma
+   * imagem por janela. Só quem abriu troca a imagem (miniaturas em cima
+   * da imagem e 🔄 Trocar imagem); os outros veem a atual, ao vivo.
+   *
+   * As imagens são reduzidas (até IMAGE_MAX px) e vão direto para cada
+   * pessoa em pedaços ("img-data"), uma vez só: depois a troca é só um
+   * aviso ("display-set" com o id da imagem). Quem chega recebe a atual.
+   *
+   *   session.displays: id -> { id, owner, current, rev }
+   *   session.images:   id da imagem -> { url, blob }
+   */
+
+  const IMAGE_MAX = 1920;
+  const IMAGE_CHUNK = 48 * 1024;      // base64 por mensagem
+  const IMAGE_MAX_CHUNKS = 400;       // ~19 MB: acima disso descarta
+  const IMAGE_BUFFER_HIGH = 2 * 1024 * 1024;
+
+  const isMine = entry => entry.owner === me.id;
+
+  function ensureDisplay(id, owner) {
+
+    if (!BOARD_ID.test(id) || !isDeviceId(owner) || session.closedDisplays.has(id)) return null;
+
+    let entry = session.displays.get(id);
+
+    if (!entry) {
+      entry = { id, owner, current: null, rev: 0 };
+      session.displays.set(id, entry);
+    }
+
+    if (!session.windows.has("display:" + id)) createDisplayWindow(entry);
+
+    return entry;
+
+  }
+
+  $("addDisplayBtn").onclick = () => {
+
+    if (!session) return;
+
+    const id = me.id.slice(0, 8) + "-" + randomId();
+    const entry = ensureDisplay(id, me.id);
+
+    session.gallery.set(id, []);
+
+    publishDisplay(entry);
+
+    // Na frente, perto do meio, para todos.
+    const place = defaultLayout("display:" + id);
+    setLayout("display:" + id, { x: place.x, y: place.y, w: place.w, z: ++topZ });
+
+    renderDisplay(id);
+    pickImages(id);
+
+  };
+
+  function createDisplayWindow(entry) {
+
+    const id = entry.id;
+    const winId = "display:" + id;
+    const mine = isMine(entry);
+
+    const extra = [];
+
+    if (mine) {
+      const change = windowButton("🔄 Trocar imagem", "Escolher outra imagem para mostrar (você pode trocar quando quiser)", () => pickImages(id));
+      change.classList.add("display-change");
+      extra.push(change);
+    }
+
+    const fullBtn = windowButton("⛶", "Tela cheia (só aqui)", () => toggleWindowFull(view));
+    extra.push(fullBtn);
+
+    const view = createWindow({
+      id: winId,
+      kind: "display",
+      extraButtons: extra,
+      closable: true,
+      onClose: () => closeDisplay(id)
+    });
+
+    view.displayId = id;
+
+    const img = document.createElement("img");
+    img.alt = "";
+    img.draggable = false;
+    img.hidden = true;
+
+    img.addEventListener("load", () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        view.aspect = img.naturalWidth / img.naturalHeight;
+        view.body.style.setProperty("--ar", `${img.naturalWidth} / ${img.naturalHeight}`);
+        positionWindow(view);
+      }
+    });
+
+    const empty = document.createElement("div");
+    empty.className = "display-empty";
+
+    view.body.prepend(img, empty);
+    view.img = img;
+    view.empty = empty;
+
+    // Dono: faixa com as miniaturas, ➕ e o aviso de que dá para trocar.
+    if (mine) {
+      const strip = document.createElement("div");
+      strip.className = "display-strip";
+      view.body.append(strip);
+      view.strip = strip;
+    }
+
+    enableCursorSurface(view.body, () => winId, () => imageContentRect(view));
+
+    return view;
+
+  }
+
+  // Parte da janela onde a imagem aparece (object-fit: contain deixa faixas).
+  function imageContentRect(view) {
+
+    const box = view.body.getBoundingClientRect();
+    const img = view.img;
+
+    if (img.hidden || !img.naturalWidth) return box;
+
+    const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
+    const width = img.naturalWidth * scale;
+    const height = img.naturalHeight * scale;
+
+    return { left: box.left + (box.width - width) / 2, top: box.top + (box.height - height) / 2, width, height };
+
+  }
+
+  function renderDisplay(id) {
+
+    const entry = session.displays.get(id);
+    const view = session.windows.get("display:" + id);
+
+    if (!entry || !view) return;
+
+    const mine = isMine(entry);
+    const owner = mine ? null : peers.get(entry.owner);
+    const ownerName = mine ? "você" : peerLabel(owner) === "O outro lado" ? "alguém" : peerLabel(owner);
+    const image = entry.current && session.images.get(entry.current);
+
+    view.label.textContent = mine ? "🖼️ Sua imagem" : `🖼️ Imagem de ${ownerName}`;
+    view.el.style.setProperty("--person", personColor(entry.owner));
+
+    if (image) {
+      if (view.img.src !== image.url) view.img.src = image.url;
+      view.img.hidden = false;
+      view.empty.hidden = true;
+    } else {
+      view.img.hidden = true;
+      view.img.removeAttribute("src");
+      view.empty.hidden = false;
+      view.empty.replaceChildren();
+
+      if (mine) {
+        const text = document.createElement("div");
+        text.textContent = "Escolha a imagem que todos vão ver.";
+        const button = windowButton("📂 Escolher imagem", "Escolher imagem", () => pickImages(id), "primary");
+        view.empty.append(text, button);
+      } else {
+        view.empty.textContent = entry.current
+          ? `⏳ Recebendo a imagem de ${ownerName}…`
+          : `${ownerName} ainda não escolheu a imagem.`;
+      }
+    }
+
+    if (!view.strip) return;
+
+    // Faixa do dono.
+    const gallery = session.gallery.get(id) || [];
+    const thumbs = document.createElement("div");
+    thumbs.className = "display-thumbs";
+
+    for (const imageId of gallery) {
+      const item = session.images.get(imageId);
+      if (!item) continue;
+      const button = document.createElement("button");
+      button.className = imageId === entry.current ? "active" : "";
+      button.style.backgroundImage = `url("${item.url}")`;
+      button.title = imageId === entry.current ? "Esta é a que todos estão vendo" : "Mostrar esta para todos";
+      button.onclick = event => {
+        event.stopPropagation();
+        setDisplayImage(id, imageId);
+      };
+      thumbs.append(button);
+    }
+
+    const add = document.createElement("button");
+    add.textContent = "➕";
+    add.title = "Adicionar imagens";
+    add.onclick = event => {
+      event.stopPropagation();
+      pickImages(id);
+    };
+    thumbs.append(add);
+
+    const hint = document.createElement("div");
+    hint.textContent = gallery.length > 1
+      ? "Você pode trocar quando quiser: toque numa miniatura para mostrar outra (só você vê esta faixa)."
+      : "Você pode trocar quando quiser: ➕ adiciona imagens, 🔄 escolhe outra (só você vê esta faixa).";
+
+    view.strip.classList.toggle("has-image", !!image);
+    view.strip.replaceChildren(hint, thumbs);
+
+  }
+
+  // Escolher imagens do aparelho (várias de uma vez): a primeira aparece.
+  let pickTarget = null;
+
+  function pickImages(id) {
+    pickTarget = id;
+    $("displayFileInput").value = "";
+    $("displayFileInput").click();
+  }
+
+  $("displayFileInput").onchange = async () => {
+
+    const id = pickTarget;
+    const files = [...$("displayFileInput").files].filter(file => file.type.startsWith("image/"));
+
+    if (!session || !id || !session.displays.has(id) || !files.length) return;
+
+    let first = null;
+
+    for (const file of files) {
+      try {
+        const imageId = await addLocalImage(file);
+        session.gallery.get(id).push(imageId);
+        first ??= imageId;
+      } catch (error) {
+        toast("🖼️ Não foi possível abrir " + file.name + ": " + error.message);
+      }
+    }
+
+    if (first) setDisplayImage(id, first);
+
+  };
+
+  // Reduz (até IMAGE_MAX) para não pesar a conexão, e guarda.
+  async function addLocalImage(file) {
+
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, IMAGE_MAX / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+
+    // WebP guarda transparência e é pequeno; onde não existe, vem PNG/JPEG.
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/webp", 0.85));
+
+    if (!blob) throw new Error("formato não suportado");
+
+    const imageId = me.id.slice(0, 8) + "-" + randomId();
+
+    session.images.set(imageId, { url: URL.createObjectURL(blob), blob });
+
+    return imageId;
+
+  }
+
+  // Troca a imagem que todos veem nesta janela.
+  function setDisplayImage(id, imageId) {
+
+    const entry = session.displays.get(id);
+
+    if (!entry || !isMine(entry) || !session.images.has(imageId)) return;
+
+    entry.current = imageId;
+    entry.rev++;
+
+    renderDisplay(id);
+    publishDisplay(entry);
+
+  }
+
+  function publishDisplay(entry, peer = null) {
+
+    const targets = peer ? [peer] : connectedPeers();
+
+    for (const target of targets) {
+      if (entry.current) sendImage(target, entry.current);
+      sendTo(target, { type: "display-set", id: entry.id, owner: entry.owner, current: entry.current, rev: entry.rev });
+    }
+
+  }
+
+  // Manda a imagem (uma vez por pessoa), em pedaços e sem entupir o canal.
+  async function sendImage(peer, imageId) {
+
+    const image = session?.images.get(imageId);
+
+    if (!image?.blob || peer.images.has(imageId)) return;
+
+    peer.images.add(imageId);
+
+    const bytes = new Uint8Array(await image.blob.arrayBuffer());
+    let binary = "";
+
+    for (let index = 0; index < bytes.length; index += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+    }
+
+    const data = btoa(binary);
+    const total = Math.ceil(data.length / IMAGE_CHUNK);
+
+    if (total > IMAGE_MAX_CHUNKS) return;
+
+    for (let index = 0; index < total; index++) {
+
+      if (!peer.connected || peer.dc?.readyState !== "open") return;
+
+      while (peer.dc.bufferedAmount > IMAGE_BUFFER_HIGH) await wait(30);
+
+      sendTo(peer, {
+        type: "img-data",
+        img: imageId,
+        i: index,
+        n: total,
+        mime: image.blob.type,
+        data: data.slice(index * IMAGE_CHUNK, (index + 1) * IMAGE_CHUNK)
+      });
+
+    }
+
+  }
+
+  function receiveImageChunk(peer, message) {
+
+    const imageId = message.img;
+
+    if (typeof imageId !== "string" || !BOARD_ID.test(imageId) || session.images.has(imageId)) return;
+    if (!Number.isInteger(message.n) || message.n < 1 || message.n > IMAGE_MAX_CHUNKS) return;
+    if (!Number.isInteger(message.i) || message.i < 0 || message.i >= message.n || typeof message.data !== "string") return;
+
+    const mime = String(message.mime || "");
+
+    if (!/^image\/(webp|png|jpeg|gif)$/.test(mime)) return;
+
+    let pending = session.incomingImages.get(imageId);
+
+    if (!pending) {
+      pending = { chunks: new Array(message.n), received: 0, mime };
+      session.incomingImages.set(imageId, pending);
+    }
+
+    if (pending.chunks[message.i] === undefined) {
+      pending.chunks[message.i] = message.data;
+      pending.received++;
+    }
+
+    if (pending.received < pending.chunks.length) return;
+
+    session.incomingImages.delete(imageId);
+
+    try {
+
+      const binary = atob(pending.chunks.join(""));
+      const bytes = new Uint8Array(binary.length);
+
+      for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+
+      const blob = new Blob([bytes], { type: pending.mime });
+
+      session.images.set(imageId, { url: URL.createObjectURL(blob), blob });
+
+      // Quem mandou já tem; e agora eu também posso mandar para quem chegar.
+      peer.images.add(imageId);
+
+    } catch {
+      return;
+    }
+
+    for (const entry of session.displays.values()) {
+      if (entry.current === imageId) renderDisplay(entry.id);
+    }
+
+  }
+
+  // "display-set": ao vivo vem do dono; do histórico, de quem estava lá.
+  function applyDisplay(data, from) {
+
+    if (typeof data?.id !== "string" || !Number.isInteger(data.rev)) return;
+
+    const owner = data.owner;
+
+    // Ao vivo, só o dono muda a janela dele.
+    if (from && owner !== from.id) return;
+
+    const entry = ensureDisplay(data.id, owner);
+
+    if (!entry || data.rev < entry.rev) return;
+
+    const current = typeof data.current === "string" && BOARD_ID.test(data.current) ? data.current : null;
+
+    const isNew = entry.rev === 0 && !entry.current && from;
+
+    entry.rev = data.rev;
+    entry.current = current;
+
+    renderDisplay(entry.id);
+
+    if (isNew && data.rev === 0) addNote(`🖼️ ${peerLabel(from)} abriu uma janela de imagem`);
+
+  }
+
+  function closeDisplay(id, fromPeer = null) {
+
+    const entry = session.displays.get(id);
+
+    if (!entry) return;
+
+    // Só o dono fecha para todos (ou qualquer um, se o dono já saiu).
+    const ownerHere = peers.get(entry.owner)?.connected;
+
+    if (fromPeer && fromPeer.id !== entry.owner && ownerHere) return;
+
+    if (!fromPeer && !isMine(entry) && ownerHere) {
+      toast(`🖼️ Só ${peerLabel(peers.get(entry.owner))} fecha esta janela. Você pode minimizar (–).`);
+      return;
+    }
+
+    session.closedDisplays.add(id);
+    session.displays.delete(id);
+    session.gallery.delete(id);
+    session.layout.delete("display:" + id);
+
+    removeWindow("display:" + id);
+
+    if (!fromPeer) send({ type: "display-close", id });
+
+  }
+
+
   /* ---- telas compartilhadas ---- */
 
   // Uma janela por pessoa compartilhando (inclusive eu: a prévia do que
@@ -6524,7 +7089,7 @@
 
     // Versão antiga da página: "board" era o único quadro.
     const surface = message.surface === "board" ? "board:" + MAIN_BOARD : message.surface;
-    const valid = typeof surface === "string" && /^(board|screen):[\w-]{1,64}$/.test(surface);
+    const valid = typeof surface === "string" && /^(board|screen|display):[\w-]{1,64}$/.test(surface);
 
     if (valid && Number.isFinite(message.x) && Number.isFinite(message.y)) {
       peer.cursor = {
@@ -6552,7 +7117,9 @@
 
     if (!view || !view.el.offsetParent || view.el.classList.contains("minimized")) return null;
 
-    return view.kind === "board" ? view.canvas.getBoundingClientRect() : videoContentRect(view.video);
+    if (view.kind === "board") return view.canvas.getBoundingClientRect();
+    if (view.kind === "display") return imageContentRect(view);
+    return videoContentRect(view.video);
 
   }
 
