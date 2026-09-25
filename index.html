@@ -1713,7 +1713,8 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <audio id="remoteAudio" autoplay playsinline></audio>
+  <!-- Um <audio> por pessoa conectada (criados pelo JS). -->
+  <div id="remoteAudios" hidden></div>
 
 </div>
 
@@ -1959,8 +1960,19 @@
    * ============================================================
    */
 
-  let peerConnection = null;
-  let dataChannel = null;
+  /*
+   * Uma entrada por aparelho com quem há conexão (abrindo ou aberta),
+   * pelo id do aparelho:
+   *
+   *   { id, name, role, pairId, channel, pc, dc, connected, closed,
+   *     audioTransceiver, videoTransceiver, audioReady, audio,
+   *     videoStream, remote, reconnect }
+   *
+   * role é o papel NESTA conexão: "host" (aceitou o pedido e faz a
+   * oferta) ou "guest" (pediu e responde).
+   */
+  const peers = new Map();
+
   let wakeLock = null;
 
   const $ = id => document.getElementById(id);
@@ -2038,33 +2050,72 @@
 
   }
 
-  // Avisa o outro lado antes de sair (senão ele só percebe bem depois).
-  function sendBye() {
+  function newPeer({ id, name }, role, pairId) {
 
-    if (dataChannel?.readyState === "open") {
-      dataChannel.send(JSON.stringify({ type: "bye" }));
+    return {
+      id,
+      name: cleanName(name),
+      role,
+      pairId,
+      channel: null,          // canal pair:<pairId> no Supabase
+      pc: null,
+      dc: null,               // DataChannel "control"
+      connected: false,       // DataChannel abriu e entrou na sessão
+      closed: false,
+      audioTransceiver: null,
+      videoTransceiver: null,
+      audioReady: false,
+      audio: null,            // <audio> com o som dele
+      videoStream: null,      // tela dele, quando compartilha
+      remote: { known: false, mic: false, speaker: true, screen: false, device: null, name: "" },
+      reconnect: null         // { startedAt, giveUp } enquanto a conexão está caída
+    };
+
+  }
+
+  const connectedPeers = () => [...peers.values()].filter(peer => peer.connected);
+
+  // Por enquanto a sessão tem uma pessoa só: a interface mostra ela.
+  const firstPeer = () => connectedPeers()[0] || null;
+
+  // Avisa o outro lado antes de sair (senão ele só percebe bem depois).
+  function sendBye(peer) {
+
+    if (peer.dc?.readyState === "open") {
+      peer.dc.send(JSON.stringify({ type: "bye" }));
     }
 
   }
 
-  function closeConnection() {
+  // Fecha a conexão com um aparelho. Não mexe na sessão (veja removePeer).
+  function closePeer(peer) {
 
-    sendBye();
-    endSession();
+    if (peer.closed) return;
 
-    if (dataChannel) {
-      dataChannel.onclose = null;
-      dataChannel.onmessage = null;
-      dataChannel.close();
-      dataChannel = null;
+    peer.closed = true;
+
+    sendBye(peer);
+
+    if (peers.get(peer.id) === peer) peers.delete(peer.id);
+
+    if (peer.channel) client.removeChannel(peer.channel);
+
+    if (peer.dc) {
+      peer.dc.onclose = null;
+      peer.dc.onmessage = null;
+      peer.dc.close();
     }
 
-    if (peerConnection) {
+    if (peer.audio) {
+      peer.audio.srcObject = null;
+      peer.audio.remove();
+    }
 
-      const pc = peerConnection;
+    if (peer.pc) {
+
+      const pc = peer.pc;
 
       pc.onconnectionstatechange = null;
-      peerConnection = null;
 
       // Dá tempo do "bye" sair antes de derrubar a conexão.
       setTimeout(() => pc.close(), 300);
@@ -2073,44 +2124,51 @@
 
   }
 
+  function closeAllPeers() {
+
+    [...peers.values()].forEach(closePeer);
+    endSession();
+
+  }
+
   // Fechar a aba ou sair da página também avisa o outro lado.
-  window.addEventListener("pagehide", sendBye);
+  window.addEventListener("pagehide", () => peers.forEach(sendBye));
 
-  function createPeerConnection(onFailed) {
-
-    closeConnection();
+  function createPeerConnection(peer) {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
     pc.onconnectionstatechange = () => {
 
+      if (peer.pc !== pc || peer.closed) return;
+
       const state = pc.connectionState;
 
-      log("Connection state: " + state);
+      log(`Connection state (${peerName(peer)}): ${state}`);
 
-      if (session && (state === "disconnected" || state === "failed")) {
+      if (peer.connected && (state === "disconnected" || state === "failed")) {
 
         // Caiu durante a sessão: tenta reconectar (ICE restart pelo
         // Supabase, veja reconnectAttempt). Só desiste depois.
-        connectionInterrupted(() => onFailed(CONNECTION_LOST_MESSAGE, true));
+        connectionInterrupted(peer, () => connectionFailed(peer, CONNECTION_LOST_MESSAGE, true));
 
       } else if (state === "failed") {
 
-        onFailed("Falha na conexão. Os dois aparelhos estão com internet?");
+        connectionFailed(peer, "Falha na conexão. Os dois aparelhos estão com internet?");
 
       } else if (state === "connected") {
 
-        connectionRestored();
+        connectionRestored(peer);
 
       }
 
     };
 
     pc.oniceconnectionstatechange = () => {
-      log("ICE state: " + pc.iceConnectionState);
+      log(`ICE state (${peerName(peer)}): ${pc.iceConnectionState}`);
     };
 
-    peerConnection = pc;
+    peer.pc = pc;
 
     return pc;
 
@@ -2233,10 +2291,15 @@
 
   const randomId = () => Math.random().toString(36).slice(2, 10);
 
-  function send(message) {
-    if (dataChannel?.readyState === "open") {
-      dataChannel.send(JSON.stringify(message));
+  function sendTo(peer, message) {
+    if (peer.dc?.readyState === "open") {
+      peer.dc.send(JSON.stringify(message));
     }
+  }
+
+  // Para todos na sessão.
+  function send(message) {
+    connectedPeers().forEach(peer => sendTo(peer, message));
   }
 
   function formatSize(bytes) {
@@ -2261,21 +2324,16 @@
 
   /* ---------------- início / fim ---------------- */
 
-  // role: "host" (mostrou o primeiro QR) | "guest" (leu o QR)
+  // Abre a tela da sessão (na primeira conexão). role: papel nela,
+  // só para escolher a cor inicial do quadro.
   function startSession(role) {
 
     session = {
-      role,
-      pc: peerConnection,
-      audioTransceiver: null,
-      audioReady: false,
       micTrack: null,
       speakerOn: true,
-      remote: { known: false, mic: false, speaker: true, screen: false, device: null, name: "" },
       tab: "chat",
       stage: "board",         // PC: o que aparece à esquerda (board | screen)
       unread: { chat: 0, board: 0, screen: 0 },
-      videoTransceiver: null,
       screenTrack: null,
       color: role === "host" ? BOARD_COLORS[1] : BOARD_COLORS[2],
       width: BOARD_WIDTHS.thin,
@@ -2285,11 +2343,11 @@
       flushScheduled: false,
       remoteDrawingTimer: null,
       toastTimer: null,
-      outgoing: new Map(),
+      outgoing: new Map(),    // arquivos: chave fileKey(peer, id)
       incoming: new Map(),
       objectUrls: [],
       statsTimer: null,
-      reconnect: null         // { startedAt, timer, giveUp } enquanto a conexão está caída
+      reconnectTimer: null    // atualiza o "Reconectando…" enquanto alguém está caído
     };
 
     // Interface zerada.
@@ -2314,19 +2372,37 @@
     keepScreenOn();
     requestAnimationFrame(resizeBoard);
 
-    const pc = session.pc;
+    session.statsTimer = setInterval(updateAudioLevels, 250);
+
+  }
+
+  // O DataChannel de um aparelho abriu: ele entra na sessão.
+  function addPeerToSession(peer) {
+
+    peer.connected = true;
+
+    const pc = peer.pc;
 
     pc.ontrack = event => {
 
       if (event.track.kind === "video") {
-        log("Canal de vídeo (tela) do outro lado recebido.");
-        $("screenVideo").srcObject = new MediaStream([event.track]);
+        log(`Canal de vídeo (tela) de ${peerLabel(peer)} recebido.`);
+        peer.videoStream = new MediaStream([event.track]);
+        if (peer.remote.screen) renderRemoteScreen();
         return;
       }
 
-      log("Áudio do outro lado recebido.");
-      $("remoteAudio").srcObject = new MediaStream([event.track]);
-      $("remoteAudio").muted = !session.speakerOn;
+      log(`Áudio de ${peerLabel(peer)} recebido.`);
+
+      if (!peer.audio) {
+        peer.audio = document.createElement("audio");
+        peer.audio.autoplay = true;
+        peer.audio.playsInline = true;
+        $("remoteAudios").appendChild(peer.audio);
+      }
+
+      peer.audio.srcObject = new MediaStream([event.track]);
+      peer.audio.muted = !session.speakerOn;
       playRemoteAudio();
 
     };
@@ -2334,31 +2410,70 @@
     // Canais abertos pelo outro lado depois de conectar = arquivos.
     pc.ondatachannel = event => {
       if (event.channel.label.startsWith("file:")) {
-        receiveFileChannel(event.channel);
+        receiveFileChannel(peer, event.channel);
       }
     };
 
-    send({ type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name });
-    sendState();
+    sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name });
+    sendState(peer);
 
-    if (role === "host") {
-      negotiateAudio().catch(error => {
+    if (peer.role === "host") {
+      negotiateAudio(peer).catch(error => {
         log("Erro ao preparar o áudio: " + error.message);
         audioFailed();
       });
     }
 
-    session.statsTimer = setInterval(updateAudioLevels, 250);
+    renderPeers();
+    renderLocalControls();
 
   }
 
-  // Idempotente. Chamado por closeConnection().
+  // Um aparelho saiu da sessão. Sem mais ninguém, volta ao início.
+  function removePeer(peer, notice) {
+
+    const wasConnected = peer.connected;
+
+    closePeer(peer);
+
+    if (!session || !wasConnected) return;
+
+    // Arquivos indo ou vindo desse aparelho param aqui.
+    for (const [key, entry] of session.outgoing) {
+      if (entry.peer === peer) finishOutgoing(key, "A conexão acabou antes de terminar.");
+    }
+
+    for (const [key, entry] of session.incoming) {
+      if (entry.peer !== peer) continue;
+      entry.channel?.close();
+      entry.ui.setStatus("A conexão acabou antes de terminar.");
+      entry.ui.hideProgress();
+      entry.ui.setActions();
+      session.incoming.delete(key);
+    }
+
+    if (!connectedPeers().length) {
+      goHome(notice, { id: peer.id, name: peer.name });
+      return;
+    }
+
+    addNote("👋 " + notice);
+    toast("👋 " + notice);
+
+    renderPeers();
+    renderLocalControls();
+    renderRemoteScreen();
+    renderConnectionState();
+
+  }
+
+  // Idempotente. Chamado por closeAllPeers().
   function endSession() {
 
     if (!session) return;
 
     clearInterval(session.statsTimer);
-    clearInterval(session.reconnect?.timer);
+    clearInterval(session.reconnectTimer);
     clearTimeout(session.toastTimer);
     clearTimeout(session.remoteDrawingTimer);
 
@@ -2366,7 +2481,6 @@
     session.screenTrack?.stop();
     session.objectUrls.forEach(url => URL.revokeObjectURL(url));
 
-    $("remoteAudio").srcObject = null;
     $("screenVideo").srcObject = null;
     $("sessionView").classList.remove("has-screen");
 
@@ -2379,19 +2493,36 @@
 
   $("leaveBtn").onclick = () => goHome();
 
-  // Nome do outro lado: o que ele escolheu, senão o tipo do aparelho.
-  function peerLabel() {
-    return cleanName(session?.remote.name) ||
-      DEVICE_NAMES[session?.remote.device] ||
+  // Nome de um aparelho: o que ele escolheu, senão o tipo do aparelho.
+  function peerLabel(peer) {
+    return cleanName(peer?.remote.name) ||
+      cleanName(peer?.name) ||
+      DEVICE_NAMES[peer?.remote.device] ||
       "O outro lado";
+  }
+
+  // Cabeçalho da sessão: com quem está conectado.
+  function renderPeers() {
+
+    const peer = firstPeer();
+
+    if (!session || !peer) return;
+
+    $("peerName").textContent = "direto com " + peerLabel(peer);
+    $("remoteLabel").textContent = peerLabel(peer) + ":";
+
+    renderRemoteState();
+    renderRememberButton();
+
   }
 
   $("sessionHelpBtn").onclick = () => show("helpModal");
 
   // Qualquer toque na sessão libera o áudio bloqueado pelo navegador.
   $("sessionView").addEventListener("pointerdown", () => {
-    const audio = $("remoteAudio");
-    if (audio.srcObject && audio.paused) playRemoteAudio();
+    if (connectedPeers().some(peer => peer.audio?.srcObject && peer.audio.paused)) {
+      playRemoteAudio();
+    }
   });
 
 
@@ -2401,30 +2532,31 @@
   // "disconnected"; se a rede voltar (Wi-Fi oscilou, tela apagou), a
   // conexão volta com tudo como estava. Aqui só mostramos isso e
   // desistimos depois de RECONNECT_GIVE_UP_S.
-  function connectionInterrupted(giveUp) {
+  function connectionInterrupted(peer, giveUp) {
 
-    if (!session || session.reconnect) return;
+    if (!session || peer.reconnect) return;
 
-    session.reconnect = {
-      startedAt: Date.now(),
-      timer: setInterval(renderConnectionState, 1000),
-      giveUp
-    };
+    peer.reconnect = { startedAt: Date.now(), lastAttempt: 0, giveUp };
 
-    addNote("⚠️ A conexão caiu. Tentando reconectar…");
-    toast("⚠️ A conexão caiu. Tentando reconectar…");
+    session.reconnectTimer ??= setInterval(renderConnectionState, 1000);
+
+    const text = connectedPeers().length > 1
+      ? `⚠️ A conexão com ${peerLabel(peer)} caiu. Tentando reconectar…`
+      : "⚠️ A conexão caiu. Tentando reconectar…";
+
+    addNote(text);
+    toast(text);
 
     renderConnectionState();
-    reconnectAttempt();
+    reconnectAttempt(peer);
 
   }
 
-  function connectionRestored() {
+  function connectionRestored(peer) {
 
-    if (!session?.reconnect) return;
+    if (!session || !peer.reconnect) return;
 
-    clearInterval(session.reconnect.timer);
-    session.reconnect = null;
+    peer.reconnect = null;
 
     addNote("✅ Reconectado!");
     toast("✅ Reconectado!");
@@ -2437,20 +2569,41 @@
 
     if (!session) return;
 
-    const reconnect = session.reconnect;
+    let reconnect = null;
+
+    for (const peer of connectedPeers()) {
+
+      const current = peer.reconnect;
+
+      if (!current) continue;
+
+      const elapsed = Math.floor((Date.now() - current.startedAt) / 1000);
+
+      if (elapsed >= RECONNECT_GIVE_UP_S) {
+        peer.reconnect = null;
+        current.giveUp();
+        if (!session) return; // era o último: voltou para o início
+        continue;
+      }
+
+      if (elapsed > 0 && elapsed % RECONNECT_EVERY_S === 0 && current.lastAttempt !== elapsed) {
+        current.lastAttempt = elapsed;
+        reconnectAttempt(peer);
+      }
+
+      // Mostra quem está caído há mais tempo.
+      if (!reconnect || current.startedAt < reconnect.startedAt) reconnect = current;
+
+    }
+
+    if (!reconnect) {
+      clearInterval(session.reconnectTimer);
+      session.reconnectTimer = null;
+    }
 
     if (reconnect) {
 
       const elapsed = Math.floor((Date.now() - reconnect.startedAt) / 1000);
-
-      if (elapsed >= RECONNECT_GIVE_UP_S) {
-        clearInterval(reconnect.timer);
-        session.reconnect = null;
-        reconnect.giveUp();
-        return;
-      }
-
-      if (elapsed > 0 && elapsed % RECONNECT_EVERY_S === 0) reconnectAttempt();
 
       $("sessionTitle").textContent = "Reconectando…";
       $("sessionTitleNote").textContent =
@@ -2470,26 +2623,25 @@
 
   /* ---------------- mensagens ---------------- */
 
-  function handleSessionMessage(message) {
+  function handleSessionMessage(peer, message) {
 
-    if (!session) return;
+    if (!session || !peer.connected) return;
 
     switch (message.type) {
 
       case "hello":
-        session.remote.device = message.device;
-        session.remote.name = cleanName(message.name);
-        peerNameChanged(message.name);
-        $("peerName").textContent = "direto com " + peerLabel();
-        $("remoteLabel").textContent = peerLabel() + ":";
+        peer.remote.device = message.device;
+        peer.remote.name = cleanName(message.name);
+        peerNameChanged(peer, message.name);
+        renderPeers();
         break;
 
       case "state":
-        handleRemoteState(message);
+        handleRemoteState(peer, message);
         break;
 
       case "sdp":
-        handleRemoteSdp(message).catch(error => {
+        handleRemoteSdp(peer, message).catch(error => {
           log("Erro na renegociação: " + error.message);
           audioFailed();
         });
@@ -2505,7 +2657,7 @@
       case "draw-move":
       case "draw-end":
       case "clear":
-        handleRemoteDraw(message);
+        handleRemoteDraw(peer, message);
         break;
 
       case "file-offer":
@@ -2513,7 +2665,7 @@
       case "file-decline":
       case "file-cancel":
       case "file-done":
-        handleFileMessage(message);
+        handleFileMessage(peer, message);
         break;
 
     }
@@ -2654,28 +2806,28 @@
 
   /* ---------------- áudio ---------------- */
 
-  async function negotiateAudio() {
+  async function negotiateAudio(peer) {
 
-    const pc = session.pc;
+    const pc = peer.pc;
 
     // Áudio (microfone) e vídeo (tela) de uma vez: depois é só trocar a trilha.
-    session.audioTransceiver =
+    peer.audioTransceiver =
       pc.addTransceiver("audio", { direction: "sendrecv" });
 
-    session.videoTransceiver =
+    peer.videoTransceiver =
       pc.addTransceiver("video", { direction: "sendrecv" });
 
     await pc.setLocalDescription(await pc.createOffer());
 
-    send({ type: "sdp", description: pc.localDescription.toJSON() });
+    sendTo(peer, { type: "sdp", description: pc.localDescription.toJSON() });
 
     log("Renegociação do áudio e do vídeo enviada pelo DataChannel.");
 
   }
 
-  async function handleRemoteSdp({ description }) {
+  async function handleRemoteSdp(peer, { description }) {
 
-    const pc = session.pc;
+    const pc = peer.pc;
 
     await pc.setRemoteDescription(description);
 
@@ -2685,23 +2837,59 @@
       const transceiverOf = kind => pc.getTransceivers()
         .find(transceiver => transceiver.receiver.track?.kind === kind);
 
-      session.audioTransceiver = transceiverOf("audio");
-      session.videoTransceiver = transceiverOf("video");
+      peer.audioTransceiver = transceiverOf("audio");
+      peer.videoTransceiver = transceiverOf("video");
 
-      session.audioTransceiver.direction = "sendrecv";
+      peer.audioTransceiver.direction = "sendrecv";
 
-      if (session.videoTransceiver) session.videoTransceiver.direction = "sendrecv";
+      if (peer.videoTransceiver) peer.videoTransceiver.direction = "sendrecv";
 
       await pc.setLocalDescription(await pc.createAnswer());
 
-      send({ type: "sdp", description: pc.localDescription.toJSON() });
+      sendTo(peer, { type: "sdp", description: pc.localDescription.toJSON() });
 
     }
 
-    log("Canal de áudio pronto.");
+    log(`Canal de áudio com ${peerLabel(peer)} pronto.`);
 
-    session.audioReady = true;
+    peer.audioReady = true;
+
+    // Microfone ou tela já ligados (por causa de outra pessoa): manda para este também.
+    await applyLocalTracks(peer);
+
     renderLocalControls();
+
+  }
+
+  // Áudio pronto com todo mundo na sessão.
+  const audioReady = () => {
+    const list = connectedPeers();
+    return list.length > 0 && list.every(peer => peer.audioReady);
+  };
+
+  const canShareScreen = () =>
+    audioReady() && connectedPeers().every(peer => peer.videoTransceiver);
+
+  function applyLocalTracks(peer) {
+
+    if (!session || !peer.audioReady) return Promise.resolve();
+
+    return Promise.all([
+      peer.audioTransceiver.sender.replaceTrack(session.micTrack),
+      peer.videoTransceiver?.sender.replaceTrack(session.screenTrack)
+    ]).catch(error => log("Erro ao trocar a trilha: " + error.message));
+
+  }
+
+  // Troca a trilha do microfone ou da tela em todas as conexões.
+  function replaceTrackEverywhere(kind, track) {
+
+    return Promise.all(connectedPeers()
+      .filter(peer => peer.audioReady)
+      .map(peer => {
+        const transceiver = kind === "audio" ? peer.audioTransceiver : peer.videoTransceiver;
+        return transceiver?.sender.replaceTrack(track);
+      }));
 
   }
 
@@ -2716,15 +2904,15 @@
 
   $("micBtn").onclick = async () => {
 
-    if (!session?.audioReady) return;
-
-    const sender = session.audioTransceiver.sender;
+    if (!session || !audioReady()) return;
 
     if (session.micTrack) {
 
-      await sender.replaceTrack(null);
-      session.micTrack.stop();
+      const track = session.micTrack;
+
       session.micTrack = null;
+      await replaceTrackEverywhere("audio", null).catch(() => {});
+      track.stop();
 
     } else {
 
@@ -2745,8 +2933,8 @@
           return;
         }
 
-        await sender.replaceTrack(track);
         session.micTrack = track;
+        await replaceTrackEverywhere("audio", track);
 
       } catch (error) {
 
@@ -2772,7 +2960,7 @@
     if (!session) return;
 
     session.speakerOn = !session.speakerOn;
-    $("remoteAudio").muted = !session.speakerOn;
+    peers.forEach(peer => { if (peer.audio) peer.audio.muted = !session.speakerOn; });
 
     if (session.speakerOn) playRemoteAudio();
 
@@ -2786,33 +2974,44 @@
   // O navegador pode bloquear som que começa sem um toque do usuário.
   function playRemoteAudio() {
 
-    const audio = $("remoteAudio");
+    const audios = connectedPeers()
+      .map(peer => peer.audio)
+      .filter(audio => audio?.srcObject);
 
-    if (!audio.srcObject) return;
+    if (!audios.length) return;
 
-    audio.play()
+    Promise.all(audios.map(audio => audio.play()))
       .then(() => show("unlockAudioBtn", false))
       .catch(() => show("unlockAudioBtn", session?.speakerOn ?? false));
 
   }
 
-  function sendState() {
-    send({
+  // peer omitido: para todos.
+  function sendState(peer) {
+
+    const message = {
       type: "state",
       mic: !!session.micTrack,
       speaker: session.speakerOn,
       screen: !!session.screenTrack
-    });
+    };
+
+    if (peer) sendTo(peer, message);
+    else send(message);
+
   }
 
   function renderLocalControls() {
 
+    if (!session) return;
+
+    const ready = audioReady();
     const micOn = !!session.micTrack;
 
-    $("micBtn").disabled = !session.audioReady;
+    $("micBtn").disabled = !ready;
     $("micBtn").classList.toggle("on", micOn);
     $("micBtn").classList.remove("speaking");
-    $("micLabel").textContent = !session.audioReady
+    $("micLabel").textContent = !ready
       ? "Preparando áudio…"
       : micOn ? "Microfone: ligado" : "Microfone: desligado";
 
@@ -2823,16 +3022,16 @@
 
     const sharing = !!session.screenTrack;
 
-    $("screenBtn").disabled = !session.audioReady || !session.videoTransceiver;
+    $("screenBtn").disabled = !canShareScreen();
     $("screenBtn").classList.toggle("on", sharing);
     $("screenLabel").textContent = sharing ? "Parar de compartilhar" : "Compartilhar tela";
 
   }
 
-  function handleRemoteState({ mic, speaker, screen = false }) {
+  function handleRemoteState(peer, { mic, speaker, screen = false }) {
 
-    const remote = session.remote;
-    const who = peerLabel();
+    const remote = peer.remote;
+    const who = peerLabel(peer);
 
     // Avisa só mudanças (não o estado inicial).
     if (remote.known) {
@@ -2878,7 +3077,8 @@
 
   function renderRemoteState() {
 
-    const { mic, speaker } = session.remote;
+    const peer = firstPeer();
+    const { mic, speaker } = peer?.remote || { mic: false, speaker: true };
 
     const micPill = $("remoteMicPill");
     micPill.textContent = mic ? "🎙️ Microfone ligado" : "🎙️ Microfone desligado";
@@ -2893,21 +3093,28 @@
   // Nível do som (0–1) pelo getStats: acende quem está falando.
   async function updateAudioLevels() {
 
-    if (!session?.audioReady) return;
+    if (!session) return;
 
     const current = session;
-    let remoteLevel = 0;
+    const list = connectedPeers().filter(peer => peer.audioReady);
+    const remoteLevels = new Map();
     let localLevel = 0;
+
+    if (!list.length) return;
 
     try {
 
-      const stats = await current.pc.getStats();
+      await Promise.all(list.map(async peer => {
 
-      stats.forEach(report => {
-        if (report.kind !== "audio" || report.audioLevel == null) return;
-        if (report.type === "inbound-rtp") remoteLevel = report.audioLevel;
-        if (report.type === "media-source") localLevel = report.audioLevel;
-      });
+        const stats = await peer.pc.getStats();
+
+        stats.forEach(report => {
+          if (report.kind !== "audio" || report.audioLevel == null) return;
+          if (report.type === "inbound-rtp") remoteLevels.set(peer, report.audioLevel);
+          if (report.type === "media-source") localLevel = Math.max(localLevel, report.audioLevel);
+        });
+
+      }));
 
     } catch {
       return;
@@ -2915,8 +3122,10 @@
 
     if (current !== session) return;
 
+    const peer = firstPeer();
+
     $("remoteMicPill").classList.toggle(
-      "speaking", session.remote.mic && remoteLevel > SPEAKING_LEVEL
+      "speaking", !!peer?.remote.mic && (remoteLevels.get(peer) || 0) > SPEAKING_LEVEL
     );
 
     $("micBtn").classList.toggle(
@@ -2930,7 +3139,7 @@
 
   $("screenBtn").onclick = async () => {
 
-    if (!session?.audioReady || !session.videoTransceiver) return;
+    if (!session || !canShareScreen()) return;
 
     if (session.screenTrack) {
       stopScreenShare();
@@ -2957,8 +3166,8 @@
       // "Parar compartilhamento" do próprio navegador.
       track.onended = () => stopScreenShare();
 
-      await session.videoTransceiver.sender.replaceTrack(track);
       session.screenTrack = track;
+      await replaceTrackEverywhere("video", track);
 
       log("Compartilhando a tela.");
 
@@ -2988,7 +3197,7 @@
     track.onended = null;
     track.stop();
 
-    await session.videoTransceiver.sender.replaceTrack(null).catch(() => {});
+    await replaceTrackEverywhere("video", null).catch(() => {});
 
     log("Parou de compartilhar a tela.");
 
@@ -2997,18 +3206,27 @@
 
   }
 
-  // O outro começou/parou de compartilhar: mostra ou esconde a Tela.
+  // Alguém começou/parou de compartilhar: mostra ou esconde a Tela.
+  // Mostra a tela do primeiro que estiver compartilhando.
   function renderRemoteScreen() {
 
-    const sharing = session.remote.screen;
+    if (!session) return;
+
+    const video = $("screenVideo");
+    const presenter = connectedPeers().find(peer => peer.remote.screen) || null;
+    const sharing = !!presenter;
+    const stream = presenter?.videoStream || null;
+    const changed = video.srcObject !== stream;
+
+    if (changed) video.srcObject = stream;
 
     $("sessionView").classList.toggle("has-screen", sharing);
     show("remoteScreenPill", sharing);
-    $("screenTitle").textContent = "🖥️ Tela de " + peerLabel();
+    $("screenTitle").textContent = "🖥️ Tela de " + peerLabel(presenter);
 
     if (sharing) {
-      $("screenVideo").play().catch(() => {});
-      setTab("screen");
+      video.play().catch(() => {});
+      if (changed) setTab("screen");
     } else if (session.tab === "screen" || session.stage === "screen") {
       session.stage = "board";
       setTab(session.tab === "screen" ? "board" : session.tab);
@@ -3221,9 +3439,12 @@
 
   };
 
-  function handleRemoteDraw(message) {
+  function handleRemoteDraw(peer, message) {
 
-    const who = peerLabel();
+    const who = peerLabel(peer);
+
+    // Cada um sorteia os ids dos próprios traços: separa por aparelho.
+    const id = peer.id + ":" + message.id;
 
     if (message.type === "clear") {
       session.strokes.clear();
@@ -3237,13 +3458,13 @@
 
       const stroke = { color: message.color, width: message.width, points: [message.point] };
 
-      session.strokes.set(message.id, stroke);
+      session.strokes.set(id, stroke);
       drawSegment(stroke, 0);
       bump("board");
 
     } else if (message.type === "draw-move") {
 
-      const stroke = session.strokes.get(message.id);
+      const stroke = session.strokes.get(id);
 
       if (!stroke) return;
 
@@ -3345,29 +3566,38 @@
 
   }
 
+  // Os ids de arquivo são sorteados por quem envia: separa por aparelho.
+  const fileKey = (peer, id) => peer.id + ":" + id;
+
+  // Oferece o arquivo a cada um na sessão (um cartão por pessoa).
   function offerFile(file) {
 
     if (!session) return;
 
-    const id = randomId();
-    const meta = { name: file.name, size: file.size, mime: file.type };
-    const ui = createFileCard(meta, true);
+    for (const peer of connectedPeers()) {
 
-    session.outgoing.set(id, { file, ui, channel: null });
+      const id = randomId();
+      const key = fileKey(peer, id);
+      const meta = { name: file.name, size: file.size, mime: file.type };
+      const ui = createFileCard(meta, true);
 
-    ui.setStatus("Aguardando o outro aceitar…");
-    ui.setActions(actionButton("Cancelar", () => {
-      send({ type: "file-cancel", id });
-      finishOutgoing(id, "Você cancelou o envio.");
-    }));
+      session.outgoing.set(key, { id, peer, file, ui, channel: null });
 
-    send({ type: "file-offer", id, ...meta });
+      ui.setStatus("Aguardando o outro aceitar…");
+      ui.setActions(actionButton("Cancelar", () => {
+        sendTo(peer, { type: "file-cancel", id });
+        finishOutgoing(key, "Você cancelou o envio.");
+      }));
+
+      sendTo(peer, { type: "file-offer", id, ...meta });
+
+    }
 
   }
 
-  function finishOutgoing(id, text) {
+  function finishOutgoing(key, text) {
 
-    const entry = session?.outgoing.get(id);
+    const entry = session?.outgoing.get(key);
 
     if (!entry) return;
 
@@ -3375,14 +3605,15 @@
     entry.ui.setStatus(text);
     entry.ui.hideProgress();
     entry.ui.setActions();
-    session.outgoing.delete(id);
+    session.outgoing.delete(key);
 
   }
 
-  function handleFileMessage(message) {
+  function handleFileMessage(peer, message) {
 
-    const who = peerLabel();
+    const who = peerLabel(peer);
     const { id } = message;
+    const key = fileKey(peer, id);
 
     switch (message.type) {
 
@@ -3392,18 +3623,18 @@
         const meta = { name: message.name, size: message.size, mime: message.mime };
         const ui = createFileCard(meta, false);
 
-        session.incoming.set(id, { meta, ui, chunks: [], received: 0, channel: null });
+        session.incoming.set(key, { peer, meta, ui, chunks: [], received: 0, channel: null });
 
         ui.setStatus("Quer aceitar este arquivo?");
         ui.setActions(
           actionButton("Recusar", () => {
-            send({ type: "file-decline", id });
+            sendTo(peer, { type: "file-decline", id });
             ui.setStatus("Você recusou.");
             ui.setActions();
-            session.incoming.delete(id);
+            session.incoming.delete(key);
           }),
           actionButton("⬇️ Aceitar e baixar", () => {
-            send({ type: "file-accept", id });
+            sendTo(peer, { type: "file-accept", id });
             ui.setStatus("Recebendo… 0%");
             ui.setProgress(0);
             ui.setActions();
@@ -3419,7 +3650,7 @@
 
       case "file-cancel": {
 
-        const entry = session.incoming.get(id);
+        const entry = session.incoming.get(key);
 
         if (!entry) return;
 
@@ -3427,39 +3658,39 @@
         entry.ui.setStatus(`${who} cancelou o envio.`);
         entry.ui.hideProgress();
         entry.ui.setActions();
-        session.incoming.delete(id);
+        session.incoming.delete(key);
 
         break;
       }
 
       // Enviando: resposta do outro.
       case "file-accept":
-        sendFile(id).catch(error => {
+        sendFile(key).catch(error => {
           log("Erro ao enviar arquivo: " + error.message);
-          finishOutgoing(id, "Falha no envio.");
+          finishOutgoing(key, "Falha no envio.");
         });
         break;
 
       case "file-decline":
-        finishOutgoing(id, `✕ ${who} recusou.`);
+        finishOutgoing(key, `✕ ${who} recusou.`);
         break;
 
       case "file-done":
-        finishOutgoing(id, `✓ Entregue para ${who}.`);
+        finishOutgoing(key, `✓ Entregue para ${who}.`);
         break;
 
     }
 
   }
 
-  async function sendFile(id) {
+  async function sendFile(key) {
 
-    const entry = session.outgoing.get(id);
+    const entry = session.outgoing.get(key);
 
     if (!entry) return;
 
-    const { file, ui } = entry;
-    const channel = session.pc.createDataChannel("file:" + id);
+    const { id, peer, file, ui } = entry;
+    const channel = peer.pc.createDataChannel("file:" + id);
 
     channel.binaryType = "arraybuffer";
     channel.bufferedAmountLowThreshold = FILE_BUFFER_LOW;
@@ -3468,8 +3699,8 @@
     ui.setStatus("Enviando… 0%");
     ui.setProgress(0);
     ui.setActions(actionButton("Cancelar", () => {
-      send({ type: "file-cancel", id });
-      finishOutgoing(id, "Você cancelou o envio.");
+      sendTo(peer, { type: "file-cancel", id });
+      finishOutgoing(key, "Você cancelou o envio.");
     }));
 
     await new Promise((resolve, reject) => {
@@ -3513,10 +3744,10 @@
 
   }
 
-  function receiveFileChannel(channel) {
+  function receiveFileChannel(peer, channel) {
 
-    const id = channel.label.slice("file:".length);
-    const entry = session?.incoming.get(id);
+    const key = fileKey(peer, channel.label.slice("file:".length));
+    const entry = session?.incoming.get(key);
 
     if (!entry) {
       channel.close();
@@ -3537,20 +3768,21 @@
       ui.setProgress(fraction);
       ui.setStatus(`Recebendo… ${Math.round(fraction * 100)}%`);
 
-      if (entry.received >= meta.size) finishIncoming(id);
+      if (entry.received >= meta.size) finishIncoming(key);
 
     };
 
-    if (meta.size === 0) finishIncoming(id);
+    if (meta.size === 0) finishIncoming(key);
 
   }
 
-  function finishIncoming(id) {
+  function finishIncoming(key) {
 
-    const entry = session.incoming.get(id);
-    const { meta, ui } = entry;
+    const entry = session.incoming.get(key);
+    const { peer, meta, ui } = entry;
+    const id = key.slice(peer.id.length + 1);
 
-    session.incoming.delete(id);
+    session.incoming.delete(key);
     entry.channel.close();
 
     const blob = new Blob(entry.chunks, { type: meta.mime || "application/octet-stream" });
@@ -3577,7 +3809,7 @@
 
     link.click(); // baixa automaticamente
 
-    send({ type: "file-done", id });
+    sendTo(peer, { type: "file-done", id });
 
   }
 
@@ -3589,8 +3821,10 @@
    */
 
   // onClose só é chamado quando o OUTRO lado fecha
-  // (closeConnection() remove o handler antes de fechar).
-  function setupDataChannel(channel, onOpen, onClose) {
+  // (closePeer() remove o handler antes de fechar).
+  function setupDataChannel(peer, channel, onOpen, onClose) {
+
+    peer.dc = channel;
 
     channel.onopen = () => {
       log("DataChannel conectado!");
@@ -3632,7 +3866,7 @@
           return;
         }
 
-        handleSessionMessage(message);
+        handleSessionMessage(peer, message);
 
       } catch (error) {
         console.error(error);
@@ -3694,8 +3928,6 @@
   let room = null;        // { name, channel, joinedAt, requestedTo }
   let pending = null;     // pedido em andamento: { pairId, peer, role, via, timer, failed }
   let incoming = null;    // pedido recebido esperando Aceitar/Recusar
-  let pair = null;        // { id, channel, role, peer } da conexão aceita
-  let currentPeer = null; // { id, name } de quem está na sessão
 
   const deviceChannels = new Map();
 
@@ -4048,9 +4280,16 @@
 
     try {
 
-      await openPair(request.pairId, "host", peer);
+      const conn = await openPair(request.pairId, "host", peer);
+
+      // Cancelado nesse meio-tempo.
+      if (pending?.pairId !== request.pairId) {
+        closePeer(conn);
+        return;
+      }
+
       await sendToDevice(peer.id, { type: "accept", pairId: request.pairId, auto, from: publicMe() });
-      await startHostNegotiation();
+      await startHostNegotiation(conn);
 
     } catch (error) {
 
@@ -4151,7 +4390,7 @@
 
     const { peer, via, role } = pending;
 
-    cleanupConnection();
+    cleanupPending();
 
     pending = { peer, via, role, failed: true, pairId: null, timer: null };
 
@@ -4170,7 +4409,7 @@
         .catch(() => {});
     }
 
-    cleanupConnection();
+    cleanupPending();
     pending = null;
     show("pendingModal", false);
 
@@ -4200,49 +4439,46 @@
 
   /* ---------------- conexão (canal pair:<id>) ---------------- */
 
-  async function openPair(pairId, role, peer) {
+  // Cria a entrada do aparelho e escuta o canal da conexão com ele.
+  async function openPair(pairId, role, { id, name }) {
 
-    closePair();
+    const old = peers.get(id);
 
+    if (old) closePeer(old);
+
+    const peer = newPeer({ id, name }, role, pairId);
     const channel = client.channel("pair:" + pairId, { config: { broadcast: { self: false } } });
 
     channel.on("broadcast", { event: "sdp" }, ({ payload }) =>
-      handlePairSdp(payload).catch(error => log("Erro na negociação: " + error.message))
+      handlePairSdp(peer, payload).catch(error => log("Erro na negociação: " + error.message))
     );
 
-    pair = { id: pairId, channel, role, peer };
+    peer.channel = channel;
+    peers.set(id, peer);
 
     await subscribe(channel);
 
-  }
-
-  function closePair() {
-
-    if (!pair) return;
-
-    client.removeChannel(pair.channel);
-    pair = null;
+    return peer;
 
   }
 
-  function sendSdp(description) {
-    return pair?.channel.send({ type: "broadcast", event: "sdp", payload: { description } });
+  function sendSdp(peer, description) {
+    return peer.channel.send({ type: "broadcast", event: "sdp", payload: { description } });
   }
 
   // Quem aceitou cria o canal de dados e a oferta.
-  async function startHostNegotiation() {
+  async function startHostNegotiation(peer) {
 
-    const pc = createPeerConnection(connectionFailed);
+    const pc = createPeerConnection(peer);
 
-    dataChannel = pc.createDataChannel("control");
-    setupDataChannel(dataChannel, onConnected, onPeerLeft);
+    setupDataChannel(peer, pc.createDataChannel("control"), () => onConnected(peer), () => onPeerLeft(peer));
 
-    await sendOffer(pc);
+    await sendOffer(peer, pc);
 
   }
 
   // Sem "trickle": espera juntar os candidatos e manda tudo numa mensagem.
-  async function sendOffer(pc, iceRestart = false) {
+  async function sendOffer(peer, pc, iceRestart = false) {
 
     await pc.setLocalDescription(await pc.createOffer({ iceRestart }));
 
@@ -4250,30 +4486,31 @@
 
     await waitForIceGathering(pc);
 
-    if (peerConnection !== pc) return;
+    if (peer.pc !== pc || peer.closed) return;
 
-    await sendSdp(pc.localDescription.toJSON());
+    await sendSdp(peer, pc.localDescription.toJSON());
 
     log(iceRestart ? "Oferta de reconexão enviada pelo Supabase." : "Oferta enviada pelo Supabase.");
 
   }
 
-  async function handlePairSdp({ description } = {}) {
+  async function handlePairSdp(peer, { description } = {}) {
 
-    if (!pair || !["offer", "answer"].includes(description?.type)) return;
+    if (peer.closed || !["offer", "answer"].includes(description?.type)) return;
 
-    if (description.type === "offer" && pair.role === "guest") {
+    if (description.type === "offer" && peer.role === "guest") {
 
-      let pc = peerConnection;
+      let pc = peer.pc;
 
       // Primeira oferta: conexão nova. Depois disso: reconexão (ICE restart).
-      if (!pc || !session) {
+      if (!pc || !peer.connected) {
 
-        pc = createPeerConnection(connectionFailed);
+        if (pc) pc.close();
+
+        pc = createPeerConnection(peer);
 
         pc.ondatachannel = event => {
-          dataChannel = event.channel;
-          setupDataChannel(dataChannel, onConnected, onPeerLeft);
+          setupDataChannel(peer, event.channel, () => onConnected(peer), () => onPeerLeft(peer));
         };
 
       }
@@ -4282,19 +4519,19 @@
       await pc.setLocalDescription(await pc.createAnswer());
       await waitForIceGathering(pc);
 
-      if (peerConnection !== pc) return;
+      if (peer.pc !== pc || peer.closed) return;
 
-      await sendSdp(pc.localDescription.toJSON());
+      await sendSdp(peer, pc.localDescription.toJSON());
 
       log("Resposta enviada pelo Supabase.");
 
     } else if (
       description.type === "answer" &&
-      pair.role === "host" &&
-      peerConnection?.signalingState === "have-local-offer"
+      peer.role === "host" &&
+      peer.pc?.signalingState === "have-local-offer"
     ) {
 
-      await peerConnection.setRemoteDescription(description);
+      await peer.pc.setRemoteDescription(description);
       log("Resposta recebida pelo Supabase.");
 
     }
@@ -4302,71 +4539,82 @@
   }
 
   // Chamado pela sessão quando a conexão cai e a cada nova tentativa.
-  function reconnectAttempt() {
+  function reconnectAttempt(peer) {
 
-    if (!pair || pair.role !== "host" || !peerConnection) return;
+    if (peer.closed || peer.role !== "host" || !peer.pc) return;
 
-    log("Tentando reconectar (ICE restart pelo Supabase)…");
+    log(`Tentando reconectar com ${peerLabel(peer)} (ICE restart pelo Supabase)…`);
 
-    sendOffer(peerConnection, true).catch(error =>
+    sendOffer(peer, peer.pc, true).catch(error =>
       log("Erro ao tentar reconectar: " + error.message)
     );
 
   }
 
-  function onConnected() {
+  function onConnected(peer) {
 
-    const role = pair.role;
-
-    currentPeer = { ...pair.peer };
+    if (peer.closed) return;
 
     const auto = !!pending?.auto;
 
-    clearTimeout(pending?.timer);
-    pending = null;
-    show("pendingModal", false);
+    if (pending?.pairId === peer.pairId) {
+      clearTimeout(pending.timer);
+      pending = null;
+      show("pendingModal", false);
+    }
 
     // A sala já cumpriu o papel: libera para outros.
     leaveRoom();
 
-    startSession(role);
-    renderRememberButton();
+    if (!session) startSession(peer.role);
+
+    addPeerToSession(peer);
 
     if (auto) {
-      addNote(role === "host"
+      addNote(peer.role === "host"
         ? "⚡ Aceito automaticamente: você marcou “Sempre aceitar” para este dispositivo."
         : "⚡ O outro aparelho aceitou automaticamente (“Sempre aceitar”).");
     }
 
   }
 
-  // O outro saiu (ou a conexão não voltou): volta para o início.
-  function onPeerLeft() {
-    goHome(`${peerName(currentPeer)} foi desconectado.`, currentPeer);
+  // O outro saiu (ou a conexão não voltou).
+  function onPeerLeft(peer) {
+    removePeer(peer, `${peerLabel(peer)} foi desconectado.`);
   }
 
-  function connectionFailed(message, lost = false) {
+  function connectionFailed(peer, message, lost = false) {
 
-    if (session) {
-      goHome(lost ? "A conexão caiu e não voltou." : message, currentPeer);
+    if (peer.connected) {
+      removePeer(peer, lost ? `A conexão com ${peerLabel(peer)} caiu e não voltou.` : message);
       return;
     }
 
-    pendingFailed("Não foi possível abrir a conexão direta. " + message);
+    if (pending?.pairId === peer.pairId) {
+      pendingFailed("Não foi possível abrir a conexão direta. " + message);
+    } else {
+      closePeer(peer);
+    }
 
   }
 
-  function cleanupConnection() {
+  // Desfaz o pedido em andamento (e a conexão que ele estava abrindo).
+  function cleanupPending() {
 
-    clearTimeout(pending?.timer);
-    closeConnection();
-    closePair();
+    if (!pending) return;
+
+    clearTimeout(pending.timer);
+
+    const peer = peers.get(pending.peer.id);
+
+    if (peer && !peer.connected && peer.pairId === pending.pairId) closePeer(peer);
 
   }
 
   function goHome(notice, retryPeer = null) {
 
-    cleanupConnection();
+    cleanupPending();
+    closeAllPeers();
     pending = null;
     show("pendingModal", false);
 
@@ -4652,16 +4900,19 @@
 
   $("rememberBtn").onclick = () => {
 
-    if (!currentPeer) return;
+    const peer = firstPeer();
 
-    if (isRemembered(currentPeer.id)) forget(currentPeer.id);
-    else remember(currentPeer);
+    if (!peer) return;
+
+    if (isRemembered(peer.id)) forget(peer.id);
+    else remember(peer);
 
   };
 
   function renderRememberButton() {
 
-    const remembered = !!currentPeer && isRemembered(currentPeer.id);
+    const peer = firstPeer();
+    const remembered = !!peer && isRemembered(peer.id);
 
     $("rememberBtn").textContent = remembered ? "★ Lembrado" : "☆ Lembrar";
     $("rememberBtn").classList.toggle("on", remembered);
@@ -4669,13 +4920,13 @@
   }
 
   // O outro mandou o nome na sessão: mantém a lista atualizada.
-  function peerNameChanged(name) {
+  function peerNameChanged(peer, name) {
 
-    if (!currentPeer || !cleanName(name)) return;
+    if (!cleanName(name)) return;
 
-    currentPeer.name = cleanName(name);
+    peer.name = cleanName(name);
 
-    if (isRemembered(currentPeer.id)) remember(currentPeer);
+    if (isRemembered(peer.id)) remember(peer);
 
   }
 
