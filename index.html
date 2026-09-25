@@ -3277,6 +3277,72 @@
       overflow-wrap: anywhere;
     }
 
+    /* 🔊 Sons */
+
+    .sounds-list {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .sounds-list li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .widget .sound-play {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    .sound-play .sound-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sound-play.playing {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .35);
+    }
+
+    .sound-play:disabled {
+      opacity: .55;
+    }
+
+    .sounds-list .sound-rename {
+      flex: 1;
+    }
+
+    .sounds-form {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+      flex: none;
+    }
+
+    .sounds-form .sound-source {
+      display: flex;
+      gap: 6px;
+      grid-column: 1 / -1;
+    }
+
+    .sounds-form .sound-source input {
+      flex: 1;
+    }
+
     /* ✅ Tarefas */
 
     .tasks-form {
@@ -4343,12 +4409,13 @@
           <button id="addDiceBtn" class="tool" title="Sorteio: dado, moeda ou nome (todos veem o mesmo resultado)"><span class="ic" data-icon="dice"></span><span class="rail-label">Sorteio</span></button>
           <button id="addTasksBtn" class="tool" title="Lista de tarefas: todos adicionam e marcam"><span class="ic" data-icon="tasks"></span><span class="rail-label">Tarefas</span></button>
           <button id="addRadioBtn" class="tool" title="Rádio: música ambiente tocando para todos (cada um no seu volume)"><span class="ic" data-icon="radio"></span><span class="rail-label">Rádio</span></button>
+          <button id="addSoundsBtn" class="tool" title="Sons: cada um adiciona sons (link ou arquivo); tocar toca para todos"><span class="ic" data-icon="volume"></span><span class="rail-label">Sons</span></button>
           <button id="addPaletteBtn" class="tool" title="Barra de ferramentas flutuante: pode ter várias; cada um que mexe muda só a própria ferramenta"><span class="ic" data-icon="palette"></span><span class="rail-label">Ferramentas</span></button>
           <button id="addChatBtn" class="tool" title="Chat numa janela: dá para mover, mudar o tamanho e abrir em picture-in-picture"><span class="ic" data-icon="chat"></span><span class="rail-label">Chat</span></button>
         </div>
         <input id="displayFileInput" type="file" accept="image/*" multiple hidden>
         <button id="boardModeBtn" class="tool active"><span id="boardModeIcon" class="ic"></span><span id="boardModeLabel" class="btn-label">Editando</span></button>
-        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo, jogos, código, enquete, timer, sorteio, tarefas, rádio, ferramentas e chat" aria-expanded="false">⋯</button>
+        <button id="moreTrayBtn" class="tool tray-btn mobile-only" data-tray="more" title="Novo quadro, imagem, site, vídeo, jogos, código, enquete, timer, sorteio, tarefas, rádio, sons, ferramentas e chat" aria-expanded="false">⋯</button>
       </div>
 
       <!-- Espaço infinito: arrastar o fundo move, pinça / Ctrl+roda dá zoom. -->
@@ -5878,6 +5945,10 @@
         receiveReaction(peer, message);
         break;
 
+      case "sound-play":
+        receiveSoundPlay(peer, message);
+        break;
+
       case "img-data":
         receiveImageChunk(peer, message);
         break;
@@ -6112,6 +6183,10 @@
     // Imagens que estão à vista (todas, no histórico completo; senão, as minhas).
     for (const entry of session.displays.values()) {
       if (entry.current && (full || isMine(entry))) sendImage(peer, entry.current);
+      // Sons enviados como arquivo: todos no completo; senão, os que eu adicionei.
+      if (entry.kind === "sounds") {
+        for (const sound of soundList(entry)) if (sound.file && (full || sound.by === me.id)) sendImage(peer, sound.file);
+      }
     }
 
     if (full) log(`Histórico enviado para ${peerLabel(peer)}: ${chat.length} mensagens, ${strokes.length} traços.`);
@@ -9887,8 +9962,8 @@
   const isMine = entry => entry.owner === me.id;
 
   // kind: "image" | "site" | "youtube" (veja "janelas de site e de vídeo") | "code"
-  // | "poll" | "timer" | "dice" | "tasks" | "radio" | "palette" | "chat" (veja "ferramentas da sala").
-  const DISPLAY_KINDS = ["image", "site", "youtube", "code", "poll", "timer", "dice", "tasks", "radio", "palette", "chat"];
+  // | "poll" | "timer" | "dice" | "tasks" | "radio" | "sounds" | "palette" | "chat" (veja "ferramentas da sala").
+  const DISPLAY_KINDS = ["image", "site", "youtube", "code", "poll", "timer", "dice", "tasks", "radio", "sounds", "palette", "chat"];
 
   function ensureDisplay(id, owner, kind = "image") {
 
@@ -10180,6 +10255,7 @@
 
     for (const target of targets) {
       if (entry.current) sendImage(target, entry.current);
+      if (entry.kind === "sounds") soundFiles(entry).forEach(file => sendImage(target, file));
       sendTo(target, { type: "display-set", ...displayData(entry) });
     }
 
@@ -10235,7 +10311,7 @@
 
     const mime = String(message.mime || "");
 
-    if (!/^image\/(webp|png|jpeg|gif)$/.test(mime)) return;
+    if (!/^image\/(webp|png|jpeg|gif)$/.test(mime) && !SOUND_MIME.test(mime)) return;
 
     let pending = session.incomingImages.get(imageId);
 
@@ -10272,7 +10348,7 @@
     }
 
     for (const entry of session.displays.values()) {
-      if (entry.current === imageId) renderDisplay(entry.id);
+      if (entry.current === imageId || (entry.kind === "sounds" && soundFiles(entry).includes(imageId))) renderDisplay(entry.id);
     }
 
   }
@@ -10395,7 +10471,7 @@
    * { kind: "youtube", video, play }.
    */
 
-  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻", poll: "📊", timer: "⏱️", dice: "🎲", tasks: "✅", radio: "📻", palette: "🖌️", chat: "💬" };
+  const DISPLAY_ICONS = { image: "🖼️", site: "🌐", youtube: "▶️", code: "💻", poll: "📊", timer: "⏱️", dice: "🎲", tasks: "✅", radio: "📻", sounds: "🔊", palette: "🖌️", chat: "💬" };
 
   const CAN_SITE = CAN_SHARE_SCREEN && ("RestrictionTarget" in window || "CropTarget" in window);
   const YT_ID = /^[\w-]{11}$/;
@@ -11813,6 +11889,7 @@
     dice: { icon: "🎲", name: "Sorteio", note: "um sorteio", w: 440, ar: [1, 1], create: createDiceWidget, render: renderDiceWidget, clean: cleanDiceKey, prune: pruneDice },
     tasks: { icon: "✅", name: "Tarefas", note: "uma lista de tarefas", w: 420, ar: [4, 5], create: createTasksWidget, render: renderTasksWidget, clean: cleanTaskKey },
     radio: { icon: "📻", name: "Rádio", note: "o rádio", w: 520, ar: [1, 1], create: createRadioWidget, render: renderRadioWidget, clean: cleanRadioKey },
+    sounds: { icon: "🔊", name: "Sons", note: "um card de sons", w: 420, ar: [4, 5], create: createSoundsWidget, render: renderSoundsWidget, clean: cleanSoundKey, label: "tocar toca para todos" },
     chat: { icon: "💬", name: "Chat", note: "uma janela de chat", w: 380, ar: [3, 4], create: createChatWidget, render: renderChatWidget, clean: () => undefined, label: "todos conversam" },
     palette: { icon: "🖌️", name: "Ferramentas", note: "uma barra de ferramentas", w: 250, ar: [9, 10], create: createPaletteWidget, render: renderPaletteWidget, clean: () => undefined, label: "cada um muda só a sua" }
   };
@@ -11825,6 +11902,7 @@
   $("addDiceBtn").onclick = () => openWidget("dice");
   $("addTasksBtn").onclick = () => openWidget("tasks");
   $("addRadioBtn").onclick = () => openWidget("radio");
+  $("addSoundsBtn").onclick = () => openWidget("sounds");
   $("addPaletteBtn").onclick = () => openWidget("palette");
   $("addChatBtn").onclick = () => openWidget("chat");
 
@@ -12630,6 +12708,257 @@
       return item;
 
     }));
+
+  }
+
+
+  /* 🔊 Sons
+   * "s:<id>": { name, url | file, at, by } (null = tirado). Cada um
+   * adiciona sons por link (https) ou arquivo; só o nome dá para mudar.
+   * O arquivo vai para todos em pedaços, como as imagens (session.images),
+   * e não fica na memória da sala. ▶ toca para todos: "sound-play", que
+   * não fica no histórico (quem chega não ouve sons antigos).
+   * Muda o nome ou tira: quem adicionou (ou o dono do card).
+   */
+
+  const SOUND_NAME_MAX = 40;
+  const SOUND_FILE_MAX = 3 * 1024 * 1024;
+  const SOUND_MIME = /^audio\/(mpeg|mp3|ogg|wav|x-wav|wave|webm|mp4|aac|x-m4a|m4a|flac|x-flac|opus)$/;
+  const SOUND_PLAY_GAP_MS = 250;
+  const SOUND_EXTENSIONS = { mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", opus: "audio/ogg", m4a: "audio/mp4", aac: "audio/aac", webm: "audio/webm", flac: "audio/flac" };
+
+  function cleanSoundKey(key, v, by, entry) {
+
+    if (!key.startsWith("s:")) return undefined;
+
+    const current = entry.state[key]?.v;
+    const author = current?.by || (key.slice(2, 10) === by.slice(0, 8) ? by : null);
+
+    // Só quem adicionou muda; o dono do card também pode tirar.
+    if (v === null) return author === by || entry.owner === by ? null : undefined;
+    if (author !== by) return undefined;
+
+    const name = cleanText(v?.name, SOUND_NAME_MAX);
+    const url = v?.url ? cleanSiteUrl(v.url) : null;
+    const file = typeof v?.file === "string" && BOARD_ID.test(v.file) ? v.file : null;
+
+    if (!name || !Number.isFinite(v.at) || (!url && !file)) return undefined;
+    // O endereço ou o arquivo não mudam depois (só o nome).
+    if (current && (current.url !== url || current.file !== file)) return undefined;
+
+    return { name, url, file, at: v.at, by };
+
+  }
+
+  const soundList = entry => Object.entries(entry.state)
+    .filter(([key, item]) => key.startsWith("s:") && item.v)
+    .map(([key, item]) => ({ key, ...item.v }))
+    .sort((a, b) => a.at - b.at || (a.key < b.key ? -1 : 1));
+
+  const soundFiles = entry => soundList(entry).map(sound => sound.file).filter(Boolean);
+
+  const soundSrc = sound => sound.url || session.images.get(sound.file)?.url || null;
+
+  const soundCanEdit = (entry, sound) => sound.by === me.id;
+  const soundCanRemove = (entry, sound) => sound.by === me.id || isMine(entry);
+
+  function createSoundsWidget(entry, view) {
+
+    view.list = el("ul", "sounds-list widget-scroll");
+    view.playing = new Map(); // chave do som -> quantos tocando agora
+    view.renaming = null;
+
+    const form = el("form", "sounds-form");
+
+    const name = el("input");
+    name.placeholder = "Nome do som";
+    name.maxLength = SOUND_NAME_MAX;
+    name.setAttribute("aria-label", "Nome do som");
+
+    const url = el("input");
+    url.placeholder = "Link do áudio (https://…)";
+    url.setAttribute("aria-label", "Link do áudio");
+
+    const file = el("input");
+    file.type = "file";
+    file.accept = "audio/*";
+    file.hidden = true;
+
+    const fileBtn = widgetButton("📁 Arquivo", () => file.click());
+    fileBtn.title = `Enviar um arquivo de áudio (até ${SOUND_FILE_MAX / 1024 / 1024} MB)`;
+
+    const source = el("div", "sound-source");
+    source.append(url, fileBtn, file);
+
+    const add = el("button", "tool primary", "➕ Adicionar");
+
+    form.append(name, add, source);
+
+    view.hint = el("div", "widget-hint");
+
+    const addSound = value => {
+      setWidget(entry, { ["s:" + me.id.slice(0, 8) + "-" + randomId()]: { ...value, at: Date.now() } });
+      name.value = url.value = "";
+      view.hint.textContent = "";
+    };
+
+    form.onsubmit = event => {
+      event.preventDefault();
+      const link = cleanSiteUrl(url.value, true);
+      if (!link) {
+        view.hint.textContent = url.value.trim() ? "Esse link não parece um endereço de áudio." : "Cole um link ou escolha um arquivo.";
+        return;
+      }
+      const fallback = decodeURIComponent(new URL(link).pathname.split("/").pop() || "").replace(/\.[a-z0-9]+$/i, "");
+      addSound({ name: cleanText(name.value, SOUND_NAME_MAX) || cleanText(fallback, SOUND_NAME_MAX) || "Som", url: link });
+    };
+
+    file.onchange = () => {
+
+      const picked = file.files[0];
+      file.value = "";
+
+      if (!picked) return;
+
+      // Sem tipo (alguns sistemas): pela extensão.
+      const extension = (picked.name.match(/\.([a-z0-9]+)$/i)?.[1] || "").toLowerCase();
+      const mime = picked.type === "audio/mp3" ? "audio/mpeg"
+        : picked.type || SOUND_EXTENSIONS[extension] || "";
+      if (!SOUND_MIME.test(mime)) {
+        view.hint.textContent = "Esse arquivo não é de áudio (mp3, ogg, wav, m4a, webm…).";
+        return;
+      }
+      if (picked.size > SOUND_FILE_MAX) {
+        view.hint.textContent = `Arquivo grande demais (até ${SOUND_FILE_MAX / 1024 / 1024} MB).`;
+        return;
+      }
+
+      const fileId = me.id.slice(0, 8) + "-" + randomId();
+      const blob = picked.type === mime ? picked : new Blob([picked], { type: mime });
+      session.images.set(fileId, { url: URL.createObjectURL(blob), blob });
+      connectedPeers().forEach(peer => sendImage(peer, fileId));
+
+      const fallback = picked.name.replace(/\.[a-z0-9]+$/i, "");
+      addSound({ name: cleanText(name.value, SOUND_NAME_MAX) || cleanText(fallback, SOUND_NAME_MAX) || "Som", file: fileId });
+
+    };
+
+    view.box.append(view.list, form, view.hint);
+
+  }
+
+  function renderSoundsWidget(entry, view) {
+
+    // Mudando o nome de um: não refaz a lista agora.
+    if (view.renaming && view.list.contains(document.activeElement)) return;
+    view.renaming = null;
+
+    const sounds = soundList(entry);
+
+    if (!sounds.length) {
+      view.list.replaceChildren(el("li", "widget-empty", "Nenhum som ainda. Adicione um por link ou arquivo: ▶ toca para todos."));
+      return;
+    }
+
+    view.list.replaceChildren(...sounds.map(sound => {
+
+      const item = el("li");
+      const src = soundSrc(sound);
+
+      const play = widgetButton("", () => playSoundForAll(entry, sound.key), "sound-play");
+      play.append(el("span", "", "▶"), el("span", "sound-name", sound.name));
+      play.disabled = !src;
+      play.title = !src ? "Recebendo o arquivo…"
+        : `Tocar para todos · adicionado por ${sound.by === me.id ? "você" : peers.has(sound.by) ? peerLabel(peers.get(sound.by)) : "alguém que saiu"}`;
+      play.classList.toggle("playing", !!view.playing.get(sound.key));
+      item.append(play);
+
+      if (soundCanEdit(entry, sound)) {
+        const rename = widgetButton("✏️", () => {
+          const input = el("input", "sound-rename");
+          input.value = sound.name;
+          input.maxLength = SOUND_NAME_MAX;
+          input.setAttribute("aria-label", "Nome do som");
+          view.renaming = sound.key;
+          const done = save => {
+            if (view.renaming !== sound.key) return;
+            view.renaming = null;
+            const value = cleanText(input.value, SOUND_NAME_MAX);
+            if (save && value && value !== sound.name) setWidget(entry, { [sound.key]: { ...sound, key: undefined, name: value } });
+            else renderDisplay(entry.id);
+          };
+          input.onkeydown = event => {
+            if (event.key === "Enter") done(true);
+            if (event.key === "Escape") done(false);
+          };
+          input.onblur = () => done(true);
+          play.replaceWith(input);
+          rename.remove();
+          input.focus();
+          input.select();
+        });
+        rename.title = "Mudar o nome";
+        item.append(rename);
+      }
+
+      if (soundCanRemove(entry, sound)) {
+        const remove = widgetButton("✕", () => setWidget(entry, { [sound.key]: null }));
+        remove.title = "Tirar este som";
+        item.append(remove);
+      }
+
+      return item;
+
+    }));
+
+  }
+
+  function playSoundForAll(entry, key) {
+    if (!playSound(entry, key)) return;
+    send({ type: "sound-play", id: entry.id, key });
+  }
+
+  function receiveSoundPlay(peer, message) {
+
+    const entry = session.displays.get(message.id);
+    if (entry?.kind !== "sounds" || typeof message.key !== "string") return;
+
+    // Apertando sem parar: um de cada vez por pessoa.
+    const now = Date.now();
+    if (now - (peer.lastSoundPlay || 0) < SOUND_PLAY_GAP_MS) return;
+    peer.lastSoundPlay = now;
+
+    playSound(entry, message.key);
+
+  }
+
+  // Toca aqui (cada um no seu aparelho). false: não tem esse som (ainda).
+  function playSound(entry, key) {
+
+    const sound = soundList(entry).find(item => item.key === key);
+    const src = sound && soundSrc(sound);
+
+    if (!src) return false;
+    if (!session.speakerOn) return true;
+
+    const view = session.windows.get("display:" + entry.id);
+    const audio = new Audio(src);
+    const finish = () => {
+      if (!view?.playing) return;
+      const left = (view.playing.get(key) || 1) - 1;
+      if (left) view.playing.set(key, left); else view.playing.delete(key);
+      renderDisplay(entry.id);
+    };
+
+    audio.onended = audio.onerror = finish;
+    audio.play().catch(finish);
+
+    if (view?.playing) {
+      view.playing.set(key, (view.playing.get(key) || 0) + 1);
+      renderDisplay(entry.id);
+    }
+
+    return true;
 
   }
 
