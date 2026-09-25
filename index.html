@@ -3417,7 +3417,7 @@
     <button id="speakerBtn" class="ctl on">
       <span class="ic" id="speakerIcon" data-icon="volume"></span><span id="speakerLabel" class="ctl-label">Som: ligado</span>
     </button>
-    <button id="screenBtn" class="ctl hidden" disabled title="Compartilhar a tela">
+    <button id="screenBtn" class="ctl hidden" disabled title="O som vai junto se você marcar “Compartilhar áudio” na janela de escolha">
       <span class="ic" id="screenIcon" data-icon="monitor"></span><span id="screenLabel" class="ctl-label">Compartilhar tela</span>
     </button>
     <button id="shareAudioBtn" class="ctl hidden" disabled title="Manda o som de uma guia (ou do computador) sem mandar a imagem">
@@ -5804,13 +5804,7 @@
         return;
       }
 
-      track.contentHint = "music";
-
-      // "Parar compartilhamento" do próprio navegador.
-      track.onended = () => stopAudioShare();
-
-      session.shareAudioTrack = track;
-      await replaceTrackEverywhere("shareAudio", track);
+      await startAudioShare(track);
 
       log("Compartilhando áudio (sem vídeo).");
 
@@ -5830,6 +5824,30 @@
 
   };
 
+  // Manda o áudio (do 🎵 ou o que veio junto com a tela) no lugar do anterior.
+  async function startAudioShare(track, fromScreen = false) {
+
+    const old = session.shareAudioTrack;
+
+    if (old && old !== track) {
+      old.onended = null;
+      old.stop();
+    }
+
+    track.contentHint = "music";
+
+    // "Parar compartilhamento" do próprio navegador.
+    track.onended = () => {
+      if (session?.shareAudioTrack === track) stopAudioShare();
+    };
+
+    session.shareAudioTrack = track;
+    session.shareAudioFromScreen = fromScreen;
+
+    await replaceTrackEverywhere("shareAudio", track);
+
+  }
+
   async function stopAudioShare() {
 
     const track = session?.shareAudioTrack;
@@ -5837,6 +5855,7 @@
     if (!track) return;
 
     session.shareAudioTrack = null;
+    session.shareAudioFromScreen = false;
     track.onended = null;
     track.stop();
 
@@ -5868,16 +5887,25 @@
 
       const { height, fps } = screenQuality.send;
 
+      // O som vem junto quando dá (guia com "Compartilhar áudio da guia",
+      // ou o computador inteiro no Windows / ChromeOS).
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: { ideal: fps, max: fps }, height: { max: height } },
-        audio: false
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        systemAudio: "include"
       });
 
       const track = stream.getVideoTracks()[0];
+      const audio = stream.getAudioTracks()[0];
 
       if (!session) {
-        track.stop();
+        stream.getTracks().forEach(item => item.stop());
         return;
+      }
+
+      if (audio) {
+        await startAudioShare(audio, true);
+        log("Compartilhando o áudio junto com a tela.");
       }
 
       // Um vídeo por pessoa: a tela entra no lugar do site.
@@ -5939,6 +5967,9 @@
     if (!session) return;
 
     if (track) connectedPeers().forEach(applyScreenQuality);
+
+    // Parou a tela: o som que veio com ela para junto.
+    if (!sharingScreen() && session.shareAudioFromScreen) await stopAudioShare();
 
     renderScreens();
     for (const id of new Set([oldSite, session.screenFor])) if (id) renderDisplay(id);
