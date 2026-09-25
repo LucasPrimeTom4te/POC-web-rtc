@@ -636,18 +636,21 @@
       padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
     }
 
+    /* Sessão aberta: a página de trás não rola (evita scroll duplo no celular). */
+    body.in-session {
+      overflow: hidden;
+    }
+
     .s-top {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
+      gap: 6px 10px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--border);
     }
 
     .s-peer {
-      display: flex;
-      align-items: center;
-      gap: 12px;
       flex: 1;
       min-width: 0;
     }
@@ -663,12 +666,15 @@
 
     .s-title {
       font-weight: 700;
-      font-size: 16px;
+      font-size: 15px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .s-title-note {
       font-weight: 400;
-      font-size: 13px;
+      font-size: 12px;
       color: var(--muted);
     }
 
@@ -680,40 +686,100 @@
     }
 
     .s-sub {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .s-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .icon-btn {
-      padding: 8px 10px;
-      font-size: 16px;
+      padding: 7px 9px;
+      font-size: 14px;
       line-height: 1;
     }
 
-    /* Estado do outro lado: sempre visível */
+    .icon-btn.on {
+      color: var(--ok);
+    }
+
+    /* Quem está aqui (no celular: linha de baixo, rola para o lado). */
     .s-remote {
+      order: 10;
+      flex-basis: 100%;
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
       gap: 6px;
-      padding: 8px 16px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
       font-size: 13px;
       color: var(--muted);
     }
 
-    .pill {
+    .avatars {
+      display: flex;
+      gap: 6px;
+    }
+
+    .avatar {
+      flex: none;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 5px 11px;
+      padding: 4px 10px 4px 8px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      transition: box-shadow .15s;
+    }
+
+    .avatar .dot {
+      flex: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--person, var(--accent));
+    }
+
+    .avatar .icons {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .avatar.me {
+      border-color: var(--border);
+    }
+
+    .avatar.pending {
+      opacity: .6;
+    }
+
+    .avatar.speaking {
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, .45);
+    }
+
+    .pill {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
       border-radius: 999px;
       font-size: 13px;
       background: var(--surface-2);
       color: var(--muted);
       border: 1px solid transparent;
-      transition: box-shadow .15s, background .2s, color .2s;
+      white-space: nowrap;
     }
 
     .pill.on {
@@ -728,10 +794,6 @@
       background: rgba(245, 158, 11, .12);
     }
 
-    .pill.speaking {
-      box-shadow: 0 0 0 3px rgba(34, 197, 94, .45);
-    }
-
     button.pill {
       cursor: pointer;
       font-weight: 600;
@@ -739,8 +801,8 @@
 
     .s-tabs {
       display: flex;
-      gap: 6px;
-      padding: 8px 16px 0;
+      gap: 4px;
+      padding: 4px 8px 0;
       border-bottom: 1px solid var(--border);
     }
 
@@ -748,9 +810,10 @@
       flex: 1;
       background: transparent;
       color: var(--muted);
-      border-radius: 10px 10px 0 0;
+      border-radius: 8px 8px 0 0;
       border-bottom: 2px solid transparent;
-      padding: 10px;
+      padding: 7px 6px;
+      font-size: 14px;
       font-weight: 600;
     }
 
@@ -773,6 +836,7 @@
     }
 
     .s-body {
+      position: relative;
       flex: 1;
       min-height: 0;
       display: flex;
@@ -796,51 +860,11 @@
       color: var(--ok);
     }
 
-    /* Telas: quem está aqui + grade com todas as telas compartilhadas. */
-    .screens-wrap {
-      flex: 1;
-      min-height: 0;
+    /* Telas (celular): uma embaixo da outra, a aba rola. */
+    .screen-pane {
       overflow-y: auto;
-      display: flex;
-      flex-direction: column;
+      padding: 10px 12px;
       gap: 10px;
-      padding: 12px 16px;
-    }
-
-    .screens-heading {
-      margin-bottom: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: .03em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .people {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .person {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 11px;
-      border-radius: 12px;
-      border: 1px solid transparent;
-      background: var(--surface-2);
-      font-size: 13px;
-    }
-
-    .person.sharing {
-      border-color: rgba(34, 197, 94, .45);
-      cursor: pointer;
-    }
-
-    .person .tags {
-      color: var(--muted);
-      font-size: 12px;
     }
 
     .screens-empty {
@@ -858,22 +882,174 @@
       font-size: 13px;
     }
 
-    .screen-settings {
+    .screen-grid {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px 16px;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .screen-grid:empty {
+      display: none;
+    }
+
+    .screen-tile {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #000;
+      border: 1px solid var(--border);
+    }
+
+    .screen-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 6px 5px 10px;
+      background: var(--surface);
       font-size: 13px;
+      font-weight: 600;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .screen-head .dot {
+      flex: none;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--person, var(--accent));
+    }
+
+    .screen-head .label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .screen-head .spacer {
+      flex: 1;
+    }
+
+    .screen-head button {
+      flex: none;
+      padding: 4px 7px;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .screen-video {
+      position: relative;
+      aspect-ratio: var(--ar, 16 / 9);
+      max-height: 70dvh;
+      background: #000;
+    }
+
+    .screen-video video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    .screen-tile.minimized .screen-video {
+      display: none;
+    }
+
+    .resize-handle {
+      display: none;
+    }
+
+    /* Configurações (painel sobre a sessão). */
+    .settings-panel {
+      position: absolute;
+      z-index: 6;
+      left: 8px;
+      right: 8px;
+      bottom: calc(var(--controls-h, 76px) + 8px);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100% - var(--controls-h, 76px) - 70px);
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, .5);
+    }
+
+    .settings-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .settings-head .tool {
+      padding: 5px 9px;
+      font-size: 13px;
+    }
+
+    .settings-body {
+      overflow-y: auto;
+      padding: 4px 16px 14px;
+    }
+
+    .set-section {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .set-section:last-child {
+      border-bottom: 0;
+    }
+
+    .set-section h4 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      letter-spacing: .03em;
+      text-transform: uppercase;
       color: var(--muted);
     }
 
-    .screen-settings .quality-group {
+    .set-section p {
+      margin: 6px 0 0;
+    }
+
+    .set-section .check {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 4px 0;
+      font-size: 14px;
+    }
+
+    .set-section .tool {
+      padding: 7px 12px;
+      font-size: 13px;
+    }
+
+    .set-section .tool.on {
+      background: rgba(34, 197, 94, .15);
+      color: var(--ok);
+    }
+
+    .quality-group {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 6px;
+      margin: 6px 0;
+      font-size: 13px;
+      color: var(--muted);
     }
 
-    .screen-settings select {
+    .quality-group > span {
+      flex-basis: 100%;
+    }
+
+    .quality-group select {
       padding: 6px 8px;
       border-radius: 8px;
       border: 1px solid var(--border);
@@ -882,72 +1058,87 @@
       font: inherit;
     }
 
-    .screen-grid {
-      display: grid;
-      gap: 10px;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-      align-content: start;
+    .people {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    .screen-grid:empty {
+    .person {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: var(--surface-2);
+      font-size: 14px;
+    }
+
+    .person .dot {
+      flex: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--person, var(--accent));
+    }
+
+    .person.sharing {
+      border-color: rgba(34, 197, 94, .45);
+      cursor: pointer;
+    }
+
+    .person .tags {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    /* Mouse dos outros. */
+    .cursor-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .cursor-layer.hidden-cursors {
       display: none;
     }
 
-    .screen-tile {
-      position: relative;
-      aspect-ratio: 16 / 9;
-      max-height: 72vh;
-      overflow: hidden;
-      border-radius: 14px;
-      background: black;
-      outline: 2px solid transparent;
-    }
-
-    /* Destacada: ocupa a linha toda, antes das outras. */
-    .screen-tile.focused {
-      grid-column: 1 / -1;
-      order: -1;
-      outline-color: var(--accent);
-    }
-
-    .screen-tile video {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      background: black;
-    }
-
-    .screen-tile video:fullscreen {
-      border-radius: 0;
-    }
-
-    .screen-bar {
+    .remote-cursor {
       position: absolute;
       left: 0;
-      right: 0;
-      bottom: 0;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px;
-      padding: 18px 8px 8px;
-      background: linear-gradient(transparent, rgba(0, 0, 0, .8));
+      top: 0;
+      transition: transform .08s linear, opacity .3s;
+      will-change: transform;
+    }
+
+    .remote-cursor svg {
+      display: block;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5));
+    }
+
+    .remote-cursor span {
+      position: absolute;
+      left: 14px;
+      top: 16px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: var(--person, var(--accent));
       color: white;
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
     }
 
-    .screen-bar .spacer {
-      flex: 1;
+    .desktop-only {
+      display: none;
     }
 
-    .screen-bar button {
-      padding: 5px 9px;
-      font-size: 12px;
-    }
-
-    /* Chat: o cabeçalho (minimizar) só existe no computador. */
+    /* Chat: o cabeçalho (fechar) só existe no computador. */
     .chat-head {
       display: none;
     }
@@ -1030,6 +1221,7 @@
     /* Chat */
     .chat-list {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 14px 16px;
       display: flex;
@@ -1065,10 +1257,6 @@
       font-size: 12px;
       font-weight: 700;
       opacity: .75;
-    }
-
-    .peer-list {
-      display: contents;
     }
 
     .msg time {
@@ -1248,7 +1436,7 @@
       position: absolute;
       bottom: calc(150px + env(safe-area-inset-bottom));
       left: 50%;
-      z-index: 2;
+      z-index: 7; /* acima das janelas das telas e do mouse dos outros */
       transform: translateX(-50%);
       width: max-content;
       max-width: calc(100% - 32px);
@@ -1262,43 +1450,93 @@
     }
 
     @media (max-width: 899px) {
-      .peer-label {
-        flex-basis: 100%;
-        font-size: 12px;
+      .s-controls {
+        gap: 6px;
+        padding-left: 8px;
+        padding-right: 8px;
       }
 
       .ctl {
         flex: 1;
         min-width: 0;
+        padding: 8px 4px;
+        font-size: 11px;
+        line-height: 1.2;
+      }
+
+      .ctl .ic {
+        font-size: 20px;
+      }
+
+      /* Estreito: tela, áudio e configurações só com o ícone (a dica diz o que é). */
+      #screenBtn,
+      #shareAudioBtn,
+      #settingsBtn {
+        flex: 0 0 48px;
+      }
+
+      #screenBtn > span:last-child,
+      #shareAudioBtn > span:last-child,
+      #settingsBtn > span:last-child {
+        display: none;
       }
     }
 
     @media (min-width: 900px) {
-      .s-body {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 380px;
+
+      /* Topo numa linha: quem está aqui fica no meio. */
+      .s-top {
+        flex-wrap: nowrap;
       }
 
-      /* Chat sempre à direita; à esquerda, Quadro ou Tela. */
+      .s-peer {
+        flex: 0 1 auto;
+        max-width: 280px;
+      }
+
+      .s-remote {
+        order: 0;
+        flex: 1 1 auto;
+        flex-basis: auto;
+      }
+
+      .desktop-only {
+        display: inline-flex;
+        align-items: center;
+      }
+
+      /* Sem abas: o quadro ocupa o palco e as telas flutuam por cima. */
+      .s-tabs {
+        display: none;
+      }
+
+      .s-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+      }
+
+      .session.chat-min .s-body {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
       .pane {
         display: none;
         grid-column: 1;
         grid-row: 1;
       }
 
-      .chat-pane,
-      .pane.stage {
+      .board-pane {
         display: flex;
       }
 
       .chat-pane {
+        display: flex;
         grid-column: 2;
         border-left: 1px solid var(--border);
       }
 
-      /* As abas trocam o que fica à esquerda (Quadro/Telas). */
-      .s-tabs {
-        display: flex;
+      .session.chat-min .chat-pane {
+        display: none;
       }
 
       .chat-head {
@@ -1306,41 +1544,130 @@
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        padding: 8px 12px;
+        padding: 6px 8px 6px 12px;
         border-bottom: 1px solid var(--border);
         font-size: 13px;
         color: var(--muted);
       }
 
       .chat-head .tool {
-        padding: 5px 10px;
+        padding: 4px 9px;
         font-size: 12px;
       }
 
-      /* Chat minimizado: vira uma faixa estreita com o botão para abrir. */
-      .session.chat-min .s-body {
-        grid-template-columns: minmax(0, 1fr) 56px;
+      /* Camada das janelas de tela: cobre o quadro, só as janelas pegam o mouse. */
+      .screen-pane {
+        display: block;
+        position: relative;
+        z-index: 3;
+        padding: 0;
+        overflow: hidden;
+        pointer-events: none;
       }
 
-      .session.chat-min .chat-pane > :not(.chat-head),
-      .session.chat-min .chat-head-title,
-      .session.chat-min #chatMinText {
+      .screen-pane .screens-empty {
         display: none;
       }
 
-      .session.chat-min .chat-head {
-        justify-content: center;
-        padding: 10px 0;
-        border-bottom: 0;
+      .screen-grid,
+      .screen-grid:empty {
+        display: block;
+        position: absolute;
+        inset: 0;
       }
 
-      .s-tabs button[data-tab="chat"] {
+      .screen-tile {
+        position: absolute;
+        left: var(--x, 16px);
+        top: var(--y, 16px);
+        width: var(--w, 360px);
+        pointer-events: auto;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+      }
+
+      .screen-head {
+        cursor: grab;
+      }
+
+      .screen-tile.dragging .screen-head {
+        cursor: grabbing;
+      }
+
+      .screen-video {
+        max-height: none;
+      }
+
+      /* Maximizada: ocupa o palco inteiro. */
+      .screen-tile.maximized {
+        left: 8px;
+        top: 8px;
+        right: 8px;
+        bottom: 8px;
+        width: auto;
+      }
+
+      .screen-tile.maximized .screen-video {
+        flex: 1;
+        aspect-ratio: auto;
+      }
+
+      .screen-tile.maximized .screen-head {
+        cursor: default;
+      }
+
+      .resize-handle {
+        display: block;
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 18px;
+        height: 18px;
+        cursor: nwse-resize;
+        background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, .55) 50%);
+        border-bottom-right-radius: 11px;
+      }
+
+      .screen-tile.maximized .resize-handle {
         display: none;
+      }
+
+      /* Configurações: painel à direita, acima dos controles. */
+      .settings-panel {
+        left: auto;
+        right: 12px;
+        width: 380px;
+      }
+
+      /* Controles compactos: ícone e texto na mesma linha. */
+      .s-controls {
+        gap: 8px;
+        padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+      }
+
+      .ctl {
+        flex-direction: row;
+        gap: 7px;
+        min-width: 0;
+        padding: 7px 12px;
+        font-size: 13px;
+      }
+
+      .ctl .ic {
+        font-size: 16px;
+      }
+
+      .board-tools {
+        padding: 8px 12px;
+      }
+
+      .board-wrap {
+        padding: 0 12px 10px;
       }
 
       .toast {
-        bottom: calc(96px + env(safe-area-inset-bottom));
+        bottom: calc(76px + env(safe-area-inset-bottom));
       }
+
     }
 
     /* ----------------------------------------------------------
@@ -1819,30 +2146,33 @@
 <!-- Sessão: o que dá para fazer depois de conectar (igual nos dois lados) -->
 <div id="sessionView" class="session hidden">
 
+  <!-- Topo: uma linha só no computador (título, quem está aqui, botões). -->
   <div class="s-top">
 
+    <span id="liveDot" class="live-dot"></span>
+
     <div class="s-peer">
-      <span id="liveDot" class="live-dot"></span>
-      <div>
-        <div class="s-title">
-          <span id="sessionTitle">Conectado</span>
-          <span id="sessionTitleNote" class="s-title-note">(direto, sem servidor no meio)</span>
-        </div>
-        <div id="peerName" class="s-sub">direto com o outro aparelho</div>
+      <div class="s-title">
+        <span id="sessionTitle">Conectado</span>
+        <span id="sessionTitleNote" class="s-title-note">(direto, sem servidor no meio)</span>
       </div>
+      <div id="peerName" class="s-sub">direto com o outro aparelho</div>
     </div>
 
-    <button id="roomModeBtn" class="icon-btn hidden">🔒 Privada</button>
-    <button id="roomLinkBtn" class="icon-btn hidden" title="Copiar o link da sala para chamar mais gente">🔗 Link da sala</button>
-    <button id="rememberBtn" class="icon-btn" title="Lembrar este dispositivo para conectar de novo depois">☆ Lembrar</button>
-    <button id="sessionHelpBtn" class="icon-btn" title="Quero entender o que está acontecendo">💡</button>
+    <!-- Quem está aqui: uma bolinha com a cor de cada um. -->
+    <div class="s-remote">
+      <span id="peerList" class="avatars"></span>
+      <button id="remoteScreenPill" class="pill on hidden" title="Ver as telas">🖥️ Compartilhando a tela</button>
+      <button id="unlockAudioBtn" class="pill warn hidden">🔈 Toque aqui para ouvir</button>
+    </div>
 
-  </div>
+    <div class="s-actions">
+      <button id="roomLinkBtn" class="icon-btn hidden" title="Copiar o link da sala para chamar mais gente">🔗<span class="btn-text"> Link da sala</span></button>
+      <button id="rememberBtn" class="icon-btn" title="Lembrar este dispositivo para conectar de novo depois">☆ Lembrar</button>
+      <button id="chatToggleBtn" class="icon-btn desktop-only" title="Fechar o chat">💬<span class="btn-text"> Chat</span><span id="chatToggleBadge" class="badge hidden"></span></button>
+      <button id="sessionHelpBtn" class="icon-btn" title="Quero entender o que está acontecendo">💡</button>
+    </div>
 
-  <div class="s-remote">
-    <span id="peerList" class="peer-list"></span>
-    <button id="remoteScreenPill" class="pill on hidden" title="Ver a tela">🖥️ Compartilhando a tela</button>
-    <button id="unlockAudioBtn" class="pill warn hidden">🔈 Toque aqui para ouvir</button>
   </div>
 
   <div class="s-tabs">
@@ -1872,48 +2202,26 @@
 
     </section>
 
+    <!-- Telas: no computador, janelas flutuando por cima do quadro;
+         no celular, uma embaixo da outra nesta aba. -->
     <section id="screenPane" class="pane screen-pane">
 
-      <div class="screens-wrap">
-
-        <div>
-          <div class="screens-heading">👥 Quem está aqui</div>
-          <div id="peopleList" class="people"></div>
-        </div>
-
-        <div class="screens-heading">🖥️ Telas compartilhadas</div>
-
-        <!-- Qualidade: mais leve = menos internet e menos processador. -->
-        <div class="screen-settings">
-          <div id="sendQualityField" class="quality-group">
-            Minha tela (o que eu envio)
-            <select id="sendHeight" aria-label="Resolução da minha tela"></select>
-            <select id="sendFps" aria-label="Quadros por segundo da minha tela"></select>
-          </div>
-          <div class="quality-group">
-            Telas que eu recebo
-            <select id="receiveHeight" aria-label="Resolução máxima das telas que recebo"></select>
-            <select id="receiveFps" aria-label="Quadros por segundo máximos das telas que recebo"></select>
-          </div>
-        </div>
-        <div id="screensEmpty" class="screens-empty">
-          Ninguém está compartilhando a tela agora.
-          <span id="screensEmptyHint">No computador, toque em 🖥️ Compartilhar tela: várias pessoas podem compartilhar ao mesmo tempo.</span>
-        </div>
-        <div id="screenGrid" class="screen-grid"></div>
-
+      <div id="screensEmpty" class="screens-empty">
+        Ninguém está compartilhando a tela agora.
+        <span id="screensEmptyHint">No computador, toque em 🖥️ Compartilhar tela: várias pessoas podem compartilhar ao mesmo tempo.</span>
       </div>
+
+      <div id="screenGrid" class="screen-grid"></div>
 
     </section>
 
     <section id="chatPane" class="pane chat-pane active">
 
-      <!-- Só no computador: minimizar o chat dá mais espaço ao quadro/telas. -->
+      <!-- Só no computador: fechar o chat dá mais espaço ao quadro e às telas
+           (abre de novo pelo 💬 lá em cima). -->
       <div class="chat-head">
         <span class="chat-head-title">💬 Chat</span>
-        <button id="chatMinBtn" class="tool" title="Minimizar o chat">
-          <span id="chatMinIcon">⇥</span><span id="chatMinText"> Minimizar</span><span id="chatMinBadge" class="badge hidden"></span>
-        </button>
+        <button id="chatMinBtn" class="tool" title="Fechar o chat">✕</button>
       </div>
 
       <div id="chatList" class="chat-list"></div>
@@ -1936,16 +2244,75 @@
     <button id="speakerBtn" class="ctl on">
       <span class="ic" id="speakerIcon">🔊</span><span id="speakerLabel">Som: ligado</span>
     </button>
-    <button id="screenBtn" class="ctl hidden" disabled>
+    <button id="screenBtn" class="ctl hidden" disabled title="Compartilhar a tela">
       <span class="ic">🖥️</span><span id="screenLabel">Compartilhar tela</span>
     </button>
     <button id="shareAudioBtn" class="ctl hidden" disabled title="Manda o som de uma guia (ou do computador) sem mandar a imagem">
       <span class="ic">🎵</span><span id="shareAudioLabel">Compartilhar áudio</span>
     </button>
+    <button id="settingsBtn" class="ctl" title="Quem está aqui, seu nome, sala, qualidade e mouse">
+      <span class="ic">⚙️</span><span>Configurações</span>
+    </button>
     <button id="leaveBtn" class="ctl danger">
       <span class="ic">✕</span><span>Desconectar</span>
     </button>
   </div>
+
+  <!-- Configurações: tudo num lugar só. -->
+  <div id="settingsPanel" class="settings-panel hidden" role="dialog" aria-label="Configurações">
+
+    <div class="settings-head">
+      <strong>⚙️ Configurações</strong>
+      <button id="settingsCloseBtn" class="tool" title="Fechar">✕</button>
+    </div>
+
+    <div class="settings-body">
+
+      <section class="set-section">
+        <h4>👥 Quem está aqui</h4>
+        <div id="peopleList" class="people"></div>
+      </section>
+
+      <section class="set-section">
+        <h4>🙂 Seu nome</h4>
+        <input id="myNameInput" class="text-input" maxlength="40" autocomplete="off">
+        <p class="muted small">Na sala, quem não escolheu um nome ganha um aleatório ao entrar.</p>
+      </section>
+
+      <section id="roomModeSection" class="set-section hidden">
+        <h4>🚪 Sala</h4>
+        <button id="roomModeBtn" class="tool">🔓 Pública</button>
+        <p id="roomModeHint" class="muted small"></p>
+      </section>
+
+      <!-- Qualidade: menos = menos internet e menos processador. -->
+      <section class="set-section">
+        <h4>🖥️ Qualidade das telas</h4>
+        <div id="sendQualityField" class="quality-group">
+          <span>Minha tela (o que eu envio)</span>
+          <select id="sendHeight" aria-label="Resolução da minha tela"></select>
+          <select id="sendFps" aria-label="Quadros por segundo da minha tela"></select>
+        </div>
+        <div class="quality-group">
+          <span>Telas que eu recebo</span>
+          <select id="receiveHeight" aria-label="Resolução máxima das telas que recebo"></select>
+          <select id="receiveFps" aria-label="Quadros por segundo máximos das telas que recebo"></select>
+        </div>
+      </section>
+
+      <section class="set-section">
+        <h4>🖱️ Mouse</h4>
+        <label class="check"><input type="checkbox" id="showCursorsCheck"> Mostrar o mouse dos outros</label>
+        <label class="check"><input type="checkbox" id="shareCursorCheck"> Mostrar o meu mouse para os outros</label>
+        <p class="muted small">Vale no quadro e em cima das telas compartilhadas.</p>
+      </section>
+
+    </div>
+
+  </div>
+
+  <!-- Mouse de cada um (por cima de tudo, não pega cliques). -->
+  <div id="cursorLayer" class="cursor-layer"></div>
 
   <div id="toast" class="toast hidden"></div>
 
@@ -2360,6 +2727,9 @@
       audio.remove();
     }
 
+    clearTimeout(peer.cursorIdle);
+    peer.cursorEl?.remove();
+
     if (peer.pc) {
 
       const pc = peer.pc;
@@ -2566,10 +2936,10 @@
     return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  // No PC não há abas: o quadro e as telas (flutuando) estão sempre à
+  // vista, e o chat, se não estiver fechado.
   function isPaneVisible(name) {
-    if (DESKTOP_LAYOUT.matches) {
-      return name === "chat" ? !session?.chatMin : session?.stage === name;
-    }
+    if (DESKTOP_LAYOUT.matches) return name === "chat" ? !session?.chatMin : true;
     return session?.tab === name;
   }
 
@@ -2643,6 +3013,7 @@
       : "Conectado! Tudo aqui vai direto de um aparelho para o outro.");
 
     show("sessionView");
+    document.body.classList.add("in-session");
     keepScreenOn();
     requestAnimationFrame(resizeBoard);
 
@@ -2794,8 +3165,13 @@
 
     session = null;
 
+    setSettingsOpen(false);
+    $("cursorLayer").replaceChildren();
+    peers.forEach(peer => { peer.cursorEl = null; });
+
     releaseScreen();
     show("sessionView", false);
+    document.body.classList.remove("in-session");
 
   }
 
@@ -2807,6 +3183,14 @@
       cleanName(peer?.name) ||
       DEVICE_NAMES[peer?.remote.device] ||
       "O outro lado";
+  }
+
+  // Cor de cada pessoa (bolinha, mouse, janela da tela): sai do id.
+  function personColor(id) {
+    // FNV-1a: espalha bem até ids parecidos.
+    let hash = 2166136261;
+    for (const char of String(id)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+    return `hsl(${hash % 360} 72% 56%)`;
   }
 
   // Cor inicial do quadro na sala: sai do id, cada um fica com a sua.
@@ -2825,7 +3209,8 @@
 
     if (session.room) {
       const count = list.length + 1;
-      $("peerName").textContent = `Sala “${session.room}” · ` +
+      // O modo também aparece aqui: dá para ver sem abrir as configurações.
+      $("peerName").textContent = `${room?.public === false ? "🔒" : "🔓"} Sala “${session.room}” · ` +
         (count === 1 ? "só você por enquanto" : `${count} pessoas`);
     } else if (list.length) {
       $("peerName").textContent = "direto com " + peerLabel(list[0]);
@@ -3000,6 +3385,10 @@
 
       case "chat":
         receiveChat(peer, message);
+        break;
+
+      case "cursor":
+        receiveCursor(peer, message);
         break;
 
       case "screen-quality":
@@ -3332,9 +3721,9 @@
 
     session.tab = name;
 
-    if (name !== "chat") session.stage = name;
+    // No PC o palco é sempre o quadro (as telas flutuam por cima).
+    if (name !== "chat") session.stage = DESKTOP_LAYOUT.matches ? "board" : name;
 
-    // No PC as abas só trocam o que fica à esquerda (Quadro/Tela).
     const selected = DESKTOP_LAYOUT.matches ? session.stage : name;
 
     document.querySelectorAll(".s-tabs button").forEach(button =>
@@ -3373,15 +3762,15 @@
 
     for (const name of ["chat", "board", "screen"]) setBadge(name + "Badge", session.unread[name]);
 
-    // Chat minimizado: as mensagens novas aparecem no botão de abrir.
-    setBadge("chatMinBadge", session.chatMin ? session.unread.chat : 0);
+    // Chat fechado (PC): as mensagens novas aparecem no botão 💬.
+    setBadge("chatToggleBadge", session.chatMin ? session.unread.chat : 0);
 
   }
 
 
-  /* ---------------- minimizar o chat (PC) ---------------- */
+  /* ---------------- abrir / fechar o chat (PC) ---------------- */
 
-  $("chatMinBtn").onclick = () => {
+  $("chatMinBtn").onclick = $("chatToggleBtn").onclick = () => {
 
     if (!session) return;
 
@@ -3399,8 +3788,8 @@
     const min = session.chatMin;
 
     $("sessionView").classList.toggle("chat-min", min);
-    $("chatMinIcon").textContent = min ? "💬" : "⇥";
-    $("chatMinBtn").title = min ? "Abrir o chat" : "Minimizar o chat";
+    $("chatToggleBtn").classList.toggle("on", !min);
+    $("chatToggleBtn").title = min ? "Abrir o chat" : "Fechar o chat";
 
     renderBadges();
 
@@ -3415,6 +3804,7 @@
     session.unread = { chat: 0, board: 0, screen: 0 };
     setTab(session.tab);
     renderBadges();
+    renderScreens();
     requestAnimationFrame(resizeBoard);
   });
 
@@ -3777,74 +4167,71 @@
 
   }
 
-  // Linha "o outro lado": com uma pessoa, detalhado (como sempre foi);
-  // com várias, uma pílula por pessoa. Na sala, também quem está chegando.
+  // Quem está aqui, no topo: uma bolinha com a cor de cada um, o nome e
+  // o que está fazendo (🎙️ microfone, 🖥️ tela, 🎵 áudio, 🔇 sem som).
   function renderRemoteState() {
 
     if (!session) return;
 
     const container = $("peerList");
-    const list = connectedPeers();
-    const pill = (text, className = "") => {
-      const element = document.createElement("span");
-      element.className = "pill " + className;
-      element.textContent = text;
-      return element;
-    };
 
     container.replaceChildren();
 
-    if (!list.length) {
-      container.append(session.room
-        ? "Só você na sala por enquanto. Toque em 🔗 Link da sala para chamar alguém."
-        : "");
+    const avatar = (id, name, state, extra = "") => {
+
+      const element = document.createElement("span");
+      element.className = "avatar " + extra;
+      element.style.setProperty("--person", personColor(id));
+
+      const dot = document.createElement("span");
+      dot.className = "dot";
+
+      const label = document.createElement("span");
+      label.textContent = name;
+
+      const icons = document.createElement("span");
+      icons.className = "icons";
+      icons.textContent = [
+        state.mic ? "🎙️" : "",
+        state.screen ? "🖥️" : "",
+        state.audioShare ? "🎵" : "",
+        state.speaker === false ? "🔇" : "",
+        state.text || ""
+      ].join("");
+
+      element.title = [
+        name,
+        state.mic ? "microfone ligado" : "microfone desligado",
+        state.screen ? "compartilhando a tela" : "",
+        state.audioShare ? "compartilhando áudio" : "",
+        state.speaker === false ? "com o som desligado (não está ouvindo)" : ""
+      ].filter(Boolean).join(" · ");
+
+      element.append(dot, label, icons);
+      container.appendChild(element);
+
+      return element;
+
+    };
+
+    session.myAvatar = avatar(me.id, me.name + " (você)", {
+      mic: !!session.micTrack,
+      screen: !!session.screenTrack,
+      audioShare: !!session.shareAudioTrack,
+      speaker: session.speakerOn
+    }, "me");
+
+    for (const peer of connectedPeers()) {
+      peer.micPill = avatar(peer.id, peerLabel(peer), {
+        ...peer.remote,
+        text: peer.reconnect ? " ⚠️" : ""
+      });
     }
 
-    for (const peer of list) {
-
-      const { mic, speaker } = peer.remote;
-      let micPill;
-
-      if (list.length === 1) {
-
-        const label = document.createElement("span");
-        label.className = "peer-label";
-        label.textContent = peerLabel(peer) + ":";
-
-        micPill = pill(mic ? "🎙️ Microfone ligado" : "🎙️ Microfone desligado", mic ? "on" : "");
-
-        container.append(
-          label,
-          micPill,
-          pill(speaker ? "🔊 Ouvindo você" : "🔇 Não está ouvindo você", speaker ? "on" : "warn")
-        );
-
-        if (peer.remote.audioShare) container.append(pill("🎵 Compartilhando áudio", "on"));
-
-      } else {
-
-        micPill = pill(
-          (mic ? "🎙️ " : "🤐 ") + peerLabel(peer) +
-            (peer.remote.audioShare ? " · 🎵" : "") + (speaker ? "" : " · 🔇 sem som"),
-          speaker ? (mic ? "on" : "") : "warn"
-        );
-
-        micPill.title = (mic ? "Microfone ligado" : "Microfone desligado") +
-          (peer.remote.audioShare ? ", compartilhando áudio" : "") +
-          (speaker ? ", ouvindo" : ", com o som desligado (não ouve ninguém)");
-
-        container.append(micPill);
-
-      }
-
-      peer.micPill = micPill;
-
-    }
-
-    // Sala: pedidos ainda em andamento.
+    // Sala: quem ainda está conectando.
     for (const request of roomRequests.values()) {
       if (peers.get(request.peer.id)?.connected) continue;
-      container.append(pill("⏳ " + peerName(request.peer), "warn"));
+      avatar(request.peer.id, peerName(request.peer), { text: " ⏳" }, "pending");
     }
 
     renderPeople();
@@ -3889,9 +4276,10 @@
       );
     }
 
-    $("micBtn").classList.toggle(
-      "speaking", !!session.micTrack && localLevel > SPEAKING_LEVEL
-    );
+    const speaking = !!session.micTrack && localLevel > SPEAKING_LEVEL;
+
+    $("micBtn").classList.toggle("speaking", speaking);
+    session.myAvatar?.classList.toggle("speaking", speaking);
 
   }
 
@@ -4177,17 +4565,23 @@
   }
 
 
-  /* ---------------- aba Telas ---------------- */
+  /* ---------------- telas compartilhadas ---------------- */
 
-  // Várias pessoas podem compartilhar ao mesmo tempo: cada tela vira um
-  // quadradinho na grade, com picture-in-picture, tela cheia e destacar.
-  // O <video> de cada um é mantido entre renderizações (não pisca e não
-  // derruba o picture-in-picture).
+  // Várias pessoas podem compartilhar ao mesmo tempo. No PC cada tela é
+  // uma janela flutuando por cima do quadro: arrasta pela barra, muda o
+  // tamanho pelo canto, minimiza, maximiza (ocupa o palco), picture-in-
+  // picture e tela cheia. No celular ficam uma embaixo da outra na aba
+  // Telas. O <video> de cada um é mantido entre renderizações (não pisca
+  // e não derruba o picture-in-picture).
 
   const CAN_PIP = !!document.pictureInPictureEnabled ||
     typeof HTMLVideoElement.prototype.webkitSetPresentationMode === "function";
 
-  // started: quem acabou de começar a compartilhar (abre a aba se ninguém estava).
+  const TILE_MIN_WIDTH = 220;
+
+  let tileZ = 1;
+
+  // started: quem acabou de começar a compartilhar.
   function renderScreens(started = null) {
 
     if (!session) return;
@@ -4195,18 +4589,18 @@
     const sharers = [];
 
     if (session.screenTrack) {
-      sharers.push({ key: "me", name: "Você", track: session.screenTrack, mine: true });
+      sharers.push({ key: "me", id: me.id, name: "Você (o que os outros veem)", track: session.screenTrack, mine: true });
     }
 
     for (const peer of connectedPeers()) {
       const track = peer.videoStream?.getVideoTracks()[0];
-      if (peer.remote.screen && track) sharers.push({ key: peer.id, name: peerLabel(peer), track, mine: false });
+      if (peer.remote.screen && track) sharers.push({ key: peer.id, id: peer.id, name: peerLabel(peer), track, mine: false });
     }
 
     const keys = new Set(sharers.map(sharer => sharer.key));
     const hadRemote = [...session.screenTiles.keys()].some(key => key !== "me");
 
-    // Quem parou: some da grade.
+    // Quem parou: some.
     for (const [key, entry] of session.screenTiles) {
       if (keys.has(key)) continue;
       if (document.pictureInPictureElement === entry.video) document.exitPictureInPicture().catch(() => {});
@@ -4225,6 +4619,7 @@
         entry = createScreenTile(sharer.key);
         session.screenTiles.set(sharer.key, entry);
         $("screenGrid").appendChild(entry.tile);
+        placeTile(entry, session.screenTiles.size - 1);
       }
 
       if (entry.video.srcObject?.getVideoTracks()[0] !== sharer.track) {
@@ -4232,9 +4627,20 @@
         entry.video.play().catch(() => {});
       }
 
-      entry.label.textContent = sharer.mine ? "🖥️ Você (o que os outros veem)" : "🖥️ " + sharer.name;
-      entry.tile.classList.toggle("focused", session.focusedScreen === sharer.key);
-      entry.focusBtn.textContent = session.focusedScreen === sharer.key ? "↙ Normal" : "🔍 Destacar";
+      entry.id = sharer.id;
+      entry.label.textContent = sharer.name;
+      entry.tile.style.setProperty("--person", personColor(sharer.id));
+
+      const maximized = session.focusedScreen === sharer.key;
+
+      entry.tile.classList.toggle("maximized", maximized);
+      entry.tile.classList.toggle("minimized", entry.minimized && !maximized);
+      entry.maxBtn.textContent = maximized ? "🗗" : "⤢";
+      entry.maxBtn.title = maximized ? "Voltar ao tamanho da janela" : "Maximizar (ocupa o quadro todo)";
+      entry.minBtn.textContent = entry.minimized ? "▢" : "–";
+      entry.minBtn.title = entry.minimized ? "Mostrar o vídeo" : "Minimizar (só a barra)";
+
+      if (maximized) entry.tile.style.zIndex = ++tileZ;
 
     }
 
@@ -4245,29 +4651,32 @@
 
     show("remoteScreenPill", remoteCount > 0);
     $("remoteScreenPill").textContent = remoteCount === 1
-      ? `🖥️ ${sharers.find(sharer => !sharer.mine).name} compartilhando a tela`
-      : `🖥️ ${remoteCount} telas compartilhadas`;
+      ? `🖥️ ${sharers.find(sharer => !sharer.mine).name} compartilhando`
+      : `🖥️ ${remoteCount} telas`;
 
-    // Primeira tela dos outros: abre a aba. Com outras já abertas, só avisa.
-    if (started && !hadRemote && remoteCount) {
-      if (session.stage !== "screen" || session.tab !== "screen") {
-        session.screenAutoFrom = { tab: session.tab, stage: session.stage };
+    // Celular: a primeira tela dos outros abre a aba Telas (e volta quando
+    // ninguém mais compartilha). No PC as janelas já aparecem por cima.
+    if (!DESKTOP_LAYOUT.matches) {
+
+      if (started && !hadRemote && remoteCount) {
+        if (session.tab !== "screen") session.screenAutoFrom = { tab: session.tab, stage: session.stage };
+        setTab("screen");
+      } else if (started) {
+        bump("screen");
       }
-      setTab("screen");
-    } else if (started) {
-      bump("screen");
-    }
 
-    // Abriu sozinha e ninguém mais compartilha: volta para onde estava.
-    const from = session.screenAutoFrom;
+      const from = session.screenAutoFrom;
 
-    if (!remoteCount && from) {
-      session.screenAutoFrom = null;
-      session.stage = from.stage === "screen" ? "board" : from.stage;
-      setTab(from.tab === "screen" ? session.stage : from.tab);
+      if (!remoteCount && from) {
+        session.screenAutoFrom = null;
+        session.stage = from.stage === "screen" ? "board" : from.stage;
+        setTab(from.tab === "screen" ? session.stage : from.tab);
+      }
+
     }
 
     renderPeople();
+    renderCursors();
 
   }
 
@@ -4276,50 +4685,212 @@
     const tile = document.createElement("div");
     tile.className = "screen-tile";
 
+    const head = document.createElement("div");
+    head.className = "screen-head";
+
+    const dot = document.createElement("span");
+    dot.className = "dot";
+
+    const label = document.createElement("span");
+    label.className = "label";
+
+    const spacer = document.createElement("span");
+    spacer.className = "spacer";
+
+    const button = (text, title, onClick, desktopOnly = false) => {
+      const element = document.createElement("button");
+      element.className = "tool" + (desktopOnly ? " desktop-only" : "");
+      element.textContent = text;
+      element.title = title;
+      element.onclick = event => {
+        event.stopPropagation();
+        onClick();
+      };
+      return element;
+    };
+
+    const box = document.createElement("div");
+    box.className = "screen-video";
+
     const video = document.createElement("video");
     video.autoplay = true;
     video.playsInline = true;
     video.muted = true;
 
-    const bar = document.createElement("div");
-    bar.className = "screen-bar";
+    const handle = document.createElement("div");
+    handle.className = "resize-handle";
+    handle.title = "Arraste para mudar o tamanho";
 
-    const label = document.createElement("span");
-    const spacer = document.createElement("span");
-    spacer.className = "spacer";
+    const entry = { key, id: null, tile, video, box, label, minimized: false, pos: null };
 
-    const button = (text, title, onClick) => {
-      const element = document.createElement("button");
-      element.className = "tool";
-      element.textContent = text;
-      element.title = title;
-      element.onclick = onClick;
-      return element;
-    };
-
-    const focusBtn = button("🔍 Destacar", "Deixar esta tela maior, na frente das outras", () => {
-      session.focusedScreen = session.focusedScreen === key ? null : key;
+    entry.minBtn = button("–", "Minimizar", () => {
+      entry.minimized = !entry.minimized;
+      if (session.focusedScreen === key) session.focusedScreen = null;
       renderScreens();
-    });
+    }, true);
 
-    const pipBtn = button("📺 PiP", "Picture-in-picture: assistir numa janelinha por cima de tudo", () => togglePip(video));
+    entry.maxBtn = button("⤢", "Maximizar", () => {
+      session.focusedScreen = session.focusedScreen === key ? null : key;
+      entry.minimized = false;
+      renderScreens();
+    }, true);
 
-    const fullBtn = button("⛶ Tela cheia", "Tela cheia", () => {
+    const pipBtn = button("📺", "Picture-in-picture: assistir numa janelinha por cima de tudo", () => togglePip(video));
+
+    const fullBtn = button("⛶", "Tela cheia", () => {
       if (video.requestFullscreen) video.requestFullscreen().catch(() => {});
       else video.webkitEnterFullscreen?.(); // iPhone
     });
 
     pipBtn.hidden = !CAN_PIP;
 
-    bar.append(label, spacer, focusBtn, pipBtn, fullBtn);
-    tile.append(video, bar);
+    head.append(dot, label, spacer, entry.minBtn, entry.maxBtn, pipBtn, fullBtn);
+    box.append(video, handle);
+    tile.append(head, box);
+
+    // Proporção real do vídeo (a janela acompanha).
+    const fitRatio = () => {
+      if (video.videoWidth && video.videoHeight) {
+        box.style.setProperty("--ar", `${video.videoWidth} / ${video.videoHeight}`);
+        clampTile(entry);
+      }
+    };
+
+    video.addEventListener("loadedmetadata", fitRatio);
+    video.addEventListener("resize", fitRatio);
 
     // Toque duplo: tela cheia.
     video.ondblclick = () => fullBtn.click();
 
-    return { tile, video, label, focusBtn };
+    // Clicar traz para a frente.
+    tile.addEventListener("pointerdown", () => {
+      if (session.focusedScreen !== key) tile.style.zIndex = ++tileZ;
+    });
+
+    enableTileDrag(entry, head);
+    enableTileResize(entry, handle);
+    enableCursorSurface(box, () => "screen:" + (key === "me" ? me.id : key), () => videoContentRect(video));
+
+    return entry;
 
   }
+
+  // Posição inicial: em cascata, a partir do canto de baixo à direita
+  // (em cima ficam as ferramentas do quadro).
+  function placeTile(entry, index) {
+
+    const stage = $("screenPane").getBoundingClientRect();
+    const width = Math.min(420, Math.max(TILE_MIN_WIDTH, stage.width * .42));
+    const height = width * 9 / 16 + 34; // vídeo 16:9 + barra
+
+    entry.pos = {
+      x: stage.width - width - 16 - index * 28,
+      y: stage.height - height - 16 - index * 28,
+      w: width
+    };
+
+    clampTile(entry);
+
+  }
+
+  // Mantém a janela inteira dentro do palco.
+  function clampTile(entry) {
+
+    if (!entry.pos) return;
+
+    const stage = $("screenPane").getBoundingClientRect();
+
+    if (!stage.width) return;
+
+    const pos = entry.pos;
+
+    pos.w = Math.max(TILE_MIN_WIDTH, Math.min(pos.w, stage.width - 16));
+
+    const height = entry.tile.offsetHeight || pos.w * 9 / 16;
+
+    pos.x = Math.max(8, Math.min(pos.x, stage.width - pos.w - 8));
+    pos.y = Math.max(8, Math.min(pos.y, stage.height - Math.min(height, stage.height - 16) - 8));
+
+    // A altura segue a largura (proporção do vídeo): não pode passar do palco.
+    const ratio = height / pos.w || 9 / 16;
+    if (pos.w * ratio > stage.height - 16) pos.w = Math.max(TILE_MIN_WIDTH, (stage.height - 16) / ratio);
+
+    entry.tile.style.setProperty("--x", pos.x + "px");
+    entry.tile.style.setProperty("--y", pos.y + "px");
+    entry.tile.style.setProperty("--w", pos.w + "px");
+
+  }
+
+  function enableTileDrag(entry, head) {
+
+    head.addEventListener("pointerdown", event => {
+
+      if (!DESKTOP_LAYOUT.matches || event.target.closest("button")) return;
+      if (session.focusedScreen === entry.key) return;
+
+      event.preventDefault();
+      head.setPointerCapture(event.pointerId);
+      entry.tile.classList.add("dragging");
+
+      const start = { x: event.clientX, y: event.clientY, px: entry.pos.x, py: entry.pos.y };
+
+      const move = moveEvent => {
+        entry.pos.x = start.px + moveEvent.clientX - start.x;
+        entry.pos.y = start.py + moveEvent.clientY - start.y;
+        clampTile(entry);
+        renderCursors();
+      };
+
+      const up = () => {
+        entry.tile.classList.remove("dragging");
+        head.removeEventListener("pointermove", move);
+        head.removeEventListener("pointerup", up);
+        head.removeEventListener("pointercancel", up);
+      };
+
+      head.addEventListener("pointermove", move);
+      head.addEventListener("pointerup", up);
+      head.addEventListener("pointercancel", up);
+
+    });
+
+  }
+
+  function enableTileResize(entry, handle) {
+
+    handle.addEventListener("pointerdown", event => {
+
+      event.preventDefault();
+      event.stopPropagation();
+      handle.setPointerCapture(event.pointerId);
+
+      const start = { x: event.clientX, w: entry.pos.w };
+
+      const move = moveEvent => {
+        entry.pos.w = start.w + moveEvent.clientX - start.x;
+        clampTile(entry);
+        renderCursors();
+      };
+
+      const up = () => {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+      };
+
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+
+    });
+
+  }
+
+  // O palco mudou de tamanho (janela, chat abriu/fechou): nenhuma tela fica para fora.
+  new ResizeObserver(() => {
+    session?.screenTiles.forEach(clampTile);
+    renderCursors();
+  }).observe($("screenPane"));
 
   async function togglePip(video) {
 
@@ -4342,7 +4913,7 @@
 
   }
 
-  // Quem está aqui e o que cada um está fazendo.
+  // Configurações › Quem está aqui: cada um e o que está fazendo.
   function renderPeople() {
 
     if (!session) return;
@@ -4350,30 +4921,28 @@
     const container = $("peopleList");
     container.replaceChildren();
 
-    const person = (name, tags, sharingKey) => {
+    const person = (id, name, tags, sharingKey) => {
 
-      const element = document.createElement("span");
+      const element = document.createElement("div");
       element.className = "person" + (sharingKey ? " sharing" : "");
+      element.style.setProperty("--person", personColor(id));
+
+      const dot = document.createElement("span");
+      dot.className = "dot";
 
       const strong = document.createElement("strong");
       strong.textContent = name;
-      element.appendChild(strong);
 
-      if (tags.length) {
-        const small = document.createElement("span");
-        small.className = "tags";
-        small.textContent = tags.join(" ");
-        element.appendChild(small);
-      }
+      const small = document.createElement("span");
+      small.className = "tags";
+      small.textContent = tags.join(" · ");
 
-      // Clicar em quem compartilha destaca a tela dele.
+      element.append(dot, strong, small);
+
+      // Clicar em quem compartilha mostra a tela dele.
       if (sharingKey) {
-        element.title = "Destacar a tela";
-        element.onclick = () => {
-          session.focusedScreen = sharingKey;
-          renderScreens();
-          session.screenTiles.get(sharingKey)?.tile.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        };
+        element.title = "Mostrar a tela";
+        element.onclick = () => showScreen(sharingKey);
       }
 
       container.appendChild(element);
@@ -4381,13 +4950,13 @@
     };
 
     const tagsOf = ({ mic, screen, audioShare, speaker }) => [
-      mic ? "🎙️" : "🤐",
+      mic ? "🎙️ mic" : "🤐 mudo",
       screen ? "🖥️ tela" : "",
       audioShare ? "🎵 áudio" : "",
       speaker ? "" : "🔇 sem som"
     ].filter(Boolean);
 
-    person(me.name + " (você)", tagsOf({
+    person(me.id, me.name + " (você)", tagsOf({
       mic: !!session.micTrack,
       screen: !!session.screenTrack,
       audioShare: !!session.shareAudioTrack,
@@ -4397,20 +4966,287 @@
     for (const peer of connectedPeers()) {
       const tags = tagsOf(peer.remote);
       if (peer.reconnect) tags.unshift("⚠️ reconectando");
-      person(peerLabel(peer), tags, peer.remote.screen && peer.videoStream ? peer.id : null);
+      person(peer.id, peerLabel(peer), tags, peer.remote.screen && peer.videoStream ? peer.id : null);
     }
 
     for (const request of roomRequests.values()) {
       if (peers.get(request.peer.id)?.connected) continue;
-      person(peerName(request.peer), ["⏳ conectando"], null);
+      person(request.peer.id, peerName(request.peer), ["⏳ conectando"], null);
     }
 
   }
 
+  // Traz a tela de alguém para a frente (e abre a aba no celular).
+  function showScreen(key) {
+
+    const entry = session.screenTiles.get(key);
+
+    if (!entry) return;
+
+    entry.minimized = false;
+    entry.tile.style.zIndex = ++tileZ;
+
+    if (!DESKTOP_LAYOUT.matches) {
+      session.screenAutoFrom = null;
+      setTab("screen");
+    }
+
+    renderScreens();
+    entry.tile.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  }
+
   $("remoteScreenPill").onclick = () => {
-    session.screenAutoFrom = null;
-    setTab("screen");
+
+    const first = [...session.screenTiles.keys()].find(key => key !== "me");
+
+    if (first) showScreen(first);
+
   };
+
+
+  /* ---------------- configurações ---------------- */
+
+  $("settingsBtn").onclick = () => setSettingsOpen($("settingsPanel").classList.contains("hidden"));
+
+  // O painel fica logo acima dos controles (que mudam de altura no celular).
+  new ResizeObserver(([entry]) => {
+    $("sessionView").style.setProperty("--controls-h", Math.ceil(entry.target.getBoundingClientRect().height) + "px");
+  }).observe(document.querySelector(".s-controls"));
+  $("settingsCloseBtn").onclick = () => setSettingsOpen(false);
+
+  function setSettingsOpen(open) {
+
+    show("settingsPanel", open);
+    $("settingsBtn").classList.toggle("on", open);
+
+    if (open) {
+      $("myNameInput").value = me.name;
+      renderPeople();
+      renderRoomMode();
+    }
+
+  }
+
+  // Clicar fora ou Esc fecha.
+  $("sessionView").addEventListener("pointerdown", event => {
+    if ($("settingsPanel").classList.contains("hidden")) return;
+    if (event.target.closest("#settingsPanel, #settingsBtn")) return;
+    setSettingsOpen(false);
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") setSettingsOpen(false);
+  });
+
+  $("myNameInput").onchange = () => setMyName($("myNameInput").value);
+
+
+  /* ---------------- mouse de cada um ---------------- */
+
+  // Cada um manda onde está o mouse (ou o dedo) em cima do quadro ou de
+  // uma tela compartilhada, em coordenadas de 0 a 1 daquela superfície.
+  // Quem recebe desenha uma setinha com a cor e o nome da pessoa.
+  //
+  //   surface: "board" | "screen:<id de quem compartilha>"
+
+  const CURSOR_SEND_MS = 50;
+  const CURSOR_IDLE_MS = 8000;
+
+  const cursorPrefs = {
+    show: storageGet("rtc.showCursors") !== "0",
+    share: storageGet("rtc.shareCursor") !== "0"
+  };
+
+  $("showCursorsCheck").checked = cursorPrefs.show;
+  $("shareCursorCheck").checked = cursorPrefs.share;
+
+  $("showCursorsCheck").onchange = () => {
+    cursorPrefs.show = $("showCursorsCheck").checked;
+    storageSet("rtc.showCursors", cursorPrefs.show ? "1" : "0");
+    renderCursors();
+  };
+
+  $("shareCursorCheck").onchange = () => {
+    cursorPrefs.share = $("shareCursorCheck").checked;
+    storageSet("rtc.shareCursor", cursorPrefs.share ? "1" : "0");
+    if (!cursorPrefs.share) sendCursor(null);
+  };
+
+  let cursorLast = 0;
+  let cursorPending = null;
+  let cursorTimer = null;
+
+  // Manda no máximo um a cada CURSOR_SEND_MS (o último sempre sai).
+  function sendCursor(position) {
+
+    if (!session) return;
+
+    if (!cursorPrefs.share && position) return;
+
+    const message = position ? { type: "cursor", ...position } : { type: "cursor", surface: null };
+    const wait = CURSOR_SEND_MS - (Date.now() - cursorLast);
+
+    cursorPending = message;
+
+    if (wait <= 0) {
+      flushCursor();
+    } else if (!cursorTimer) {
+      cursorTimer = setTimeout(flushCursor, wait);
+    }
+
+  }
+
+  function flushCursor() {
+
+    clearTimeout(cursorTimer);
+    cursorTimer = null;
+
+    if (!cursorPending || !session) return;
+
+    send(cursorPending);
+    cursorLast = Date.now();
+    cursorPending = null;
+
+  }
+
+  // Superfície onde o mouse é compartilhado. rect(): a área de 0 a 1.
+  function enableCursorSurface(element, surface, rect) {
+
+    element.addEventListener("pointermove", event => {
+
+      const area = rect();
+
+      if (!area.width || !area.height) return;
+
+      const x = (event.clientX - area.left) / area.width;
+      const y = (event.clientY - area.top) / area.height;
+
+      if (x < 0 || x > 1 || y < 0 || y > 1) return sendCursor(null);
+
+      sendCursor({ surface: surface(), x: +x.toFixed(4), y: +y.toFixed(4) });
+
+    });
+
+    element.addEventListener("pointerleave", () => sendCursor(null));
+
+  }
+
+  // Parte do <video> onde a imagem aparece (object-fit: contain deixa faixas).
+  function videoContentRect(video) {
+
+    const box = video.getBoundingClientRect();
+
+    if (!video.videoWidth || !video.videoHeight) return box;
+
+    const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
+    const width = video.videoWidth * scale;
+    const height = video.videoHeight * scale;
+
+    return {
+      left: box.left + (box.width - width) / 2,
+      top: box.top + (box.height - height) / 2,
+      width,
+      height
+    };
+
+  }
+
+  function receiveCursor(peer, message) {
+
+    const surface = message.surface;
+    const valid = surface === "board" || (typeof surface === "string" && surface.startsWith("screen:"));
+
+    if (valid && Number.isFinite(message.x) && Number.isFinite(message.y)) {
+      peer.cursor = {
+        surface,
+        x: Math.min(1, Math.max(0, message.x)),
+        y: Math.min(1, Math.max(0, message.y)),
+        at: Date.now()
+      };
+    } else {
+      peer.cursor = null;
+    }
+
+    renderCursor(peer);
+
+    // Parado muito tempo: some (volta quando mexer).
+    clearTimeout(peer.cursorIdle);
+    if (peer.cursor) peer.cursorIdle = setTimeout(() => { peer.cursor = null; renderCursor(peer); }, CURSOR_IDLE_MS);
+
+  }
+
+  // Onde está a superfície na tela deste aparelho (null = não está à vista).
+  function surfaceRect(surface) {
+
+    if (surface === "board") {
+      return board.offsetParent ? board.getBoundingClientRect() : null;
+    }
+
+    const owner = surface.slice("screen:".length);
+    const entry = session.screenTiles.get(owner === me.id ? "me" : owner);
+
+    if (!entry || !entry.video.offsetParent || entry.minimized) return null;
+
+    return videoContentRect(entry.video);
+
+  }
+
+  function renderCursor(peer) {
+
+    const layer = $("cursorLayer");
+
+    if (!peer.cursorEl) {
+
+      const element = document.createElement("div");
+      element.className = "remote-cursor";
+      element.innerHTML =
+        '<svg width="18" height="22" viewBox="0 0 18 22"><path d="M1 1 L1 17 L5.5 13 L8.5 20.5 L11.5 19 L8.5 11.5 L14.5 11.5 Z" fill="currentColor" stroke="white" stroke-width="1.5" stroke-linejoin="round"/></svg><span></span>';
+
+      layer.appendChild(element);
+      peer.cursorEl = element;
+
+    }
+
+    const element = peer.cursorEl;
+    const cursor = peer.cursor;
+    const area = cursor && session && cursorPrefs.show ? surfaceRect(cursor.surface) : null;
+
+    element.style.color = personColor(peer.id);
+    element.style.setProperty("--person", personColor(peer.id));
+    element.lastElementChild.textContent = peerLabel(peer);
+
+    if (!area || !area.width) {
+      element.style.opacity = "0";
+      return;
+    }
+
+    const origin = layer.getBoundingClientRect();
+    const left = area.left - origin.left + cursor.x * area.width;
+    const top = area.top - origin.top + cursor.y * area.height;
+
+    // Aparecendo: já nasce no lugar (sem deslizar desde o canto).
+    const appearing = element.style.opacity !== "1";
+
+    if (appearing) element.style.transition = "none";
+
+    element.style.opacity = "1";
+    element.style.transform = `translate(${left}px, ${top}px)`;
+
+    if (appearing) {
+      element.getBoundingClientRect();
+      element.style.transition = "";
+    }
+
+  }
+
+  function renderCursors() {
+    if (!session) return;
+    $("cursorLayer").classList.toggle("hidden-cursors", !cursorPrefs.show);
+    connectedPeers().forEach(renderCursor);
+  }
+
+  window.addEventListener("resize", () => renderCursors());
 
 
   /* ---------------- quadro ---------------- */
@@ -4419,6 +5255,9 @@
   const boardContext = board.getContext("2d");
 
   new ResizeObserver(() => resizeBoard()).observe($("boardWrap"));
+
+  // Mouse em cima do quadro (desenhando ou não) vai para os outros.
+  enableCursorSurface(board, () => "board", () => board.getBoundingClientRect());
 
   function renderSwatches() {
 
@@ -4477,6 +5316,7 @@
     board.width = board.height = Math.round(side * ratio);
 
     redrawBoard();
+    renderCursors();
 
   }
 
@@ -6146,9 +6986,16 @@
 
     setAddress(roomPath(name));
 
+    // Quem não escolheu um nome ganha um aleatório ao entrar.
+    const randomized = !storageGet(STORAGE_KEYS.name);
+
+    if (randomized) setMyName(randomName(), false);
+
     // A sessão da sala abre já, mesmo sozinho: o quadro e o chat valem
     // enquanto estiver aqui.
     startSession({ room: name });
+
+    if (randomized) addNote(`🙂 Você entrou como “${me.name}”. Para mudar, abra ⚙️ Configurações.`);
 
     channel.on("presence", { event: "sync" }, () => {
       if (room?.channel === channel) onRoomSync();
@@ -6222,7 +7069,7 @@
 
       if (session) {
         addNote(owner.id === me.id
-          ? "🔓 A sala começou pública: quem entrar conecta sem pedir. Para exigir permissão, toque em 🔓 Pública, lá em cima."
+          ? "🔓 A sala começou pública: quem entrar conecta sem pedir. Para exigir permissão, abra ⚙️ Configurações."
           : room.public
             ? "🔓 A sala é pública: quem entrar conecta sem precisar de permissão."
             : "🔒 A sala é privada: quem entrar precisa ser aceito.");
@@ -6236,7 +7083,7 @@
 
     }
 
-    renderRoomMode();
+    renderPeers(); // cabeçalho (🔓/🔒) e configurações
 
     for (const member of members.slice(0, index)) {
 
@@ -6273,7 +7120,7 @@
       ? "🔓 Você deixou a sala pública: quem entrar conecta sem precisar de permissão."
       : "🔒 Você deixou a sala privada: quem entrar precisa ser aceito.");
 
-    renderRoomMode();
+    renderPeers();
 
   };
 
@@ -6281,7 +7128,7 @@
 
     const button = $("roomModeBtn");
 
-    show("roomModeBtn", !!room && !!session?.room);
+    show("roomModeSection", !!room && !!session?.room);
 
     if (!room) return;
 
@@ -6296,6 +7143,12 @@
         ? "Pública: quem entrar conecta sem pedir. Toque para deixar privada."
         : "Privada: quem entrar precisa ser aceito. Toque para deixar pública.")
       : `Só quem está na sala há mais tempo (${ownerName}) muda isso.`;
+
+    $("roomModeHint").textContent = room.public
+      ? "Pública: quem abrir o link entra sem pedir."
+      : "Privada: quem entrar precisa ser aceito por quem já está.";
+
+    if (!isOwner) $("roomModeHint").textContent += ` Só ${ownerName} (há mais tempo na sala) muda isso.`;
 
   }
 
@@ -6654,17 +7507,43 @@
 
   $("nameInput").value = me.name;
 
-  $("nameInput").onchange = () => {
+  $("nameInput").onchange = () => setMyName($("nameInput").value);
 
-    me.name = cleanName($("nameInput").value) || me.name;
+  // persist: foi a pessoa que escolheu (fica guardado). O nome aleatório da sala não fica.
+  function setMyName(value, persist = true) {
+
+    const name = cleanName(value);
+
+    if (name) {
+
+      me.name = name;
+
+      if (persist) storageSet(STORAGE_KEYS.name, name);
+
+      myChannel?.track(publicMe()).catch(() => {});
+      trackRoom().catch(() => {});
+
+      if (session) {
+        send({ type: "hello", device: IS_MOBILE ? "phone" : "computer", name });
+        renderRemoteState();
+      }
+
+    }
+
     $("nameInput").value = me.name;
+    $("myNameInput").value = me.name;
 
-    storageSet(STORAGE_KEYS.name, me.name);
+  }
 
-    myChannel?.track(publicMe()).catch(() => {});
-    trackRoom().catch(() => {});
+  // Nome aleatório para a sala: bicho + cor (as cores não mudam com o gênero).
+  const NAME_ANIMALS = ["Capivara", "Tucano", "Onça", "Arara", "Jabuti", "Lobo-guará", "Mico", "Boto",
+    "Sagui", "Tatu", "Quati", "Coruja", "Pinguim", "Raposa", "Lontra", "Tamanduá", "Preguiça", "Jacaré",
+    "Beija-flor", "Gavião", "Baleia", "Polvo", "Panda", "Coala"];
+  const NAME_COLORS = ["Azul", "Verde", "Rosa", "Laranja", "Cinza", "Turquesa", "Lilás", "Vinho",
+    "Coral", "Índigo", "Jade", "Âmbar", "Anil", "Violeta", "Marfim", "Carmim"];
 
-  };
+  const pick = list => list[Math.floor(Math.random() * list.length)];
+  const randomName = () => pick(NAME_ANIMALS) + " " + pick(NAME_COLORS);
 
   $("copyDeviceLinkBtn").onclick = async () => {
 
