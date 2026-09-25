@@ -5081,7 +5081,9 @@
           <strong>▶️ YouTube</strong>: cada um carrega o mesmo vídeo no player
           do YouTube (com som e na qualidade de cada um). Quem abriu controla
           e avisa pelo canal de dados quando dá play, pausa, pula ou muda a
-          velocidade; os outros seguem.
+          velocidade; os outros seguem. Um link do Spotify (playlist, álbum
+          ou música) na fila traz os nomes das faixas e procura cada uma no
+          YouTube: o som é o do YouTube, nada do Spotify toca.
         </li>
         <li>
           <strong>Compartilhar áudio</strong> usa a mesma janela de escolha,
@@ -6419,6 +6421,10 @@
 
       case "yt-suggest":
         receiveSuggestion(peer, message);
+        break;
+
+      case "yt-playlist":
+        receivePlaylistNote(peer, message);
         break;
 
       case "react":
@@ -11184,7 +11190,7 @@
       input.inputMode = "url";
       input.autocomplete = "off";
       input.spellcheck = false;
-      input.placeholder = site ? "Endereço do site (ex.: pt.wikipedia.org)" : "Cole o link do vídeo do YouTube";
+      input.placeholder = site ? "Endereço do site (ex.: pt.wikipedia.org)" : "Link do vídeo do YouTube ou playlist do Spotify";
       input.setAttribute("aria-label", input.placeholder);
 
       const go = document.createElement("button");
@@ -11631,6 +11637,10 @@
     const youtube = parseYouTube(text);
 
     if (entry.kind === "youtube") {
+      if (SPOTIFY_LINK.test(text)) {
+        view.input.value = "";
+        return importSpotify(entry, view, text);
+      }
       if (!youtube) return toast("▶️ Isso não parece um link de vídeo do YouTube.");
       setVideo(entry, youtube);
       return;
@@ -12062,7 +12072,7 @@
     input.inputMode = "url";
     input.autocomplete = "off";
     input.spellcheck = false;
-    input.placeholder = mine ? "Link do YouTube para a fila" : "Sugira um vídeo (link do YouTube)";
+    input.placeholder = mine ? "Link do YouTube ou playlist do Spotify" : "Sugira um vídeo (YouTube) ou playlist (Spotify)";
     input.setAttribute("aria-label", input.placeholder);
 
     const go = document.createElement("button");
@@ -12073,6 +12083,11 @@
 
     form.onsubmit = event => {
       event.preventDefault();
+      if (SPOTIFY_LINK.test(input.value)) {
+        importSpotify(entry, view, input.value);
+        input.value = "";
+        return;
+      }
       const youtube = parseYouTube(input.value);
       if (!youtube) return toast("▶️ Isso não parece um link de vídeo do YouTube.");
       if (mine) {
@@ -12164,7 +12179,7 @@
   }
 
   // Dono: põe na fila (ou já toca, se não tem vídeo) e busca o título.
-  function addToQueue(entry, { video, start = 0, by, name }) {
+  function addToQueue(entry, { video, start = 0, by, name, title = null }) {
 
     if (!isMine(entry) || !YT_ID.test(video ?? "")) return;
 
@@ -12178,12 +12193,12 @@
       return;
     }
 
-    const item = { qid: randomId(), video, start, by, name: cleanName(name) || "Alguém", title: null };
+    const item = { qid: randomId(), video, start, by, name: cleanName(name) || "Alguém", title };
 
     entry.queue.push(item);
     publishQueue(entry);
 
-    fetchVideoTitle(video).then(title => {
+    if (!title) fetchVideoTitle(video).then(title => {
       if (!title || !entry.queue.includes(item)) return;
       item.title = title;
       publishQueue(entry);
@@ -12216,9 +12231,11 @@
     if (!entry || entry.kind !== "youtube" || !isMine(entry) || !YT_ID.test(message.video ?? "")) return;
 
     const start = Number.isFinite(message.start) ? Math.max(0, message.start) : 0;
+    const title = typeof message.title === "string" ? message.title.slice(0, 200) : null;
 
-    addToQueue(entry, { video: message.video, start, by: peer.id, name: peerLabel(peer) });
-    addNote(`▶️ ${peerLabel(peer)} colocou um vídeo na fila`);
+    addToQueue(entry, { video: message.video, start, by: peer.id, name: peerLabel(peer), title });
+    // Veio de uma playlist (quiet): o aviso é um só, no começo.
+    if (!message.quiet) addNote(`▶️ ${peerLabel(peer)} colocou um vídeo na fila`);
 
   }
 
@@ -12237,6 +12254,127 @@
 
   function playNext(entry) {
     if (entry.queue.length) playFromQueue(entry, entry.queue[0].qid);
+  }
+
+
+  /* ---- playlist do Spotify na fila do YouTube ---- */
+
+  /*
+   * Um link do Spotify (playlist, álbum ou faixa) na fila ou no endereço
+   * da janela: /api/music lê os nomes das faixas (da página de embed do
+   * Spotify, sem chave) e procura cada uma no YouTube; o que achou entra
+   * na fila, na ordem. Quem não é dono sugere cada vídeo ({ quiet }, sem
+   * aviso a cada um) e o dono avisa uma vez ({ type: "yt-playlist" }).
+   * Nada do Spotify toca: o som é o do YouTube, no player de cada um.
+   */
+
+  const SPOTIFY_LINK = /open\.spotify\.com\/(?:intl-[\w-]+\/)?(?:embed\/)?(?:playlist|album|track)\/[A-Za-z0-9]{22}|spotify:(?:playlist|album|track):[A-Za-z0-9]{22}/;
+  const SPOTIFY_SEARCHES = 4;
+
+  async function importSpotify(entry, view, link) {
+
+    const mine = isMine(entry);
+    const owner = mine ? null : peers.get(entry.owner);
+
+    if (view.importing) return toast("🎵 Ainda estou trazendo a outra playlist.");
+    if (!mine && !owner?.connected) return toast(`▶️ ${ownerNameOf(entry)} saiu: não dá para sugerir agora.`);
+
+    view.importing = true;
+    view.queueOpen = true;
+    renderSite(entry, view);
+
+    try {
+
+      const response = await fetch("api/music?spotify=" + encodeURIComponent(link.trim()));
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !Array.isArray(data?.tracks)) {
+        toast(`🎵 ${response.status === 404 ? "Não achei essa playlist (ela é pública?)" : "Não consegui ler a playlist do Spotify agora"}.`);
+        return;
+      }
+
+      // Sem vídeo tocando, a primeira já começa (não ocupa a fila).
+      const room = YT_QUEUE_MAX - entry.queue.length + (entry.video ? 0 : 1);
+      const tracks = data.tracks.slice(0, Math.max(0, room));
+      const name = data.name || "Spotify";
+
+      if (!tracks.length) {
+        toast(data.tracks.length ? `▶️ A fila está cheia (${YT_QUEUE_MAX} vídeos).` : "🎵 Essa playlist não tem músicas para tocar.");
+        return;
+      }
+
+      toast(`🎵 ${name}: procurando ${tracks.length} ${tracks.length === 1 ? "música" : "músicas"} no YouTube…`);
+
+      if (mine) send({ type: "yt-playlist", id: entry.id, name, count: tracks.length });
+      else sendTo(owner, { type: "yt-playlist", id: entry.id, name, count: tracks.length });
+
+      // Procura em paralelo, mas entra na fila na ordem da playlist.
+      const found = new Array(tracks.length);
+      let next = 0;
+      let done = 0;
+      let added = 0;
+
+      const alive = () => session?.displays.get(entry.id) === entry;
+
+      const flush = () => {
+        while (done < tracks.length && found[done] !== undefined) {
+          const item = found[done++];
+          if (!item || !alive()) continue;
+          if (isMine(entry)) {
+            addToQueue(entry, { video: item.video, by: me.id, name: me.name, title: item.title });
+          } else {
+            const target = peers.get(entry.owner);
+            if (!target?.connected) continue;
+            sendTo(target, { type: "yt-suggest", id: entry.id, video: item.video, start: 0, title: item.title, quiet: true });
+          }
+          added++;
+        }
+      };
+
+      const worker = async () => {
+        while (next < tracks.length && alive()) {
+          const index = next++;
+          found[index] = await findOnYouTube(tracks[index]);
+          flush();
+        }
+      };
+
+      await Promise.all(Array.from({ length: SPOTIFY_SEARCHES }, worker));
+
+      if (!alive()) return;
+
+      const missed = tracks.length - added;
+      toast(added
+        ? `🎵 ${name}: ${added} na fila${missed ? ` (${missed} não achei no YouTube)` : ""}${data.tracks.length > tracks.length ? `; ${data.tracks.length - tracks.length} ficaram de fora (fila cheia)` : ""}.`
+        : "🎵 Não achei essas músicas no YouTube agora.");
+
+    } catch {
+      toast("🎵 Não consegui ler a playlist do Spotify agora.");
+    } finally {
+      view.importing = false;
+    }
+
+  }
+
+  // Faixa do Spotify -> { video, title } no YouTube (null se não achou).
+  async function findOnYouTube(track) {
+    const query = track.artist ? `${track.artist} - ${track.title}` : track.title;
+    try {
+      const response = await fetch(`api/music?q=${encodeURIComponent(query)}${track.duration ? "&d=" + track.duration : ""}`);
+      const data = await response.json();
+      if (!response.ok || !YT_ID.test(data?.video ?? "")) return null;
+      return { video: data.video, title: track.artist ? `${track.title} · ${track.artist}` : track.title };
+    } catch {
+      return null;
+    }
+  }
+
+  function receivePlaylistNote(peer, message) {
+    const entry = session.displays.get(message?.id);
+    if (!entry || entry.kind !== "youtube" || (!isMine(entry) && entry.owner !== peer.id)) return;
+    const name = cleanText(message.name, 80) || "Spotify";
+    const count = clamp(parseInt(message.count, 10) || 0, 0, YT_QUEUE_MAX + 1);
+    addNote(`🎵 ${peerLabel(peer)} trouxe a playlist "${name}" do Spotify${count ? ` (${count} músicas)` : ""} para a fila`);
   }
 
 
