@@ -9509,7 +9509,7 @@
     winSwitcherQueued = true;
     queueMicrotask(() => {
       winSwitcherQueued = false;
-      queueWinSwitcher();
+      renderWinSwitcher();
     });
   }
 
