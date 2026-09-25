@@ -4472,7 +4472,6 @@
 <div id="updateBanner" class="update-banner hidden" role="status">
   <span id="updateText">✨ Saiu uma versão nova.</span>
   <button id="updateNowBtn" class="primary">Atualizar agora</button>
-  <button id="updateLaterBtn" title="Atualiza sozinho quando você sair da sessão">Depois</button>
 </div>
 
 <div id="siteQrModal" class="modal hidden">
@@ -6798,6 +6797,10 @@
       peer.micPill.role = "button";
       peer.micPill.tabIndex = 0;
       peer.micPill.onclick = () => openPersonSettings(peer.id);
+      peer.micPill.oncontextmenu = event => {
+        event.preventDefault();
+        openPersonMenu(peer, event.clientX, event.clientY);
+      };
 
     }
 
@@ -14876,16 +14879,80 @@
 
   // Por onde a conexão passa: direto (host/srflx) ou repassada pelo TURN (relay).
   async function logRoute(peer) {
+    const route = await routeOf(peer);
+    if (route.types) log(`Caminho com ${peerLabel(peer)}: ${route.types}`);
+  }
+
+  // { icon, text, types }: como estou conectado com essa pessoa.
+  async function routeOf(peer) {
+
+    if (peer.via) {
+      const bridge = peers.get(peer.via);
+      return { icon: "🔀", text: `Por ponte, através de ${bridge ? peerLabel(bridge) : "outra pessoa"}` };
+    }
+
     try {
       const stats = await peer.pc.getStats();
       for (const report of stats.values()) {
         if (report.type !== "candidate-pair" || !report.nominated || report.state !== "succeeded") continue;
-        const local = stats.get(report.localCandidateId);
-        const remote = stats.get(report.remoteCandidateId);
-        log(`Caminho com ${peerLabel(peer)}: ${local?.candidateType} ↔ ${remote?.candidateType}`);
-        return;
+        const local = stats.get(report.localCandidateId)?.candidateType;
+        const remote = stats.get(report.remoteCandidateId)?.candidateType;
+        const types = `${local} ↔ ${remote}`;
+        if (local === "relay" || remote === "relay") return { icon: "🛰️", text: "Direta, repassada pelo servidor TURN", types };
+        if (local === "host" && remote === "host") return { icon: "🏠", text: "Direta, na mesma rede", types };
+        return { icon: "🔗", text: "Direta, pela internet", types };
       }
     } catch {}
+
+    return { icon: "⏳", text: "Direta (ainda abrindo o caminho)" };
+
+  }
+
+  // Botão direito na bolinha de alguém (no topo): como estou conectado
+  // com ela e as minhas configurações dela (só para mim).
+  async function openPersonMenu(peer, x, y) {
+
+    const route = await routeOf(peer);
+
+    if (!session || !peer.connected) return;
+
+    const pref = volumeOf(peer.id);
+    const bridgingFor = [...bridges.values()]
+      .filter(bridge => bridge.a === peer.id || bridge.c === peer.id)
+      .map(bridge => peers.get(bridge.a === peer.id ? bridge.c : bridge.a))
+      .filter(Boolean);
+    const viaMe = connectedPeers().filter(other => other.via === peer.id);
+    const refresh = () => renderRemoteState();
+    const voice = value => ({
+      icon: "🔊",
+      label: `Voz em ${Math.round(value * 100)}%`,
+      active: !pref.muted && Math.abs(pref.voice - value) < 0.01,
+      action: () => { setVolume(peer, { voice: value, muted: false }); refresh(); }
+    });
+
+    openMenu(x, y, [
+      { icon: route.icon, label: route.text, hint: route.types || "", disabled: true, action() {} },
+      bridgingFor.length && { icon: "🔀", label: `Você faz a ponte entre ${peerLabel(peer)} e ${bridgingFor.map(peerLabel).join(", ")}`, disabled: true, action() {} },
+      viaMe.length && { icon: "🔀", label: `${peerLabel(peer)} é a sua ponte até ${viaMe.map(peerLabel).join(", ")}`, disabled: true, action() {} },
+      "-",
+      {
+        icon: pref.muted ? "🔔" : "🔕",
+        label: pref.muted ? `Voltar a ouvir ${peerLabel(peer)}` : `Mutar ${peerLabel(peer)} (só para você)`,
+        action: () => { setVolume(peer, { muted: !pref.muted }); refresh(); }
+      },
+      voice(1), voice(0.5), voice(0.25),
+      peer.remote.audioShare && {
+        icon: "🎵",
+        label: pref.share > 0 ? "Silenciar o áudio compartilhado" : "Ouvir o áudio compartilhado",
+        action: () => { setVolume(peer, { share: pref.share > 0 ? 0 : 1 }); refresh(); }
+      },
+      "-",
+      peer.remote.screen && session.windows.has("screen:" + peer.id) && {
+        icon: "🖥️", label: "Mostrar a tela", action: () => showScreen("screen:" + peer.id)
+      },
+      { icon: "⚙️", label: "Mais configurações…", action: () => openPersonSettings(peer.id) }
+    ]);
+
   }
 
   // O outro saiu (ou a conexão não voltou).
@@ -16065,12 +16132,16 @@
    * A cada minuto (e quando a página volta a ficar visível) pergunta
    * a /api/version qual versão está no ar. Mudou: sem sessão aberta,
    * recarrega na hora; com sessão, mostra o aviso e recarrega quando
-   * a pessoa escolher ou sair da sessão (recarregar no meio derrubaria
-   * a chamada; na sala, a pessoa volta para a sala e recebe o histórico).
+   * a pessoa escolher ou sair da sessão, e no máximo em UPDATE_FORCE_S
+   * (todos ficam na mesma versão; na sala, a pessoa volta para a sala e
+   * recebe o histórico).
    * ============================================================
    */
 
   const VERSION_CHECK_MS = 60000;
+  const UPDATE_FORCE_S = 60;
+
+  let updateDeadline = 0;     // quando atualiza sozinho (aviso à vista)
 
   let appVersion = null;      // versão com que esta página abriu
   let updateWaiting = false;  // já tem versão nova no ar
@@ -16124,10 +16195,26 @@
 
     show("updateBanner");
 
+    if (updateDeadline) return;
+
+    // Não apertou em 1 minuto: atualiza sozinho.
+    updateDeadline = Date.now() + UPDATE_FORCE_S * 1000;
+
+    const tick = () => {
+      const left = Math.ceil((updateDeadline - Date.now()) / 1000);
+      if (left <= 0) {
+        location.reload();
+        return;
+      }
+      $("updateNowBtn").textContent = `Atualizar agora (${left} s)`;
+      setTimeout(tick, 1000);
+    };
+
+    tick();
+
   }
 
   $("updateNowBtn").onclick = () => location.reload();
-  $("updateLaterBtn").onclick = () => show("updateBanner", false);
 
   setInterval(checkVersion, VERSION_CHECK_MS);
 
