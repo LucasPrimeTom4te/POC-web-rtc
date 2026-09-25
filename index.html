@@ -1383,77 +1383,289 @@
       max-height: 70dvh;
     }
 
-    /* Configurações (painel sobre a sessão). */
-    .settings-panel {
-      position: absolute;
-      z-index: 6;
-      left: 8px;
-      right: 8px;
-      bottom: calc(var(--controls-h, 76px) + 8px);
+    /* Configurações: modal. No PC, seções numa barra à esquerda; no
+       celular, a tela toda com as seções em abas no topo. */
+    .settings-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(3, 6, 15, .6);
+      backdrop-filter: blur(3px);
+    }
+
+    .settings-modal.hidden {
+      display: none;
+    }
+
+    .settings-card {
       display: flex;
-      flex-direction: column;
-      max-height: calc(100% - var(--controls-h, 76px) - 70px);
-      border-radius: 16px;
+      width: min(780px, 100%);
+      height: min(600px, 100%);
+      overflow: hidden;
+      border-radius: 18px;
       background: var(--surface);
       border: 1px solid var(--border);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, .5);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .55);
+    }
+
+    .settings-nav {
+      flex: none;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      width: 210px;
+      padding: 16px 10px;
+      background: var(--bg);
+      border-right: 1px solid var(--border);
+    }
+
+    .settings-title {
+      padding: 4px 10px 14px;
+      font-size: 15px;
+    }
+
+    .settings-nav button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: left;
+    }
+
+    .settings-nav button:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .settings-nav button[aria-selected="true"] {
+      background: var(--surface-2);
+      color: var(--text);
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    .set-ic {
+      width: 20px;
+      text-align: center;
+    }
+
+    .settings-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
     }
 
     .settings-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 12px 10px 16px;
-      border-bottom: 1px solid var(--border);
+      padding: 14px 16px 10px 24px;
+    }
+
+    .settings-head h3 {
+      margin: 0;
+      font-size: 18px;
     }
 
     .settings-head .tool {
-      padding: 5px 9px;
-      font-size: 13px;
+      padding: 5px 10px;
+      font-size: 14px;
     }
 
     .settings-body {
+      flex: 1;
       overflow-y: auto;
-      padding: 4px 16px 14px;
+      padding: 0 24px 24px;
     }
 
-    .set-section {
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .set-section:last-child {
-      border-bottom: 0;
-    }
-
-    .set-section h4 {
-      margin: 0 0 8px;
-      font-size: 12px;
-      letter-spacing: .03em;
+    .set-group {
+      margin: 18px 0 4px;
+      font-size: 11px;
+      letter-spacing: .06em;
       text-transform: uppercase;
       color: var(--muted);
     }
 
-    .set-section p {
-      margin: 6px 0 0;
+    .set-page > .set-group:first-child,
+    .set-page > div:first-child > .set-group:first-child {
+      margin-top: 4px;
     }
 
-    .set-section .check {
+    .set-row {
       display: flex;
-      gap: 8px;
       align-items: center;
-      margin: 4px 0;
-      font-size: 14px;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
     }
 
-    .set-section .tool {
+    .set-row-stack {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .set-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      cursor: default;
+    }
+
+    label.set-text {
+      cursor: pointer;
+    }
+
+    .set-text b {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .set-text small {
+      font-size: 12.5px;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+
+    .set-note {
+      margin: 12px 0 0;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .set-note-top {
+      margin: 0 0 10px;
+    }
+
+    .set-row .tool {
+      flex: none;
       padding: 7px 12px;
       font-size: 13px;
     }
 
-    .set-section .tool.on {
+    .set-row .tool.on {
       background: rgba(34, 197, 94, .15);
       color: var(--ok);
+    }
+
+    .set-row .page-volume {
+      flex: none;
+      margin: 0;
+    }
+
+    .set-row .page-volume input {
+      width: 140px;
+    }
+
+    kbd {
+      padding: 0 5px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      font: 600 11px ui-monospace, monospace;
+      color: var(--text);
+    }
+
+    /* Chave liga/desliga (é um checkbox: o JS continua igual). */
+    .switch {
+      flex: none;
+      appearance: none;
+      position: relative;
+      width: 40px;
+      height: 22px;
+      margin: 0;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: transform .15s, background .15s;
+    }
+
+    .switch:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .switch:checked::after {
+      transform: translateX(18px);
+      background: #fff;
+    }
+
+    .switch:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    @media (max-width: 699px) {
+      .settings-modal {
+        padding: 0;
+      }
+
+      .settings-card {
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        border: 0;
+      }
+
+      .settings-nav {
+        flex-direction: row;
+        width: auto;
+        padding: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .settings-title {
+        display: none;
+      }
+
+      .settings-nav button {
+        flex: none;
+        gap: 6px;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      .settings-nav button[aria-selected="true"] {
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+
+      .settings-head {
+        padding: 12px 12px 6px 16px;
+      }
+
+      .settings-body {
+        padding: 0 16px 20px;
+      }
+
+      .set-row .page-volume input {
+        width: 110px;
+      }
     }
 
     .quality-group {
@@ -3101,13 +3313,6 @@
       }
 
       /* Área de trabalho: sempre 16:9, encaixada no palco (o JS calcula). */
-
-      /* Configurações: painel à direita, acima dos controles. */
-      .settings-panel {
-        left: auto;
-        right: 12px;
-        width: 380px;
-      }
 
       /* Controles compactos: ícone e texto na mesma linha. */
       .s-controls {
@@ -4965,84 +5170,127 @@
     <div id="zoomSlot" class="zoom-slot"></div>
   </div>
 
-  <!-- Configurações: tudo num lugar só. -->
-  <div id="settingsPanel" class="settings-panel hidden" role="dialog" aria-label="Configurações">
+  <!-- Configurações: modal com seções (barra lateral no PC, abas no celular).
+       Cada opção é uma linha: o que é, uma explicação curta e o controle. -->
+  <div id="settingsPanel" class="settings-modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTabTitle">
 
-    <div class="settings-head">
-      <strong>⚙️ Configurações</strong>
-      <button id="settingsCloseBtn" class="tool" title="Fechar">✕</button>
-    </div>
+    <div class="settings-card">
 
-    <div class="settings-body">
+      <nav class="settings-nav" role="tablist" aria-label="Seções das configurações">
+        <strong class="settings-title">⚙️ Configurações</strong>
+        <button role="tab" data-set-tab="you"><span class="set-ic">🙂</span><span>Você</span></button>
+        <button role="tab" data-set-tab="sound"><span class="set-ic">🔊</span><span>Som e microfone</span></button>
+        <button role="tab" data-set-tab="people"><span class="set-ic">👥</span><span>Pessoas e sala</span></button>
+        <button role="tab" data-set-tab="screens"><span class="set-ic">🖥️</span><span>Telas e mouse</span></button>
+      </nav>
 
-      <section class="set-section">
-        <h4>👥 Quem está aqui</h4>
-        <div id="peopleList" class="people"></div>
-      </section>
+      <div class="settings-main">
 
-      <section class="set-section">
-        <h4>🙂 Seu nome e sua cor</h4>
-        <input id="myNameInput" class="text-input" maxlength="40" autocomplete="off">
-        <div class="my-color">
-          <span id="myColorSwatches" class="tool-group" role="group" aria-label="Sua cor"></span>
-          <label class="color-pick" title="Outra cor">
-            <input id="myColorInput" type="color" aria-label="Outra cor">
-          </label>
-          <button id="myColorAutoBtn" class="tool" title="Voltar à cor automática (sai do seu id)">Automática</button>
+        <div class="settings-head">
+          <h3 id="settingsTabTitle">Você</h3>
+          <button id="settingsCloseBtn" class="tool" title="Fechar (Esc)" aria-label="Fechar">✕</button>
         </div>
-        <p class="muted small">Nome e cor ficam guardados neste aparelho e valem em todas as salas. Quem ainda não escolheu um nome ganha um aleatório na primeira sala.</p>
-      </section>
 
-      <section id="roomModeSection" class="set-section hidden">
-        <h4>🚪 Sala</h4>
-        <button id="roomModeBtn" class="tool">🔓 Pública</button>
-        <p id="roomModeHint" class="muted small"></p>
-      </section>
+        <div class="settings-body">
 
-      <section class="set-section">
-        <h4>🔔 Sons</h4>
-        <label class="volume page-volume" title="Volume de tudo nesta página: vozes, telas, vídeos, rádio, sons e efeitos (só aqui)">
-          <span>🔊 Volume geral</span>
-          <input id="pageVolumeRange" type="range" min="0" max="100" aria-label="Volume geral da página">
-          <output id="pageVolumeValue"></output>
-        </label>
-        <label class="check"><input type="checkbox" id="sfxCheck"> Efeitos sonoros (alguém entra ou sai, manda mensagem, janela abre ou fecha)</label>
-      </section>
+          <!-- 🙂 Você -->
+          <section class="set-page" data-set-page="you" role="tabpanel">
+            <div class="set-row set-row-stack">
+              <label class="set-text" for="myNameInput"><b>Nome</b><small>Como os outros veem você na sala.</small></label>
+              <input id="myNameInput" class="text-input" maxlength="40" autocomplete="off">
+            </div>
+            <div class="set-row set-row-stack">
+              <div class="set-text"><b>Cor</b><small>Sua bolinha, seu mouse, seus pings e suas janelas.</small></div>
+              <div class="my-color">
+                <span id="myColorSwatches" class="tool-group" role="group" aria-label="Sua cor"></span>
+                <label class="color-pick" title="Outra cor">
+                  <input id="myColorInput" type="color" aria-label="Outra cor">
+                </label>
+                <button id="myColorAutoBtn" class="tool" title="Voltar à cor automática (sai do seu id)">Automática</button>
+              </div>
+            </div>
+            <p class="set-note">Nome e cor ficam guardados neste aparelho e valem em todas as salas.</p>
+          </section>
 
-      <section class="set-section">
-        <h4>🎙️ Microfone</h4>
-        <label class="check"><input type="checkbox" id="pushToTalkCheck"> Apertar para falar: o microfone só manda som enquanto eu seguro <kbd>V</kbd> (ou o botão do microfone)</label>
-        <label class="check"><input type="checkbox" id="mutedAlertCheck"> Avisar quando eu falar com o microfone desligado</label>
-        <p class="muted small">Só ouve aqui, para avisar: nada é enviado enquanto o microfone está desligado. Funciona depois de você permitir o microfone uma vez.</p>
-      </section>
+          <!-- 🔊 Som e microfone -->
+          <section class="set-page" data-set-page="sound" role="tabpanel" hidden>
+            <h4 class="set-group">Som</h4>
+            <div class="set-row">
+              <label class="set-text" for="pageVolumeRange"><b>Volume geral</b><small>Tudo o que toca nesta página: vozes, telas, vídeos, rádio e sons.</small></label>
+              <div class="volume page-volume">
+                <input id="pageVolumeRange" type="range" min="0" max="100" aria-label="Volume geral da página">
+                <output id="pageVolumeValue"></output>
+              </div>
+            </div>
+            <div class="set-row">
+              <label class="set-text" for="sfxCheck"><b>Efeitos sonoros</b><small>Alguém entra ou sai, chega mensagem, janela abre ou fecha.</small></label>
+              <input type="checkbox" id="sfxCheck" class="switch">
+            </div>
+            <h4 class="set-group">Microfone</h4>
+            <div class="set-row">
+              <label class="set-text" for="pushToTalkCheck"><b>Apertar para falar</b><small>O microfone só manda som enquanto você segura <kbd>V</kbd> ou o botão do microfone.</small></label>
+              <input type="checkbox" id="pushToTalkCheck" class="switch">
+            </div>
+            <div class="set-row">
+              <label class="set-text" for="mutedAlertCheck"><b>Avisar quando eu falar mudo</b><small>Mostra um aviso se você falar com o microfone desligado. Só ouve aqui, nada é enviado.</small></label>
+              <input type="checkbox" id="mutedAlertCheck" class="switch">
+            </div>
+          </section>
 
-      <!-- Qualidade: menos = menos internet e menos processador. -->
-      <section class="set-section">
-        <h4>🖥️ Qualidade das telas</h4>
-        <div id="sendQualityField" class="quality-group">
-          <span>Minha tela (o que eu envio)</span>
-          <select id="sendHeight" aria-label="Resolução da minha tela"></select>
-          <select id="sendFps" aria-label="Quadros por segundo da minha tela"></select>
-          <select id="sendMode" aria-label="O que a minha tela mostra">
-            <option value="detail">Texto nítido (documentos, código)</option>
-            <option value="motion">Movimento (vídeo, jogo)</option>
-          </select>
+          <!-- 👥 Pessoas e sala -->
+          <section class="set-page" data-set-page="people" role="tabpanel" hidden>
+            <div id="roomModeSection" class="hidden">
+              <h4 class="set-group">Sala</h4>
+              <div class="set-row">
+                <div class="set-text"><b>Quem pode entrar</b><small id="roomModeHint"></small></div>
+                <button id="roomModeBtn" class="tool">🔓 Pública</button>
+              </div>
+            </div>
+            <h4 class="set-group">Quem está aqui</h4>
+            <p class="set-note set-note-top">O volume de cada um vale só para você.</p>
+            <div id="peopleList" class="people"></div>
+          </section>
+
+          <!-- 🖥️ Telas e mouse -->
+          <!-- Qualidade: menos = menos internet e menos processador. -->
+          <section class="set-page" data-set-page="screens" role="tabpanel" hidden>
+            <h4 class="set-group">Qualidade das telas</h4>
+            <div id="sendQualityField" class="set-row set-row-stack">
+              <div class="set-text"><b>Minha tela</b><small>O que eu envio quando compartilho.</small></div>
+              <div class="quality-group">
+                <select id="sendHeight" aria-label="Resolução da minha tela"></select>
+                <select id="sendFps" aria-label="Quadros por segundo da minha tela"></select>
+                <select id="sendMode" aria-label="O que a minha tela mostra">
+                  <option value="detail">Texto nítido (documentos, código)</option>
+                  <option value="motion">Movimento (vídeo, jogo)</option>
+                </select>
+              </div>
+            </div>
+            <div class="set-row set-row-stack">
+              <div class="set-text"><b>Telas que eu recebo</b><small>O máximo que chega das telas dos outros.</small></div>
+              <div class="quality-group">
+                <select id="receiveHeight" aria-label="Resolução máxima das telas que recebo"></select>
+                <select id="receiveFps" aria-label="Quadros por segundo máximos das telas que recebo"></select>
+              </div>
+            </div>
+            <div class="set-row">
+              <label class="set-text" for="autoBalanceCheck"><b>Balanço automático</b><small id="autoBalanceHint">Com muita gente ou muita coisa aberta, baixa sozinho a qualidade das telas (a que eu envio e a que eu recebo).</small></label>
+              <input type="checkbox" id="autoBalanceCheck" class="switch">
+            </div>
+            <h4 class="set-group">Mouse</h4>
+            <div class="set-row">
+              <label class="set-text" for="showCursorsCheck"><b>Ver o mouse dos outros</b><small>No quadro e em cima das telas compartilhadas.</small></label>
+              <input type="checkbox" id="showCursorsCheck" class="switch">
+            </div>
+            <div class="set-row">
+              <label class="set-text" for="shareCursorCheck"><b>Mostrar o meu mouse</b><small>Os outros veem onde você está apontando.</small></label>
+              <input type="checkbox" id="shareCursorCheck" class="switch">
+            </div>
+          </section>
+
         </div>
-        <div class="quality-group">
-          <span>Telas que eu recebo</span>
-          <select id="receiveHeight" aria-label="Resolução máxima das telas que recebo"></select>
-          <select id="receiveFps" aria-label="Quadros por segundo máximos das telas que recebo"></select>
-        </div>
-        <label class="check"><input type="checkbox" id="autoBalanceCheck"> Permitir balanço automático de recursos</label>
-        <p id="autoBalanceHint" class="muted small">Com muita gente ou muita coisa aberta, baixa sozinho a qualidade das telas (a que eu envio e a que eu recebo).</p>
-      </section>
 
-      <section class="set-section">
-        <h4>🖱️ Mouse</h4>
-        <label class="check"><input type="checkbox" id="showCursorsCheck"> Mostrar o mouse dos outros</label>
-        <label class="check"><input type="checkbox" id="shareCursorCheck"> Mostrar o meu mouse para os outros</label>
-        <p class="muted small">Vale no quadro e em cima das telas compartilhadas.</p>
-      </section>
+      </div>
 
     </div>
 
@@ -7985,10 +8233,10 @@
     session.myAvatar.role = "button";
     session.myAvatar.tabIndex = 0;
     session.myAvatar.title += "\nBotão direito: configurações";
-    session.myAvatar.onclick = () => setSettingsOpen(true);
+    session.myAvatar.onclick = () => setSettingsOpen(true, "you");
     session.myAvatar.oncontextmenu = event => {
       event.preventDefault();
-      setSettingsOpen(true);
+      setSettingsOpen(true, "you");
     };
 
     for (const peer of connectedPeers()) {
@@ -16874,24 +17122,63 @@
   }).observe(document.querySelector(".s-controls"));
   $("settingsCloseBtn").onclick = () => setSettingsOpen(false);
 
-  function setSettingsOpen(open) {
+  // Seções do modal; volta na última aberta (guardada no aparelho).
+  const SETTINGS_TAB_KEY = "rtc.settingsTab";
+  const SETTINGS_TABS = ["you", "sound", "people", "screens"];
+
+  function setSettingsTab(tab) {
+
+    if (!SETTINGS_TABS.includes(tab)) tab = "you";
+
+    storageSet(SETTINGS_TAB_KEY, tab);
+
+    for (const button of document.querySelectorAll("[data-set-tab]")) {
+      const active = button.dataset.setTab === tab;
+      button.setAttribute("aria-selected", active);
+      button.tabIndex = active ? 0 : -1;
+      if (active) $("settingsTabTitle").textContent = button.lastElementChild.textContent;
+    }
+
+    for (const page of document.querySelectorAll("[data-set-page]")) page.hidden = page.dataset.setPage !== tab;
+
+    $("settingsPanel").querySelector(".settings-body").scrollTop = 0;
+
+  }
+
+  document.querySelectorAll("[data-set-tab]").forEach(button => {
+    button.onclick = () => setSettingsTab(button.dataset.setTab);
+  });
+
+  // Setas trocam de seção (como abas).
+  $("settingsPanel").querySelector(".settings-nav").addEventListener("keydown", event => {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const current = SETTINGS_TABS.indexOf(storageGet(SETTINGS_TAB_KEY));
+    const next = SETTINGS_TABS[(current + step + SETTINGS_TABS.length) % SETTINGS_TABS.length];
+    setSettingsTab(next);
+    document.querySelector(`[data-set-tab="${next}"]`).focus();
+  });
+
+  // tab: abre já nessa seção (senão, na última que ficou aberta).
+  function setSettingsOpen(open, tab = null) {
 
     show("settingsPanel", open);
     $("settingsBtn").classList.toggle("on", open);
 
     if (open) {
+      setSettingsTab(tab || storageGet(SETTINGS_TAB_KEY));
       $("myNameInput").value = me.name;
       renderPeople();
       renderRoomMode();
+      $("settingsCloseBtn").focus();
     }
 
   }
 
-  // Clicar fora ou Esc fecha.
-  $("sessionView").addEventListener("pointerdown", event => {
-    if ($("settingsPanel").classList.contains("hidden")) return;
-    if (event.target.closest("#settingsPanel, #settingsBtn")) return;
-    setSettingsOpen(false);
+  // Clicar no fundo escuro fecha.
+  $("settingsPanel").addEventListener("pointerdown", event => {
+    if (event.target === $("settingsPanel")) setSettingsOpen(false);
   });
 
   document.addEventListener("keydown", event => {
@@ -16903,7 +17190,7 @@
   // Abre as configurações já na pessoa (volume e mudo dela).
   function openPersonSettings(id) {
 
-    setSettingsOpen(true);
+    setSettingsOpen(true, "people");
 
     const row = [...$("peopleList").children].find(element => element.dataset.id === id);
 
@@ -18678,7 +18965,7 @@
 
       if (session) {
         addNote(owner.id === me.id
-          ? "🔓 A sala começou pública: quem entrar conecta sem pedir. Para exigir permissão, abra ⚙️ Configurações."
+          ? "🔓 A sala começou pública: quem entrar conecta sem pedir. Para exigir permissão, abra ⚙️ Configurações → Pessoas e sala."
           : room.public
             ? "🔓 A sala é pública: quem entrar conecta sem precisar de permissão."
             : "🔒 A sala é privada: quem entrar precisa ser aceito.");
