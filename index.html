@@ -4453,6 +4453,11 @@
       </section>
 
       <section class="set-section">
+        <h4>🔔 Sons</h4>
+        <label class="check"><input type="checkbox" id="sfxCheck"> Efeitos sonoros (alguém entra ou sai, janela abre ou fecha)</label>
+      </section>
+
+      <section class="set-section">
         <h4>🎙️ Microfone</h4>
         <label class="check"><input type="checkbox" id="mutedAlertCheck"> Avisar quando eu falar com o microfone desligado</label>
         <p class="muted small">Só ouve aqui, para avisar: nada é enviado enquanto o microfone está desligado. Funciona depois de você permitir o microfone uma vez.</p>
@@ -5282,6 +5287,9 @@
   // sozinho; a sessão (quadro, chat) dura enquanto estiver na sala.
   function startSession({ role = "host", room = null } = {}) {
 
+    // Quadro inicial e o que a memória da sala restaura: sem som.
+    quietWindowSounds();
+
     session = {
       room,                   // nome da sala, ou null na conexão direta
       micTrack: null,
@@ -5378,6 +5386,10 @@
   function addPeerToSession(peer) {
 
     peer.connected = true;
+
+    sfx("join");
+    // Logo depois chega o que ele tem (quadros, janelas): sem som de "abriu".
+    quietWindowSounds();
 
     const pc = peer.pc;
 
@@ -5499,6 +5511,7 @@
       return;
     }
 
+    sfx("leave");
     addNote("👋 " + notice);
     toast("👋 " + notice);
 
@@ -5520,6 +5533,7 @@
 
     if (!session) return;
 
+    quietWindowSounds();
     saveRoomMemory();
     bridges.clear();
     clearInterval(session.roomSaveTimer);
@@ -6943,6 +6957,87 @@
   }
 
 
+  /* ---------------- efeitos sonoros ---------------- */
+
+  /*
+   * Sons curtos feitos na hora (Web Audio, sem arquivos): alguém entrou
+   * ou saiu, uma janela abriu ou fechou. Respeitam o 🔊 Som desligado.
+   * Ao entrar na sala e quando chega o histórico de alguém, muitas
+   * janelas aparecem de uma vez: essas ficam em silêncio.
+   */
+
+  // Notas de cada som: [frequência inicial, final, início (s), duração (s)].
+  const SFX = {
+    join:  { wave: "sine",     notes: [[523, 523, 0, .12], [784, 784, .1, .18]] },
+    leave: { wave: "sine",     notes: [[784, 784, 0, .12], [523, 523, .1, .2]] },
+    open:  { wave: "triangle", notes: [[620, 940, 0, .09]] },
+    close: { wave: "triangle", notes: [[900, 520, 0, .09]] }
+  };
+
+  const SFX_VOLUME = 0.08;
+  const SFX_QUIET_MS = 3000;
+
+  const sfxState = {
+    enabled: storageGet("rtc.sfx") !== "0",
+    context: null,
+    quietUntil: 0,
+    last: {}
+  };
+
+  $("sfxCheck").checked = sfxState.enabled;
+  $("sfxCheck").onchange = () => {
+    sfxState.enabled = $("sfxCheck").checked;
+    storageSet("rtc.sfx", sfxState.enabled ? "1" : "0");
+    if (sfxState.enabled) sfx("open");
+  };
+
+  function quietWindowSounds() {
+    sfxState.quietUntil = Date.now() + SFX_QUIET_MS;
+  }
+
+  function sfx(name) {
+
+    const sound = SFX[name];
+    const now = Date.now();
+
+    if (!sound || !sfxState.enabled || !session?.speakerOn) return;
+    if ((name === "open" || name === "close") && now < sfxState.quietUntil) return;
+    // Várias de uma vez (fechou três janelas juntas): um som só.
+    if (now - (sfxState.last[name] || 0) < 250) return;
+
+    sfxState.last[name] = now;
+
+    try {
+
+      const context = sfxState.context ||= new AudioContext();
+      if (context.state === "suspended") context.resume().catch(() => {});
+
+      const start = context.currentTime + .01;
+
+      for (const [from, to, at, length] of sound.notes) {
+
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = sound.wave;
+        oscillator.frequency.setValueAtTime(from, start + at);
+        oscillator.frequency.exponentialRampToValueAtTime(to, start + at + length);
+
+        gain.gain.setValueAtTime(0.0001, start + at);
+        gain.gain.exponentialRampToValueAtTime(SFX_VOLUME, start + at + .01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + at + length);
+
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start(start + at);
+        oscillator.stop(start + at + length + .02);
+
+      }
+
+    } catch {}
+
+  }
+
+
   /* ---------------- falando mutado ---------------- */
 
   /*
@@ -8257,6 +8352,8 @@
   // Moldura comum de janela: barra (arrastar) + corpo + canto (tamanho).
   function createWindow({ id, kind, extraButtons = [], closable = false, onClose = null }) {
 
+    sfx("open");
+
     const el = document.createElement("div");
     el.className = "win " + (kind === "board" ? "board-win"
       : kind === "display" ? "display-win"
@@ -8383,6 +8480,8 @@
     const view = session.windows.get(id);
 
     if (!view) return;
+
+    sfx("close");
 
     if (view.video) {
       if (document.pictureInPictureElement === view.video) document.exitPictureInPicture().catch(() => {});
