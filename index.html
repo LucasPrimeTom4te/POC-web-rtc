@@ -15357,7 +15357,7 @@
       }));
 
     return [
-      { icon: "📍", label: "Pingar aqui", hint: "Alt+clique", action: () => pingAt(point) },
+      { icon: "📍", label: "Pingar aqui", hint: "2 cliques", action: () => pingAt(point) },
       "-",
       ...create,
       "-",
@@ -15374,7 +15374,7 @@
     const editing = session.boardMode === "edit";
 
     return [
-      { icon: "📍", label: "Pingar aqui", hint: "Alt+clique", action: () => pingAt(point) },
+      { icon: "📍", label: "Pingar aqui", hint: "2 cliques", action: () => pingAt(point) },
       "-",
       ...Object.entries(TOOLS).map(([name, tool]) => ({
         svg: tool.icon,
@@ -15793,8 +15793,8 @@
 
   /* ---- 📍 ping no quadro ----
    *
-   * Alt+clique (ou "📍 Pingar aqui" no botão direito) marca um ponto do
-   * mundo para todos: { type: "ping", x, y }. Aparece uma onda com a cor e
+   * Dois cliques no fundo ou num quadro (ou Alt+clique, ou "📍 Pingar
+   * aqui" no botão direito) marca um ponto do mundo para todos: { type: "ping", x, y }. Aparece uma onda com a cor e
    * o nome de quem pingou; quem está com o ponto fora da vista vê uma seta
    * na borda da área (clicar leva até lá).
    */
@@ -15907,6 +15907,63 @@
     event.stopPropagation();
     pingAt(worldPoint(event));
   }, true);
+
+  // Dois cliques no fundo ou num quadro. No quadro, os pontinhos que os
+  // dois cliques deixaram (caneta, forma de tamanho zero) saem.
+  $("stageArea").addEventListener("dblclick", event => {
+
+    if (!session || event.target.closest(".stage-ui")) return;
+
+    const win = event.target.closest(".win");
+    const view = win && session.windows.get(win.dataset.id);
+    const onCanvas = view?.kind === "board" && event.target === view.canvas;
+
+    if (win && !onCanvas) return;
+
+    const editing = onCanvas && session.boardMode === "edit";
+
+    // Texto: o clique já abriu a caixa para escrever.
+    if (editing && (session.tool === "text" || session.tool === "textbox")) return;
+
+    if (editing) removeTapDots(view.board);
+
+    event.preventDefault();
+    pingAt(worldPoint(event));
+
+  });
+
+  // Tira os meus últimos traços deste quadro que foram só um toque (até 2,
+  // dos últimos instantes): eram os cliques do ping, não desenho.
+  function removeTapDots(boardId) {
+
+    const since = Date.now() - 800;
+    const keys = [];
+
+    for (let index = session.mine.length - 1; index >= 0 && keys.length < 2; index--) {
+
+      const { board, key } = session.mine[index];
+      const stroke = session.strokes.get(key);
+
+      if (board !== boardId || !stroke) continue;
+      if (stroke.t < since || !isTap(stroke)) break;
+
+      keys.push(key);
+      session.mine.splice(index, 1);
+
+    }
+
+    if (!keys.length) return;
+
+    eraseStrokes(boardId, keys);
+    send({ type: "erase", board: boardId, keys });
+
+  }
+
+  function isTap({ points }) {
+    const xs = points.map(point => point[0]);
+    const ys = points.map(point => point[1]);
+    return Math.max(...xs) - Math.min(...xs) < 0.006 && Math.max(...ys) - Math.min(...ys) < 0.006;
+  }
 
   /* ---- volume de cada um (só aqui) ---- */
 
