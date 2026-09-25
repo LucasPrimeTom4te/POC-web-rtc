@@ -871,6 +871,24 @@
       cursor: crosshair;
     }
 
+    /* Visualizando: o quadro não desenha e deixa rolar a página. */
+    .board-pane.viewing #board {
+      touch-action: auto;
+      cursor: default;
+    }
+
+    /* Tela cheia (a de verdade e a do iPhone, que ocupa a janela). */
+    .board-pane.board-full,
+    .board-pane:fullscreen {
+      display: flex !important;
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: var(--bg);
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
     /* Chat */
     .chat-list {
       flex: 1;
@@ -901,6 +919,18 @@
       align-self: flex-end;
       background: var(--accent);
       border-bottom-right-radius: 5px;
+    }
+
+    .msg .who {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 12px;
+      font-weight: 700;
+      opacity: .75;
+    }
+
+    .peer-list {
+      display: contents;
     }
 
     .msg time {
@@ -1094,7 +1124,7 @@
     }
 
     @media (max-width: 899px) {
-      #remoteLabel {
+      .peer-label {
         flex-basis: 100%;
         font-size: 12px;
       }
@@ -1504,8 +1534,9 @@
           <h3>Entrar numa sala</h3>
 
           <p class="muted side-text">
-            Os dois aparelhos entram na <strong>mesma sala</strong>, com o mesmo
-            nome. Cabem 2 por sala.
+            Todos entram na <strong>mesma sala</strong>, com o mesmo nome.
+            Cabem até 6 pessoas; o quadro e o chat ficam guardados enquanto
+            houver alguém lá.
           </p>
 
           <form id="roomForm" class="room-form" autocomplete="off">
@@ -1633,15 +1664,14 @@
       </div>
     </div>
 
+    <button id="roomLinkBtn" class="icon-btn hidden" title="Copiar o link da sala para chamar mais gente">🔗 Link da sala</button>
     <button id="rememberBtn" class="icon-btn" title="Lembrar este dispositivo para conectar de novo depois">☆ Lembrar</button>
     <button id="sessionHelpBtn" class="icon-btn" title="Quero entender o que está acontecendo">💡</button>
 
   </div>
 
   <div class="s-remote">
-    <span id="remoteLabel">O outro lado:</span>
-    <span id="remoteMicPill" class="pill">🎙️ Microfone desligado</span>
-    <span id="remoteSpeakerPill" class="pill on">🔊 Ouvindo você</span>
+    <span id="peerList" class="peer-list"></span>
     <button id="remoteScreenPill" class="pill on hidden" title="Ver a tela">🖥️ Compartilhando a tela</button>
     <button id="unlockAudioBtn" class="pill warn hidden">🔈 Toque aqui para ouvir</button>
   </div>
@@ -1662,6 +1692,8 @@
         <button id="thickBtn" class="tool">Grosso</button>
         <span id="remoteDrawing" class="remote-drawing hidden">✏️ O outro está desenhando…</span>
         <span class="spacer"></span>
+        <button id="boardModeBtn" class="tool active">✏️ Editando</button>
+        <button id="boardFullBtn" class="tool">⛶ Tela cheia</button>
         <button id="clearBoardBtn" class="tool">🧹 Limpar</button>
       </div>
 
@@ -1831,8 +1863,9 @@
         <li>
           Na <strong>sala</strong>, cada um entra no canal
           <code>room:&lt;nome&gt;</code> e aparece na lista de presença
-          (<em>presence</em>). Quem chegou depois pede para conectar a quem já
-          estava. Um terceiro vê que já tem 2 e sai sozinho.
+          (<em>presence</em>). Quem chegou depois pede para conectar a cada um
+          que já estava (todos com todos). Quem chega pede o quadro e o chat a
+          quem já estava, direto pelo DataChannel: nada disso fica no servidor.
         </li>
         <li>
           Aceito o pedido, oferta e resposta (descrições <strong>SDP</strong>
@@ -2328,21 +2361,29 @@
 
   /* ---------------- início / fim ---------------- */
 
-  // Abre a tela da sessão (na primeira conexão). role: papel nela,
-  // só para escolher a cor inicial do quadro.
-  function startSession(role) {
+  // Abre a tela da sessão. Conexão direta: na primeira conexão (role
+  // escolhe a cor inicial do quadro). Sala: ao entrar nela, ainda
+  // sozinho; a sessão (quadro, chat) dura enquanto estiver na sala.
+  function startSession({ role = "host", room = null } = {}) {
 
     session = {
+      room,                   // nome da sala, ou null na conexão direta
       micTrack: null,
       speakerOn: true,
       tab: "chat",
       stage: "board",         // PC: o que aparece à esquerda (board | screen)
       unread: { chat: 0, board: 0, screen: 0 },
       screenTrack: null,
-      color: role === "host" ? BOARD_COLORS[1] : BOARD_COLORS[2],
+      color: room ? colorFor(me.id) : role === "host" ? BOARD_COLORS[1] : BOARD_COLORS[2],
       width: BOARD_WIDTHS.thin,
-      strokes: new Map(),
-      drawing: null,          // id do traço que estou desenhando
+      boardMode: "edit",      // "edit" (desenha) | "view" (só olha)
+      strokes: new Map(),     // "<autor>:<id>" -> { author, color, width, v, points }
+      boardVersion: 0,        // sobe a cada "Limpar" (veja handleRemoteDraw)
+      drawing: null,          // chave do traço que estou desenhando
+      chat: new Map(),        // "<autor>:<id>" -> { id, author, name, text, time }
+      syncFrom: null,         // de quem pedi o histórico da sala
+      synced: false,          // já recebi o histórico completo
+      syncCounts: { chat: 0, strokes: 0 },
       pendingPoints: [],
       flushScheduled: false,
       remoteDrawingTimer: null,
@@ -2357,7 +2398,6 @@
     // Interface zerada.
     $("chatList").replaceChildren();
     $("peerName").textContent = "direto com o outro aparelho";
-    $("remoteLabel").textContent = "O outro lado:";
     show("unlockAudioBtn", false);
     show("remoteDrawing", false);
     show("toast", false);
@@ -2366,11 +2406,14 @@
     show("remoteScreenPill", false);
     show("screenBtn", CAN_SHARE_SCREEN);
     renderSwatches();
+    renderBoardMode();
     renderLocalControls();
-    renderRemoteState();
+    renderPeers();
     setTab("chat");
 
-    addNote("Conectado! Tudo aqui vai direto de um aparelho para o outro.");
+    addNote(room
+      ? `Você está na sala “${room}”. Quem abrir ${roomLink(room).replace(/^https?:\/\//, "")} entra também.`
+      : "Conectado! Tudo aqui vai direto de um aparelho para o outro.");
 
     show("sessionView");
     keepScreenOn();
@@ -2388,6 +2431,9 @@
     const pc = peer.pc;
 
     pc.ontrack = event => {
+
+      // A conexão fechou (ou a sessão acabou) antes da trilha chegar.
+      if (!session || peer.closed) return;
 
       if (event.track.kind === "video") {
         log(`Canal de vídeo (tela) de ${peerLabel(peer)} recebido.`);
@@ -2420,6 +2466,12 @@
 
     sendTo(peer, { type: "hello", device: IS_MOBILE ? "phone" : "computer", name: me.name });
     sendState(peer);
+
+    // Sala: troca o que cada um fez; quem chegou (quem pediu) pede o resto.
+    if (session.room && peer.room) {
+      sendSnapshot(peer, false);
+      if (peer.role === "guest") requestSync();
+    }
 
     if (peer.role === "host") {
       negotiateAudio(peer).catch(error => {
@@ -2456,13 +2508,20 @@
       session.incoming.delete(key);
     }
 
-    if (!connectedPeers().length) {
+    // Conexão direta: acabou. Sala: continua, mesmo sozinho.
+    if (!connectedPeers().length && !session.room) {
       goHome(notice, { id: peer.id, name: peer.name });
       return;
     }
 
     addNote("👋 " + notice);
     toast("👋 " + notice);
+
+    // Ainda não tinha chegado o histórico: pede a outro.
+    if (session.syncFrom === peer && !session.synced) {
+      session.syncFrom = null;
+      requestSync();
+    }
 
     renderPeers();
     renderLocalControls();
@@ -2488,6 +2547,10 @@
     $("screenVideo").srcObject = null;
     $("sessionView").classList.remove("has-screen");
 
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    $("boardPane").classList.remove("board-full", "viewing");
+    $("boardFullBtn").textContent = "⛶ Tela cheia";
+
     session = null;
 
     releaseScreen();
@@ -2505,20 +2568,55 @@
       "O outro lado";
   }
 
+  // Cor inicial do quadro na sala: sai do id, cada um fica com a sua.
+  function colorFor(id) {
+    let hash = 0;
+    for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    return BOARD_COLORS[1 + hash % (BOARD_COLORS.length - 1)];
+  }
+
   // Cabeçalho da sessão: com quem está conectado.
   function renderPeers() {
 
-    const peer = firstPeer();
+    if (!session) return;
 
-    if (!session || !peer) return;
+    const list = connectedPeers();
 
-    $("peerName").textContent = "direto com " + peerLabel(peer);
-    $("remoteLabel").textContent = peerLabel(peer) + ":";
+    if (session.room) {
+      const count = list.length + 1;
+      $("peerName").textContent = `Sala “${session.room}” · ` +
+        (count === 1 ? "só você por enquanto" : `${count} pessoas`);
+    } else if (list.length) {
+      $("peerName").textContent = "direto com " + peerLabel(list[0]);
+    }
 
+    show("roomLinkBtn", !!session.room);
+
+    // "Lembrar" é de um aparelho só: some quando tem mais gente.
+    show("rememberBtn", list.length === 1);
+
+    $("leaveBtn").lastElementChild.textContent = session.room ? "Sair da sala" : "Desconectar";
+
+    renderConnectionState();
     renderRemoteState();
     renderRememberButton();
 
   }
+
+  $("roomLinkBtn").onclick = async () => {
+
+    if (!session?.room) return;
+
+    const link = roomLink(session.room);
+
+    try {
+      await navigator.clipboard.writeText(link);
+      toast("🔗 Link da sala copiado: " + link.replace(/^https?:\/\//, ""));
+    } catch {
+      prompt("Copie o link da sala:", link);
+    }
+
+  };
 
   $("sessionHelpBtn").onclick = () => show("helpModal");
 
@@ -2613,6 +2711,11 @@
       $("sessionTitleNote").textContent =
         `(tentando há ${elapsed} s, desiste em ${RECONNECT_GIVE_UP_S - elapsed} s)`;
 
+    } else if (session.room && !connectedPeers().length) {
+
+      $("sessionTitle").textContent = "Na sala";
+      $("sessionTitleNote").textContent = "(esperando alguém entrar)";
+
     } else {
 
       $("sessionTitle").textContent = "Conectado";
@@ -2652,9 +2755,15 @@
         break;
 
       case "chat":
-        addMessage(message.text, false);
-        bump("chat");
-        if (!isPaneVisible("chat")) toast("💬 " + message.text);
+        receiveChat(peer, message);
+        break;
+
+      case "sync-request":
+        sendSnapshot(peer, true);
+        break;
+
+      case "sync-data":
+        mergeSnapshot(peer, message);
         break;
 
       case "draw-start":
@@ -2685,29 +2794,87 @@
 
   }
 
-  function addMessage(text, mine) {
+  const MESSAGE_MAX = 4000;
 
-    const element = document.createElement("div");
-    element.className = "msg " + (mine ? "mine" : "theirs");
-    element.textContent = text;
+  // Mensagem vinda de alguém na sessão (ao vivo).
+  function receiveChat(peer, message) {
 
-    const time = document.createElement("time");
-    time.textContent = timeNow();
-    element.appendChild(time);
+    const text = String(message.text || "").slice(0, MESSAGE_MAX);
 
-    appendToChat(element);
+    if (!text) return;
+
+    // Id e hora vêm de quem escreveu (servem para juntar com o histórico).
+    const localId = /^[a-z0-9]{1,16}$/.test(message.id) ? message.id : randomId();
+
+    const entry = {
+      id: peer.id + ":" + localId,
+      author: peer.id,
+      name: peerLabel(peer),
+      text,
+      time: Number.isFinite(message.time) ? message.time : Date.now()
+    };
+
+    if (session.chat.has(entry.id)) return;
+
+    session.chat.set(entry.id, entry);
+
+    // Ao vivo entra embaixo (o relógio do outro aparelho pode estar adiantado).
+    addMessage(entry, Date.now());
+
+    bump("chat");
+
+    if (!isPaneVisible("chat")) {
+      toast("💬 " + (session.room ? entry.name + ": " : "") + text);
+    }
 
   }
 
-  function appendToChat(element) {
+  // placeAt: posição na lista (hora); o histórico usa a hora de quem escreveu.
+  function addMessage(entry, placeAt = entry.time) {
+
+    const mine = entry.author === me.id;
+    const element = document.createElement("div");
+
+    element.className = "msg " + (mine ? "mine" : "theirs");
+
+    // Na sala pode ter várias pessoas: mostra quem escreveu.
+    if (!mine && session.room) {
+      const who = document.createElement("span");
+      who.className = "who";
+      who.textContent = entry.name || "Alguém";
+      element.appendChild(who);
+    }
+
+    element.append(entry.text);
+
+    const time = document.createElement("time");
+    time.textContent = new Date(entry.time)
+      .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    element.appendChild(time);
+
+    appendToChat(element, placeAt);
+
+  }
+
+  // Em ordem de hora: o histórico que chega depois entra no lugar certo.
+  function appendToChat(element, time = Date.now()) {
 
     const list = $("chatList");
     const nearBottom =
       list.scrollHeight - list.scrollTop - list.clientHeight < 80;
 
-    list.appendChild(element);
+    element.dataset.time = time;
 
-    if (nearBottom || element.matches(".mine")) {
+    let before = null;
+
+    for (let child = list.lastElementChild; child; child = child.previousElementSibling) {
+      if (Number(child.dataset.time) <= time) break;
+      before = child;
+    }
+
+    list.insertBefore(element, before);
+
+    if (!before && (nearBottom || element.matches(".mine"))) {
       list.scrollTop = list.scrollHeight;
     }
 
@@ -2723,6 +2890,176 @@
 
     clearTimeout(session.toastTimer);
     session.toastTimer = setTimeout(() => show("toast", false), 3500);
+
+  }
+
+
+  /* ---------------- histórico da sala ---------------- */
+
+  /*
+   * Na sala, o quadro e o chat vivem nos aparelhos de quem está lá.
+   * Quem chega pede tudo a UMA pessoa (a primeira com quem conectar;
+   * se ela sair antes de terminar, pede a outra). Além disso, a cada
+   * conexão nova os dois lados trocam o que eles mesmos escreveram e
+   * desenharam: cobre o que alguém fez enquanto quem chegou ainda não
+   * estava conectado a ele. Tudo tem id, então juntar repetido não duplica.
+   *
+   * Vai em pedaços (mensagens de DataChannel têm limite de tamanho).
+   */
+
+  const SYNC_CHUNK = 60 * 1024;
+
+  function requestSync() {
+
+    if (!session?.room || session.synced || session.syncFrom) return;
+
+    const peer = connectedPeers()[0];
+
+    if (!peer) return;
+
+    session.syncFrom = peer;
+    session.syncCounts = { chat: 0, strokes: 0 };
+
+    sendTo(peer, { type: "sync-request" });
+
+    log("Pedindo o histórico da sala para " + peerLabel(peer));
+
+  }
+
+  // full: tudo o que tenho; senão, só o que é meu.
+  function sendSnapshot(peer, full) {
+
+    if (!session?.room) return;
+
+    const wanted = item => full || item.author === me.id;
+
+    const chat = [...session.chat.values()].filter(wanted);
+
+    const strokes = [...session.strokes]
+      .filter(([, stroke]) => wanted(stroke))
+      .map(([key, { author, color, width, v, points }]) => ({ key, author, color, width, v, points }));
+
+    const batches = [];
+    let current = { chat: [], strokes: [] };
+    let size = 0;
+
+    const add = (kind, item) => {
+
+      const itemSize = JSON.stringify(item).length;
+
+      if (size && size + itemSize > SYNC_CHUNK) {
+        batches.push(current);
+        current = { chat: [], strokes: [] };
+        size = 0;
+      }
+
+      current[kind].push(item);
+      size += itemSize;
+
+    };
+
+    chat.forEach(item => add("chat", item));
+    strokes.forEach(item => add("strokes", item));
+    batches.push(current);
+
+    batches.forEach((batch, index) => sendTo(peer, {
+      type: "sync-data",
+      full,
+      v: session.boardVersion,
+      ...batch,
+      last: index === batches.length - 1
+    }));
+
+    if (full) log(`Histórico enviado para ${peerLabel(peer)}: ${chat.length} mensagens, ${strokes.length} traços.`);
+
+  }
+
+  function mergeSnapshot(peer, message) {
+
+    if (!session?.room) return;
+
+    const list = value => Array.isArray(value) ? value : [];
+    const ownedKey = (key, author) =>
+      typeof key === "string" && key.length < 64 && isDeviceId(author) && key.startsWith(author + ":");
+
+    // O quadro de lá já passou por um "Limpar" que não vi.
+    const v = cleanVersion(message.v);
+    if (v !== null) applyClear(v);
+
+    let chatAdded = 0;
+    let strokesAdded = 0;
+
+    for (const item of list(message.chat)) {
+
+      if (!ownedKey(item?.id, item?.author) || session.chat.has(item.id)) continue;
+
+      const text = String(item.text || "").slice(0, MESSAGE_MAX);
+
+      if (!text) continue;
+
+      const entry = {
+        id: item.id,
+        author: item.author,
+        name: cleanName(item.name) || "Alguém",
+        text,
+        time: Number.isFinite(item.time) ? item.time : Date.now()
+      };
+
+      session.chat.set(entry.id, entry);
+      addMessage(entry);
+      chatAdded++;
+
+    }
+
+    for (const item of list(message.strokes)) {
+
+      if (!ownedKey(item?.key, item?.author)) continue;
+
+      const strokeVersion = cleanVersion(item.v);
+
+      if (strokeVersion === null || strokeVersion < session.boardVersion) continue;
+
+      const points = list(item.points).filter(isPoint);
+      const existing = session.strokes.get(item.key);
+
+      // Já tenho esse traço (igual ou mais completo, se ainda está sendo desenhado).
+      if (!points.length || existing?.points.length >= points.length) continue;
+
+      session.strokes.set(item.key, {
+        author: item.author,
+        color: String(item.color || BOARD_COLORS[0]).slice(0, 32),
+        width: Number(item.width) || BOARD_WIDTHS.thin,
+        v: strokeVersion,
+        points
+      });
+
+      strokesAdded++;
+
+    }
+
+    if (strokesAdded) redrawBoard();
+
+    if (message.full && session.syncFrom === peer) {
+
+      // Conta o histórico inteiro (parte dele pode já ter chegado antes).
+      session.syncCounts.chat += list(message.chat).length;
+      session.syncCounts.strokes += list(message.strokes).length;
+
+      if (message.last) {
+
+        const { chat, strokes } = session.syncCounts;
+
+        session.synced = true;
+
+        if (chat || strokes) {
+          addNote(`📥 Histórico da sala recebido: ${chat} mensage${chat === 1 ? "m" : "ns"} e ${strokes} traço${strokes === 1 ? "" : "s"} no quadro.`);
+        }
+
+        log("Histórico da sala recebido de " + peerLabel(peer));
+
+      }
+
+    }
 
   }
 
@@ -2800,8 +3137,18 @@
 
     if (!text || !session) return;
 
-    send({ type: "chat", text });
-    addMessage(text, true);
+    const localId = randomId();
+    const entry = {
+      id: me.id + ":" + localId,
+      author: me.id,
+      name: me.name,
+      text: text.slice(0, MESSAGE_MAX),
+      time: Date.now()
+    };
+
+    session.chat.set(entry.id, entry);
+    send({ type: "chat", id: localId, text: entry.text, time: entry.time });
+    addMessage(entry);
 
     input.value = "";
 
@@ -2865,14 +3212,17 @@
 
   }
 
-  // Áudio pronto com todo mundo na sessão.
+  // Dá para ligar o microfone / a tela: com alguém cujo áudio já está
+  // pronto, ou sozinho na sala. Quem ficar pronto depois recebe a trilha
+  // em applyLocalTracks().
   const audioReady = () => {
     const list = connectedPeers();
-    return list.length > 0 && list.every(peer => peer.audioReady);
+    return list.length ? list.some(peer => peer.audioReady) : !!session?.room;
   };
 
   const canShareScreen = () =>
-    audioReady() && connectedPeers().every(peer => peer.videoTransceiver);
+    connectedPeers().some(peer => peer.audioReady && peer.videoTransceiver) ||
+    (!connectedPeers().length && !!session?.room);
 
   function applyLocalTracks(peer) {
 
@@ -3079,18 +3429,71 @@
 
   }
 
+  // Linha "o outro lado": com uma pessoa, detalhado (como sempre foi);
+  // com várias, uma pílula por pessoa. Na sala, também quem está chegando.
   function renderRemoteState() {
 
-    const peer = firstPeer();
-    const { mic, speaker } = peer?.remote || { mic: false, speaker: true };
+    if (!session) return;
 
-    const micPill = $("remoteMicPill");
-    micPill.textContent = mic ? "🎙️ Microfone ligado" : "🎙️ Microfone desligado";
-    micPill.className = "pill" + (mic ? " on" : "");
+    const container = $("peerList");
+    const list = connectedPeers();
+    const pill = (text, className = "") => {
+      const element = document.createElement("span");
+      element.className = "pill " + className;
+      element.textContent = text;
+      return element;
+    };
 
-    const speakerPill = $("remoteSpeakerPill");
-    speakerPill.textContent = speaker ? "🔊 Ouvindo você" : "🔇 Não está ouvindo você";
-    speakerPill.className = "pill " + (speaker ? "on" : "warn");
+    container.replaceChildren();
+
+    if (!list.length) {
+      container.append(session.room
+        ? "Só você na sala por enquanto. Toque em 🔗 Link da sala para chamar alguém."
+        : "");
+    }
+
+    for (const peer of list) {
+
+      const { mic, speaker } = peer.remote;
+      let micPill;
+
+      if (list.length === 1) {
+
+        const label = document.createElement("span");
+        label.className = "peer-label";
+        label.textContent = peerLabel(peer) + ":";
+
+        micPill = pill(mic ? "🎙️ Microfone ligado" : "🎙️ Microfone desligado", mic ? "on" : "");
+
+        container.append(
+          label,
+          micPill,
+          pill(speaker ? "🔊 Ouvindo você" : "🔇 Não está ouvindo você", speaker ? "on" : "warn")
+        );
+
+      } else {
+
+        micPill = pill(
+          (mic ? "🎙️ " : "🤐 ") + peerLabel(peer) + (speaker ? "" : " · 🔇 sem som"),
+          speaker ? (mic ? "on" : "") : "warn"
+        );
+
+        micPill.title = (mic ? "Microfone ligado" : "Microfone desligado") +
+          (speaker ? ", ouvindo" : ", com o som desligado (não ouve ninguém)");
+
+        container.append(micPill);
+
+      }
+
+      peer.micPill = micPill;
+
+    }
+
+    // Sala: pedidos ainda em andamento.
+    for (const request of roomRequests.values()) {
+      if (peers.get(request.peer.id)?.connected) continue;
+      container.append(pill("⏳ " + peerName(request.peer), "warn"));
+    }
 
   }
 
@@ -3126,11 +3529,11 @@
 
     if (current !== session) return;
 
-    const peer = firstPeer();
-
-    $("remoteMicPill").classList.toggle(
-      "speaking", !!peer?.remote.mic && (remoteLevels.get(peer) || 0) > SPEAKING_LEVEL
-    );
+    for (const peer of connectedPeers()) {
+      peer.micPill?.classList.toggle(
+        "speaking", peer.remote.mic && (remoteLevels.get(peer) || 0) > SPEAKING_LEVEL
+      );
+    }
 
     $("micBtn").classList.toggle(
       "speaking", !!session.micTrack && localLevel > SPEAKING_LEVEL
@@ -3364,23 +3767,34 @@
 
   }
 
+  // Traços são guardados por "<autor>:<id>" (igual em todos os aparelhos)
+  // e com a versão do quadro em que começaram (v). "Limpar" sobe a versão
+  // e apaga o que é mais antigo: assim um traço atrasado, ou um histórico
+  // que chega depois, não ressuscita o que já foi limpo.
+
   board.addEventListener("pointerdown", event => {
 
-    if (!session) return;
+    if (!session || session.boardMode !== "edit") return;
 
     event.preventDefault();
     board.setPointerCapture(event.pointerId);
 
     const id = randomId();
     const point = boardPoint(event);
-    const stroke = { color: session.color, width: session.width, points: [point] };
+    const stroke = {
+      author: me.id,
+      color: session.color,
+      width: session.width,
+      v: session.boardVersion,
+      points: [point]
+    };
 
-    session.strokes.set(id, stroke);
+    session.strokes.set(me.id + ":" + id, stroke);
     session.drawing = id;
 
     drawSegment(stroke, 0);
 
-    send({ type: "draw-start", id, color: stroke.color, width: stroke.width, point });
+    send({ type: "draw-start", id, color: stroke.color, width: stroke.width, v: stroke.v, point });
 
   });
 
@@ -3388,7 +3802,11 @@
 
     if (!session?.drawing) return;
 
-    const stroke = session.strokes.get(session.drawing);
+    const stroke = session.strokes.get(me.id + ":" + session.drawing);
+
+    // Alguém limpou o quadro no meio do traço.
+    if (!stroke) return;
+
     const events = event.getCoalescedEvents?.() || [event];
 
     for (const item of events) {
@@ -3437,54 +3855,171 @@
 
     if (!session) return;
 
-    session.strokes.clear();
-    redrawBoard();
-    send({ type: "clear" });
+    applyClear(session.boardVersion + 1);
+    send({ type: "clear", v: session.boardVersion });
 
   };
+
+  // Quadro na versão v: some tudo o que começou antes dela.
+  function applyClear(v) {
+
+    if (v <= session.boardVersion) return false;
+
+    session.boardVersion = v;
+
+    for (const [key, stroke] of session.strokes) {
+      if (stroke.v < v) session.strokes.delete(key);
+    }
+
+    redrawBoard();
+
+    return true;
+
+  }
+
+  const isPoint = point =>
+    Array.isArray(point) && point.length === 2 && point.every(Number.isFinite);
+
+  const cleanVersion = v => Number.isInteger(v) && v >= 0 ? v : null;
 
   function handleRemoteDraw(peer, message) {
 
     const who = peerLabel(peer);
 
     // Cada um sorteia os ids dos próprios traços: separa por aparelho.
-    const id = peer.id + ":" + message.id;
+    const key = peer.id + ":" + message.id;
 
     if (message.type === "clear") {
-      session.strokes.clear();
-      redrawBoard();
-      addNote(`🧹 ${who} limpou o quadro`);
-      if (!isPaneVisible("chat")) toast(`🧹 ${who} limpou o quadro`);
+
+      // Sem versão (versão antiga da página): limpa o que tem agora.
+      const v = cleanVersion(message.v) ?? session.boardVersion + 1;
+
+      if (applyClear(v)) {
+        addNote(`🧹 ${who} limpou o quadro`);
+        if (!isPaneVisible("chat")) toast(`🧹 ${who} limpou o quadro`);
+      }
+
       return;
+
     }
 
     if (message.type === "draw-start") {
 
-      const stroke = { color: message.color, width: message.width, points: [message.point] };
+      const v = cleanVersion(message.v) ?? session.boardVersion;
 
-      session.strokes.set(id, stroke);
+      if (!isPoint(message.point)) return;
+
+      // Começou antes de um "Limpar" que já aconteceu aqui: descarta.
+      if (v < session.boardVersion) return;
+
+      // Ele já viu um "Limpar" que ainda não chegou aqui.
+      applyClear(v);
+
+      const stroke = {
+        author: peer.id,
+        color: String(message.color || BOARD_COLORS[0]).slice(0, 32),
+        width: Number(message.width) || BOARD_WIDTHS.thin,
+        v,
+        points: [message.point]
+      };
+
+      session.strokes.set(key, stroke);
       drawSegment(stroke, 0);
       bump("board");
 
     } else if (message.type === "draw-move") {
 
-      const stroke = session.strokes.get(id);
+      const stroke = session.strokes.get(key);
 
-      if (!stroke) return;
+      if (!stroke || !Array.isArray(message.points)) return;
 
       for (const point of message.points) {
+        if (!isPoint(point)) continue;
         stroke.points.push(point);
         drawSegment(stroke, stroke.points.length - 1);
       }
 
     }
 
-    // "O outro está desenhando…" some logo depois que ele para.
+    // "Fulano está desenhando…" some logo depois que ele para.
+    $("remoteDrawing").textContent = session.room
+      ? `✏️ ${who} está desenhando…`
+      : "✏️ O outro está desenhando…";
     show("remoteDrawing");
     clearTimeout(session.remoteDrawingTimer);
     session.remoteDrawingTimer = setTimeout(() => show("remoteDrawing", false), 1200);
 
   }
+
+
+  /* ---------------- quadro: editar / só ver, tela cheia ---------------- */
+
+  // "Visualizando": tocar no quadro não desenha (bom para só olhar,
+  // rolar a página no celular ou apresentar sem riscar sem querer).
+  $("boardModeBtn").onclick = () => {
+
+    if (!session) return;
+
+    endStroke();
+    session.boardMode = session.boardMode === "edit" ? "view" : "edit";
+    renderBoardMode();
+
+  };
+
+  function renderBoardMode() {
+
+    const editing = session.boardMode === "edit";
+
+    $("boardModeBtn").textContent = editing ? "✏️ Editando" : "👁️ Visualizando";
+    $("boardModeBtn").classList.toggle("active", editing);
+    $("boardModeBtn").title = editing
+      ? "Tocar no quadro desenha. Toque para só visualizar."
+      : "Tocar no quadro não desenha. Toque para editar.";
+
+    $("boardPane").classList.toggle("viewing", !editing);
+
+  }
+
+  // Tela cheia de verdade quando o navegador deixa; no iPhone (que só
+  // deixa vídeo em tela cheia), o quadro ocupa a janela toda.
+  $("boardFullBtn").onclick = () => {
+
+    const pane = $("boardPane");
+
+    if (document.fullscreenElement === pane) {
+      document.exitFullscreen().catch(() => {});
+    } else if (pane.classList.contains("board-full")) {
+      setBoardFull(false);
+    } else if (document.fullscreenEnabled && pane.requestFullscreen) {
+      pane.requestFullscreen().catch(() => setBoardFull(true));
+    } else {
+      setBoardFull(true);
+    }
+
+  };
+
+  function setBoardFull(on) {
+    $("boardPane").classList.toggle("board-full", on);
+    renderBoardFull();
+  }
+
+  function renderBoardFull() {
+
+    const full = document.fullscreenElement === $("boardPane") ||
+      $("boardPane").classList.contains("board-full");
+
+    $("boardFullBtn").textContent = full ? "✕ Sair da tela cheia" : "⛶ Tela cheia";
+    requestAnimationFrame(resizeBoard);
+
+  }
+
+  document.addEventListener("fullscreenchange", renderBoardFull);
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && $("boardPane").classList.contains("board-full")) {
+      setBoardFull(false);
+    }
+  });
 
 
   /* ---------------- arquivos ---------------- */
@@ -3508,7 +4043,8 @@
   }
 
   // Cartão de arquivo no chat. Devolve os pedaços para atualizar.
-  function createFileCard({ name, size, mime }, mine) {
+  // who: nome de quem recebe (mine) ou de quem envia.
+  function createFileCard({ name, size, mime }, mine, who = "o outro") {
 
     const card = document.createElement("div");
     card.className = "file-card " + (mine ? "mine" : "theirs");
@@ -3529,7 +4065,7 @@
     const sizeElement = document.createElement("div");
     sizeElement.className = "file-size";
     sizeElement.textContent =
-      formatSize(size) + (mine ? " · você enviou" : " · o outro quer te enviar");
+      formatSize(size) + (mine ? ` · você enviou para ${who}` : ` · ${who} quer te enviar`);
 
     info.append(nameElement, sizeElement);
     head.append(icon, info);
@@ -3583,11 +4119,11 @@
       const id = randomId();
       const key = fileKey(peer, id);
       const meta = { name: file.name, size: file.size, mime: file.type };
-      const ui = createFileCard(meta, true);
+      const ui = createFileCard(meta, true, peerLabel(peer));
 
       session.outgoing.set(key, { id, peer, file, ui, channel: null });
 
-      ui.setStatus("Aguardando o outro aceitar…");
+      ui.setStatus(`Aguardando ${peerLabel(peer)} aceitar…`);
       ui.setActions(actionButton("Cancelar", () => {
         sendTo(peer, { type: "file-cancel", id });
         finishOutgoing(key, "Você cancelou o envio.");
@@ -3625,7 +4161,7 @@
       case "file-offer": {
 
         const meta = { name: message.name, size: message.size, mime: message.mime };
-        const ui = createFileCard(meta, false);
+        const ui = createFileCard(meta, false, who);
 
         session.incoming.set(key, { peer, meta, ui, chunks: [], received: 0, channel: null });
 
@@ -3924,12 +4460,21 @@
   const REQUEST_TIMEOUT_MS = 60000;   // tempo para o outro aceitar
   const OFFLINE_TIMEOUT_MS = 20000;   // idem, quando não o vimos online
   const CONNECT_TIMEOUT_MS = 30000;   // aceitou, mas a conexão direta não abriu
-  const ROOM_LIMIT = 2;
+  // Na sala todos conectam com todos: cada um manda áudio/tela para
+  // cada outro. Mais que isso pesa no upload, principalmente no celular.
+  const ROOM_LIMIT = 6;
   const NAME_MAX = 40;
 
   let client = null;
   let myChannel = null;
-  let room = null;        // { name, channel, joinedAt, requestedTo }
+  let room = null;        // { name, channel, joinedAt, attempted }
+
+  // Sala: pedidos de conexão com cada pessoa, pelo pairId (os dois lados).
+  // { pairId, peer: { id, name }, role, timer, auto }
+  const roomRequests = new Map();
+
+  // Pedidos da sala esperando a vez de aparecer (o aviso mostra um por vez).
+  const roomQueue = [];
   let pending = null;     // pedido em andamento: { pairId, peer, role, via, timer, failed }
   let incoming = null;    // pedido recebido esperando Aceitar/Recusar
 
@@ -4155,6 +4700,13 @@
 
     if (!isDeviceId(from.id)) return;
 
+    const roomRequest = roomRequests.get(payload.pairId);
+
+    if (roomRequest && roomRequest.peer.id === from.id && payload.type !== "request") {
+      handleRoomSignal(roomRequest, payload.type, from);
+      return;
+    }
+
     const matches = pending?.pairId === payload.pairId && pending.peer.id === from.id;
 
     switch (payload.type) {
@@ -4164,9 +4716,10 @@
         break;
 
       case "cancel":
+        dropQueued(payload.pairId);
         if (incoming?.pairId === payload.pairId) {
           closeIncoming();
-          homeNotice(`${peerName(from)} cancelou o pedido de conexão.`);
+          if (!session) homeNotice(`${peerName(from)} cancelou o pedido de conexão.`);
         } else if (matches && !pending.failed) {
           pendingFailed(`${peerName(from)} cancelou.`);
         }
@@ -4203,14 +4756,19 @@
 
     if (typeof request.pairId !== "string" || request.pairId.length > 64) return;
 
-    // Só um pedido/conexão por vez.
-    if (session || pending || incoming) {
+    // Alguém que chegou na sala em que estou: cada pedido é aceito à parte.
+    if (room && session?.room === room.name && request.via === "room:" + room.name) {
+      queueRoomRequest(request);
+      return;
+    }
+
+    // Fora da sala: só um pedido/conexão por vez. Pedido de uma sala em
+    // que não estou (a lista de presença estava velha): ocupado também.
+    if (session || pending || incoming || String(request.via || "").startsWith("room:")) {
       sendToDevice(request.from.id, { type: "busy", pairId: request.pairId, from: publicMe() })
         .catch(() => {});
       return;
     }
-
-    const remembered = isRemembered(request.from.id);
 
     // "Sempre aceitar": conecta sem mostrar a pergunta.
     if (isAutoAccept(request.from.id)) {
@@ -4220,12 +4778,40 @@
       return;
     }
 
-    incoming = {
-      ...request,
-      timer: setTimeout(() => declineIncoming(), REQUEST_TIMEOUT_MS)
-    };
+    request.timer = setTimeout(() => expireRequest(request), REQUEST_TIMEOUT_MS);
+    showIncoming(request);
 
-    $("requestTitle").textContent = `${peerName(request.from)} quer se conectar`;
+  }
+
+  function queueRoomRequest(request) {
+
+    if (roomRequests.has(request.pairId)) return;
+
+    request.room = true;
+
+    if (isAutoAccept(request.from.id)) {
+      log("Aceitando automaticamente (sala): " + request.from.name);
+      acceptRoomRequest(request, true);
+      return;
+    }
+
+    request.timer = setTimeout(() => expireRequest(request), REQUEST_TIMEOUT_MS);
+
+    if (incoming) roomQueue.push(request);
+    else showIncoming(request);
+
+  }
+
+  // O aviso "Fulano quer se conectar" (um por vez).
+  function showIncoming(request) {
+
+    incoming = request;
+
+    const remembered = isRemembered(request.from.id);
+
+    $("requestTitle").textContent = request.room
+      ? `${peerName(request.from)} entrou na sala e quer se conectar`
+      : `${peerName(request.from)} quer se conectar`;
 
     const via = String(request.via || "");
 
@@ -4245,6 +4831,34 @@
 
   }
 
+  // Ninguém respondeu a tempo: recusa (esteja o pedido à vista ou na fila).
+  function expireRequest(request) {
+
+    if (incoming === request) {
+      declineIncoming();
+      return;
+    }
+
+    if (dropQueued(request.pairId)) {
+      sendToDevice(request.from.id, { type: "decline", pairId: request.pairId, from: publicMe() })
+        .catch(() => {});
+    }
+
+  }
+
+  function dropQueued(pairId) {
+
+    const index = roomQueue.findIndex(request => request.pairId === pairId);
+
+    if (index === -1) return false;
+
+    clearTimeout(roomQueue[index].timer);
+    roomQueue.splice(index, 1);
+
+    return true;
+
+  }
+
   function closeIncoming() {
 
     if (!incoming) return;
@@ -4252,6 +4866,11 @@
     clearTimeout(incoming.timer);
     incoming = null;
     show("requestModal", false);
+
+    // Próximo da fila da sala.
+    const next = roomQueue.shift();
+
+    if (next) showIncoming(next);
 
   }
 
@@ -4276,11 +4895,20 @@
     const request = incoming;
     const peer = request.from;
 
+    // Lê as opções antes de fechar (fechar pode já mostrar o próximo pedido).
+    const rememberIt = $("rememberCheck").checked;
+    const autoAccept = $("autoAcceptCheck").checked;
+
     closeIncoming();
 
     if (!auto) {
-      if ($("rememberCheck").checked) remember(peer, $("autoAcceptCheck").checked);
+      if (rememberIt) remember(peer, autoAccept);
       else forget(peer.id);
+    }
+
+    if (request.room) {
+      acceptRoomRequest(request, auto);
+      return;
     }
 
     pending = { pairId: request.pairId, peer, role: "host", via: request.via, timer: null, failed: false, auto };
@@ -4456,13 +5084,18 @@
   /* ---------------- conexão (canal pair:<id>) ---------------- */
 
   // Cria a entrada do aparelho e escuta o canal da conexão com ele.
-  async function openPair(pairId, role, { id, name }) {
+  // viaRoom: conexão da sala (a sessão continua na sala depois de conectar).
+  async function openPair(pairId, role, { id, name }, viaRoom = false) {
 
+    // Conexão antiga com o mesmo aparelho (ele recarregou a página, por exemplo).
     const old = peers.get(id);
 
-    if (old) closePeer(old);
+    if (old?.connected) removePeer(old, `${peerLabel(old)} reconectou.`);
+    else if (old) closePeer(old);
 
     const peer = newPeer({ id, name }, role, pairId);
+
+    peer.room = viaRoom;
     const channel = client.channel("pair:" + pairId, { config: { broadcast: { self: false } } });
 
     channel.on("broadcast", { event: "sdp" }, ({ payload }) =>
@@ -4571,7 +5204,14 @@
 
     if (peer.closed) return;
 
-    const auto = !!pending?.auto;
+    const roomRequest = roomRequests.get(peer.pairId);
+
+    if (roomRequest) {
+      clearTimeout(roomRequest.timer);
+      roomRequests.delete(peer.pairId);
+    }
+
+    const auto = pending?.pairId === peer.pairId && !!pending.auto;
 
     if (pending?.pairId === peer.pairId) {
       clearTimeout(pending.timer);
@@ -4579,12 +5219,18 @@
       show("pendingModal", false);
     }
 
-    // A sala já cumpriu o papel: libera para outros.
-    leaveRoom();
+    // Conexão direta: a sala (se tinha) já cumpriu o papel e é liberada.
+    if (!peer.room) leaveRoom();
 
-    if (!session) startSession(peer.role);
+    if (!session) startSession({ role: peer.role });
 
     addPeerToSession(peer);
+
+    if (peer.room) {
+      addNote(roomRequest?.auto
+        ? `👋 ${peerLabel(peer)} entrou (aceito automaticamente, “Sempre aceitar”).`
+        : `👋 ${peerLabel(peer)} conectou.`);
+    }
 
     if (auto) {
       addNote(peer.role === "host"
@@ -4602,7 +5248,25 @@
   function connectionFailed(peer, message, lost = false) {
 
     if (peer.connected) {
+
       removePeer(peer, lost ? `A conexão com ${peerLabel(peer)} caiu e não voltou.` : message);
+
+      // Na sala: se ele ainda estiver lá, tenta de novo (quem chegou depois pede).
+      if (peer.room && room) {
+        for (const key of room.attempted) {
+          if (key.startsWith(peer.id + ":")) room.attempted.delete(key);
+        }
+        setTimeout(() => { if (room) onRoomSync(); }, 2000);
+      }
+
+      return;
+
+    }
+
+    const roomRequest = roomRequests.get(peer.pairId);
+
+    if (roomRequest) {
+      roomRequestFailed(roomRequest, `Não foi possível conectar com ${peerName(roomRequest.peer)}. ${message}`);
       return;
     }
 
@@ -4630,6 +5294,8 @@
   function goHome(notice, retryPeer = null) {
 
     cleanupPending();
+    clearRoomRequests();
+    leaveRoom();
     closeAllPeers();
     pending = null;
     show("pendingModal", false);
@@ -4672,7 +5338,7 @@
     joinRoom($("roomInput").value);
   };
 
-  $("leaveRoomBtn").onclick = () => leaveRoom();
+  $("leaveRoomBtn").onclick = () => goHome();
 
   async function joinRoom(value) {
 
@@ -4690,15 +5356,22 @@
       return;
     }
 
+    // Outra sala (ou sessão) aberta: sai dela antes.
+    if (session) goHome();
     await leaveRoom();
 
     const channel = client.channel("room:" + name, {
       config: { presence: { key: me.id, enabled: true } }
     });
 
-    room = { name, channel, joinedAt: Date.now(), requestedTo: null };
+    // attempted: "<id>:<joinedAt>" de quem já pedi (pedir de novo só se ele reentrar).
+    room = { name, channel, joinedAt: Date.now(), attempted: new Set() };
 
     setAddress(roomPath(name));
+
+    // A sessão da sala abre já, mesmo sozinho: o quadro e o chat valem
+    // enquanto estiver aqui.
+    startSession({ room: name });
 
     channel.on("presence", { event: "sync" }, () => {
       if (room?.channel === channel) onRoomSync();
@@ -4717,14 +5390,16 @@
     } catch (error) {
 
       if (room?.channel !== channel) return;
-      await leaveRoom();
+      goHome();
       roomError("Não foi possível entrar na sala: " + error.message);
 
     }
 
   }
 
-  // Quem entrou primeiro recebe o pedido; o segundo pede; o terceiro sai.
+  // Todos com todos: quem chegou depois pede a cada um que já estava
+  // (a ordem de chegada é a mesma em todos os aparelhos). Passou do
+  // limite: sai sozinho.
   function onRoomSync() {
 
     const members = Object.values(room.channel.presenceState())
@@ -4738,34 +5413,174 @@
 
     if (index >= ROOM_LIMIT) {
       const name = room.name;
-      leaveRoom();
-      roomError(`A sala “${name}” está cheia (cabem ${ROOM_LIMIT} aparelhos). Escolha outro nome.`);
+      goHome();
+      roomError(`A sala “${name}” está cheia (cabem ${ROOM_LIMIT} pessoas). Escolha outro nome.`);
       return;
     }
 
-    const other = members.slice(0, ROOM_LIMIT).find(member => member.id !== me.id);
+    for (const member of members.slice(0, index)) {
 
-    if (!other) {
-      room.requestedTo = null;
-      setStatus("roomStatus", "Aguardando outra pessoa entrar na sala…", "working");
-      return;
+      if (member.id === me.id) continue;
+
+      const key = member.id + ":" + member.joinedAt;
+
+      if (room.attempted.has(key)) continue;
+
+      room.attempted.add(key);
+
+      if (peers.get(member.id)?.connected) continue;
+
+      requestRoomPeer({ id: member.id, name: cleanName(member.name) });
+
     }
 
-    const otherName = peerName(other);
+  }
 
-    if (index === 1) {
+  // Pede para conectar a alguém que já estava na sala.
+  async function requestRoomPeer(member) {
 
-      setStatus("roomStatus", `${otherName} está na sala. Pedindo para conectar…`, "working");
+    const pairId = uuid();
+    const entry = { pairId, peer: member, role: "guest", timer: null, auto: false };
 
-      if (room.requestedTo !== other.id && !pending && !session) {
-        room.requestedTo = other.id;
-        requestConnection({ id: other.id, name: other.name }, "room:" + room.name);
+    roomRequests.set(pairId, entry);
+    renderRemoteState();
+
+    log("Sala: pedindo para conectar a " + peerName(member));
+
+    try {
+
+      await openPair(pairId, "guest", member, true);
+
+      if (roomRequests.get(pairId) !== entry) return;
+
+      await sendToDevice(member.id, { type: "request", pairId, via: "room:" + room.name, from: publicMe() });
+
+      if (roomRequests.get(pairId) !== entry) return;
+
+      entry.timer = setTimeout(() => {
+        sendToDevice(member.id, { type: "cancel", pairId, from: publicMe() }).catch(() => {});
+        roomRequestFailed(entry, `${peerName(member)} não respondeu ao pedido para conectar.`);
+      }, REQUEST_TIMEOUT_MS);
+
+    } catch (error) {
+
+      console.error(error);
+      roomRequestFailed(entry, `Não foi possível pedir para conectar a ${peerName(member)}: ${error.message}`);
+
+    }
+
+  }
+
+  // Aceitei alguém que chegou na sala.
+  async function acceptRoomRequest(request, auto) {
+
+    const { pairId, from } = request;
+    const entry = { pairId, peer: from, role: "host", timer: null, auto };
+
+    roomRequests.set(pairId, entry);
+    renderRemoteState();
+
+    entry.timer = setTimeout(() =>
+      roomRequestFailed(entry, `A conexão direta com ${peerName(from)} não abriu.`),
+      CONNECT_TIMEOUT_MS);
+
+    try {
+
+      const conn = await openPair(pairId, "host", from, true);
+
+      if (roomRequests.get(pairId) !== entry) {
+        closePeer(conn);
+        return;
       }
 
-    } else {
+      await sendToDevice(from.id, { type: "accept", pairId, auto, from: publicMe() });
+      await startHostNegotiation(conn);
 
-      setStatus("roomStatus", `${otherName} entrou na sala. Aceite o pedido quando aparecer.`, "working");
+    } catch (error) {
 
+      console.error(error);
+      roomRequestFailed(entry, `Não foi possível conectar com ${peerName(from)}: ${error.message}`);
+
+    }
+
+  }
+
+  // Respostas a um pedido da sala (aceitar/recusar/ocupado/cancelar).
+  function handleRoomSignal(entry, type, from) {
+
+    const name = peerName({ name: from.name || entry.peer.name });
+
+    switch (type) {
+
+      case "accept":
+        if (entry.role !== "guest") return;
+        entry.peer.name = from.name || entry.peer.name;
+        clearTimeout(entry.timer);
+        entry.timer = setTimeout(() =>
+          roomRequestFailed(entry, `A conexão direta com ${name} não abriu.`),
+          CONNECT_TIMEOUT_MS);
+        break;
+
+      case "decline":
+        roomRequestFailed(entry, `${name} recusou a conexão.`);
+        break;
+
+      case "busy":
+        roomRequestFailed(entry, `${name} está em outra conexão agora.`);
+        break;
+
+      case "cancel":
+        roomRequestFailed(entry, `${name} desistiu de conectar.`);
+        break;
+
+    }
+
+  }
+
+  function roomRequestFailed(entry, text) {
+
+    if (roomRequests.get(entry.pairId) !== entry) return;
+
+    clearTimeout(entry.timer);
+    roomRequests.delete(entry.pairId);
+
+    const peer = peers.get(entry.peer.id);
+
+    if (peer && peer.pairId === entry.pairId && !peer.connected) closePeer(peer);
+
+    log("Sala: " + text);
+
+    if (session) {
+      addNote("⚠️ " + text);
+      renderRemoteState();
+    }
+
+  }
+
+  // Saindo da sala: desfaz pedidos e recusa os que estavam esperando.
+  function clearRoomRequests() {
+
+    for (const entry of roomRequests.values()) {
+      clearTimeout(entry.timer);
+      if (entry.role === "guest") {
+        sendToDevice(entry.peer.id, { type: "cancel", pairId: entry.pairId, from: publicMe() }).catch(() => {});
+      }
+    }
+
+    roomRequests.clear();
+
+    const waiting = roomQueue.splice(0);
+
+    if (incoming?.room) waiting.unshift(incoming);
+
+    for (const request of waiting) {
+      clearTimeout(request.timer);
+      sendToDevice(request.from.id, { type: "decline", pairId: request.pairId, from: publicMe() }).catch(() => {});
+    }
+
+    if (incoming?.room) {
+      incoming = null;
+      show("requestModal", false);
     }
 
   }
